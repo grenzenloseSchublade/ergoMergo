@@ -113,8 +113,11 @@ function startDialog(programm, settings = {}) {
   // Tap auf die Vorschau: Vollbild mit gut lesbaren Klammern und Zeitachse
   preview.onclick = () => {
     try {
-      const blocks = baueBlocks(programm, leseOpts(), settings.ftp);
-      zeigeGraphOverlay(c => drawProfile(c, blocks, settings.ftp || EFF_FTP_DEFAULT));
+      const opts = leseOpts();
+      const blocks = baueBlocks(programm, opts, settings.ftp);
+      const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
+      zeigeGraphOverlay(c => drawProfile(c, blocks, settings.ftp || EFF_FTP_DEFAULT),
+        `${programm.name} <span>· ${min} min${settings.ftp ? '' : ` · FTP-Annahme ${EFF_FTP_DEFAULT} W`}</span>`);
     } catch { /* unvollständige Eingabe */ }
   };
 
@@ -268,6 +271,8 @@ if (bigParam) {
   const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === bigParam);
   if (p) getSettings().then(s => {
     const blocks = baueBlocks(p, defaultOpts(p), s.ftp);
-    zeigeGraphOverlay(c => drawProfile(c, blocks, s.ftp || EFF_FTP_DEFAULT));
+    const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
+    zeigeGraphOverlay(c => drawProfile(c, blocks, s.ftp || EFF_FTP_DEFAULT),
+      `${p.name} <span>· ${min} min</span>`);
   });
 }

@@ -79,7 +79,9 @@ function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1) {
 // Watt-Achse links (nur große Canvas). Zwei Phasen: Rasterlinien liegen
 // unter den Balken, die Beschriftung darüber — sonst verdecken Balken den Text.
 function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
-  const raster = [25, 50, 100, 200].find(r => (h - kopf - fuss) * r / maxW >= 26 * s) ?? 200;
+  // Mindestabstand fix (Schrift ist gedeckelt) — nicht mit s skalieren,
+  // sonst bleibt auf Handygröße nur eine einzige Rasterlinie übrig
+  const raster = [25, 50, 100, 200].find(r => (h - kopf - fuss) * r / maxW >= 30) ?? 200;
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink2');
   ctx.lineWidth = 1;
@@ -96,6 +98,25 @@ function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
     if (phase !== 'linien') ctx.fillText(`${v} W`, 3, y - 2);
   }
   ctx.stroke();
+}
+
+// Gestrichelte Referenzlinie bei 100 % FTP (nur wenn FTP bekannt und im Bild)
+function zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s) {
+  if (!ftp || ftp >= maxW) return;
+  const y = kopf + (h - kopf - fuss) * (1 - ftp / maxW);
+  ctx.strokeStyle = css('--ink3');
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, y + 0.5);
+  ctx.lineTo(w, y + 0.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = css('--ink2');
+  ctx.font = `${axisFont(s)}px system-ui`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('FTP', w - 3, y - 1);
 }
 
 // Wiederholte Abschnitte (gruppe/gruppeLabel an den Blöcken) einsammeln
@@ -149,8 +170,20 @@ function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) 
     const bw = b.dauer / total * w;
     const y = kopf + (h - kopf - fuss) * (1 - b.watt / maxW);
     const label = String(b.watt);
+    const mitte = (t + b.dauer / 2) / total * w;
     if (bw >= ctx.measureText(label).width + 10 && h - fuss - y >= 22) {
-      ctx.fillText(label, (t + b.dauer / 2) / total * w, y + 3);
+      ctx.fillText(label, mitte, y + 3);
+      // Blockdauer darunter, wenn zusätzlich Platz ist
+      const dauer = b.dauer % 60 === 0 ? `${b.dauer / 60} min`
+        : `${Math.floor(b.dauer / 60)}:${String(b.dauer % 60).padStart(2, '0')}`;
+      ctx.save();
+      ctx.fillStyle = css('--power-line');
+      ctx.globalAlpha = 0.7;
+      ctx.font = `${axisFont(1)}px system-ui`;
+      if (bw >= ctx.measureText(dauer).width + 10 && h - fuss - y >= 44) {
+        ctx.fillText(dauer, mitte, y + 6 + labelFont(2));
+      }
+      ctx.restore();
     }
     t += b.dauer;
   }
@@ -196,6 +229,7 @@ export function drawProfile(canvas, blocks, ftp) {
   ctx.globalAlpha = 1;
   if (gross) {
     zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
+    zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
     zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s);
   }
   if (fuss) zeichneZeitachse(ctx, css, w, h, fuss, total, s);
