@@ -31,7 +31,18 @@ export class Session extends EventTarget {
   #writeTimer = null;
   #tickTimer = null;
   #autosaveTimer = null;
-  #onData = e => { Object.assign(this.live, e.detail); };
+  #hrExternal = false;
+  #onData = e => {
+    const d = { ...e.detail };
+    if (this.#hrExternal) delete d.hr;      // Gurt schlägt Trainer-Bridge
+    Object.assign(this.live, d);
+  };
+
+  attachHR(hrClient) {
+    this.#hrExternal = true;
+    hrClient.addEventListener('hr', e => { this.live.hr = e.detail; });
+    hrClient.addEventListener('disconnected', () => { this.#hrExternal = false; });
+  }
 
   setTarget(watt, { instant = false } = {}) {
     const w = Math.min(Math.max(0, Math.round(watt)), this.settings.maxWatt);

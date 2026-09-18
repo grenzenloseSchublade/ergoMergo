@@ -2,6 +2,8 @@
 
 import { LiveChart, WorkoutChart, zoneColor } from './chart.js';
 import * as signal from '../signals.js';
+import { HeartRate } from '../ble/hr.js';
+import { ZwiftClick } from '../ble/click.js';
 
 export class RideScreen {
   constructor(root, session, settings, onEnd, run = null) {
@@ -39,6 +41,29 @@ export class RideScreen {
   #bind() {
     const step = this.settings.wattSchritt;
     const adjust = d => this.run ? this.run.adjust(d) : this.session.adjust(d);
+    this.adjust = adjust;
+
+    // Zusatzgeräte: Herzgurt und Zwift Click (experimentell)
+    const chip = (id, connectFn) => {
+      const btn = this.$(id);
+      btn.addEventListener('click', async () => {
+        try { await connectFn(); btn.classList.add('on'); }
+        catch (err) { if (err.name !== 'NotFoundError') this.#status(err.message, 'err'); }
+      });
+    };
+    chip('#btn-hr', async () => {
+      const hr = new HeartRate();
+      await hr.connect();
+      this.session.attachHR(hr);
+      hr.addEventListener('disconnected', () => this.$('#btn-hr').classList.remove('on'));
+    });
+    chip('#btn-click', async () => {
+      const click = new ZwiftClick();
+      await click.connect();
+      click.addEventListener('plus', () => adjust(step));
+      click.addEventListener('minus', () => adjust(-step));
+      click.addEventListener('disconnected', () => this.$('#btn-click').classList.remove('on'));
+    });
     const hold = (btn, delta) => {
       const fire = () => adjust(delta);
       btn.addEventListener('pointerdown', e => {

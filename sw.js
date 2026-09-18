@@ -2,12 +2,12 @@
 // offline startet. VERSION bei jedem Release hochzählen — alte Caches werden
 // beim Aktivieren entsorgt.
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `ergomergo-${VERSION}`;
 const SHELL = [
   '.', 'index.html', 'css/app.css', 'manifest.webmanifest',
   'js/main.js', 'js/state.js', 'js/storage.js', 'js/export.js',
-  'js/program.js', 'js/signals.js', 'js/ble/ftms.js',
+  'js/program.js', 'js/signals.js', 'js/ble/ftms.js', 'js/ble/hr.js', 'js/ble/click.js',
   'js/ui/ride.js', 'js/ui/chart.js', 'js/ui/list.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
