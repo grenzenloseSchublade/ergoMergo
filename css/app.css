@@ -52,7 +52,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .tiles-programme .tile { padding: .8rem 1rem; }
 .tiles-programme .tile-title { font-size: 1.1rem; }
 .tile-profile { width: 100%; height: 36px; margin-top: .45rem; display: block; }
-#dlg-preview { width: 100%; height: 60px; display: block; margin: .2rem 0 .8rem; background: var(--surface2); border-radius: 8px; }
+#dlg-preview { width: 100%; height: 76px; display: block; margin: .2rem 0 .8rem; background: var(--surface2); border-radius: 8px; }
 
 dialog {
   background: var(--surface); color: var(--ink); border: 1px solid var(--line);
@@ -139,9 +139,9 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 
 /* Querformat: Werte links, Bedienung rechts, Kurve unten */
 @media (orientation: landscape) and (max-height: 500px) {
-  .ride-grid { grid-template-rows: 1fr auto; grid-template-columns: 1fr auto; grid-template-areas: "metrics controls" "chart chart"; }
-  .metrics { grid-area: metrics; }
-  #live-chart { grid-area: chart; height: clamp(70px, 30vh, 140px); }
+  .ride-grid { grid-template-rows: minmax(0, 1fr) auto; grid-template-columns: 1fr auto; grid-template-areas: "metrics controls" "chart chart"; }
+  .metrics { grid-area: metrics; min-height: 0; overflow: hidden; }
+  #live-chart { grid-area: chart; height: clamp(70px, 24vh, 130px); }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
   .ctl { min-width: 96px; }
 }

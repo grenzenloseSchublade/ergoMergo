@@ -109,13 +109,13 @@ function startDialog(programm, settings = {}) {
     catch { /* unvollständige Eingabe während des Tippens */ }
   };
   fields.oninput = zeichne;
-  zeichne();
 
   return new Promise(resolve => {
     dlg.onclose = () => {
       resolve(dlg.returnValue === 'ok' ? leseOpts() : null);
     };
     dlg.showModal();
+    zeichne();            // erst nach showModal: Canvas braucht sein Layout
   });
 }
 

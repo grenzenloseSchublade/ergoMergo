@@ -25,11 +25,43 @@ export function zoneHex(watt, ftp, css) {
   return css(name);
 }
 
+// Zeitachse am unteren Rand: Minuten-Ticks in sinnvollem Raster
+function zeichneZeitachse(ctx, css, w, h, fuss, total) {
+  const y = h - fuss + 0.5;
+  ctx.strokeStyle = css('--line');
+  ctx.fillStyle = css('--ink3');
+  ctx.lineWidth = 1;
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(w, y);
+  const step = [60, 120, 300, 600, 900, 1200, 1800, 3600].find(s => s / total * w >= 34) ?? 3600;
+  for (let t = step; t < total; t += step) {
+    const x = t / total * w;
+    if (x > w - 46) break;                   // Platz fürs Endlabel lassen
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y + 3);
+    ctx.fillText(String(t / 60), x, y + 4);
+  }
+  ctx.stroke();
+  ctx.textAlign = 'right';
+  ctx.fillText(`${Math.round(total / 60)} min`, w - 1, y + 4);
+}
+
 // Intensitätsprofil eines Programms: Zielblöcke als zonengefärbte Balken.
-// Für Kachel-Miniaturen und die Vorschau im Startdialog.
+// Für Kachel-Miniaturen und die Vorschau im Startdialog. Ab ~56 px Höhe
+// kommt unten eine Zeitachse dazu.
 export function drawProfile(canvas, blocks, ftp) {
   const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
+  const dpr = devicePixelRatio || 1;
+  const w = canvas.clientWidth || canvas.width, h = canvas.clientHeight || canvas.height;
+  if (canvas.clientWidth && canvas.width !== Math.round(w * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
   const total = blocks.reduce((a, b) => a + b.dauer, 0);
   if (!total) return;
 
@@ -45,6 +77,7 @@ export function drawProfile(canvas, blocks, ftp) {
     t += b.dauer;
   }
   const kopf = gruppen.size ? 13 : 0;        // Platz für die Klammern reservieren
+  const fuss = h >= 56 ? 13 : 0;             // Platz für die Zeitachse
 
   const maxW = Math.max(...blocks.map(b => b.watt)) * 1.08;
   const css = n => getComputedStyle(canvas).getPropertyValue(n).trim();
@@ -52,13 +85,14 @@ export function drawProfile(canvas, blocks, ftp) {
   t = 0;
   for (const b of blocks) {
     const x = t / total * w, bw = b.dauer / total * w;
-    const y = kopf + (h - kopf) * (1 - b.watt / maxW);
+    const y = kopf + (h - kopf - fuss) * (1 - b.watt / maxW);
     ctx.fillStyle = zoneHex(b.watt, ftp, css);
     ctx.globalAlpha = 0.9;
-    ctx.fillRect(x + 0.5, y, Math.max(bw - 1, 0.5), h - y);
+    ctx.fillRect(x + 0.5, y, Math.max(bw - 1, 0.5), h - fuss - y);
     t += b.dauer;
   }
   ctx.globalAlpha = 1;
+  if (fuss) zeichneZeitachse(ctx, css, w, h, fuss, total);
 
   ctx.strokeStyle = css('--ink3');
   ctx.fillStyle = css('--ink2');
@@ -106,8 +140,9 @@ export class WorkoutChart {
     for (let k = Math.max(0, count - 50); k < count; k++)
       maxW = Math.max(maxW, samples[k * FIELDS + 1]);
     maxW *= 1.15;
+    const fuss = 13;
     const x = t => t / total * w;
-    const y = v => h - Math.max(0, v) / maxW * (h - 6);
+    const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - 6);
 
     // Zielblöcke, 1 px Fuge zwischen den Flächen
     let t = 0;
@@ -115,10 +150,11 @@ export class WorkoutChart {
       const watt = b.watt + offset;
       ctx.fillStyle = zoneHex(watt, ftp, this.#css);
       ctx.globalAlpha = 0.42;
-      ctx.fillRect(x(t) + 0.5, y(watt), x(t + b.dauer) - x(t) - 1, h - y(watt));
+      ctx.fillRect(x(t) + 0.5, y(watt), x(t + b.dauer) - x(t) - 1, (h - fuss) - y(watt));
       t += b.dauer;
     }
     ctx.globalAlpha = 1;
+    zeichneZeitachse(ctx, this.#css, w, h, fuss, total);
 
     // Gefahrene Leistung
     ctx.strokeStyle = this.#css('--power-line');
@@ -139,7 +175,7 @@ export class WorkoutChart {
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
       ctx.moveTo(px, 0);
-      ctx.lineTo(px, h);
+      ctx.lineTo(px, h - fuss);
       ctx.stroke();
       ctx.setLineDash([]);
     }
