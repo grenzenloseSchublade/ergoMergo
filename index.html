@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1113">
+<title>ergoMergo</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ============ START ============ -->
+<section id="screen-home" class="screen">
+  <header class="brand">
+    <h1>ergo<b>Mergo</b></h1>
+    <span id="bt-support" class="hint"></span>
+  </header>
+  <div class="tiles">
+    <button class="tile tile-primary" id="start-free">
+      <span class="tile-kicker">Sofort los</span>
+      <span class="tile-title">Freies Fahren</span>
+      <span class="tile-sub">ERG · ± am Daumen</span>
+    </button>
+  </div>
+  <h2 class="listhead">Letzte Fahrten</h2>
+  <ul id="session-list" class="sessions"></ul>
+</section>
+
+<!-- ============ FAHRT ============ -->
+<section id="screen-ride" class="screen" hidden>
+  <div class="ride-grid">
+    <div class="metrics">
+      <div class="metric metric-power">
+        <span class="label">Leistung</span>
+        <span class="value" id="m-watt">0</span>
+        <span class="unit">Watt</span>
+      </div>
+      <div class="metric">
+        <span class="label">Ziel</span>
+        <span class="value" id="m-target">0</span>
+        <span class="unit">Watt</span>
+      </div>
+      <div class="metric">
+        <span class="label">Zeit</span>
+        <span class="value value-time" id="m-time">0:00</span>
+      </div>
+      <div class="row-secondary">
+        <span><b id="m-rpm">–</b> rpm</span>
+        <span><b id="m-hr">–</b> bpm</span>
+        <span><b id="m-kj">0</b> kJ</span>
+        <span id="m-status" class="status">verbinde …</span>
+      </div>
+    </div>
+    <canvas id="live-chart"></canvas>
+    <div class="controls">
+      <button class="ctl ctl-minus" id="btn-minus">−10</button>
+      <button class="ctl ctl-stop" id="btn-stop">STOP</button>
+      <button class="ctl ctl-plus" id="btn-plus">+10</button>
+      <button class="ctl ctl-end" id="btn-end">Beenden</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DETAIL ============ -->
+<section id="screen-detail" class="screen" hidden>
+  <header class="brand">
+    <button class="back" id="btn-back">‹ Zurück</button>
+    <h1 id="d-title">Fahrt</h1>
+  </header>
+  <div class="d-stats" id="d-stats"></div>
+  <canvas id="detail-chart"></canvas>
+  <div class="d-actions">
+    <button id="btn-tcx">TCX exportieren</button>
+    <button id="btn-delete" class="danger">Löschen</button>
+  </div>
+</section>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
