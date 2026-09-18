@@ -25,6 +25,28 @@ export function zoneHex(watt, ftp, css) {
   return css(name);
 }
 
+// Intensitätsprofil eines Programms: Zielblöcke als zonengefärbte Balken.
+// Für Kachel-Miniaturen und die Vorschau im Startdialog.
+export function drawProfile(canvas, blocks, ftp) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const total = blocks.reduce((a, b) => a + b.dauer, 0);
+  if (!total) return;
+  const maxW = Math.max(...blocks.map(b => b.watt)) * 1.08;
+  const css = n => getComputedStyle(canvas).getPropertyValue(n).trim();
+  ctx.clearRect(0, 0, w, h);
+  let t = 0;
+  for (const b of blocks) {
+    const x = t / total * w, bw = b.dauer / total * w;
+    const y = h - b.watt / maxW * h;
+    ctx.fillStyle = zoneHex(b.watt, ftp, css);
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(x + 0.5, y, Math.max(bw - 1, 0.5), h - y);
+    t += b.dauer;
+  }
+  ctx.globalAlpha = 1;
+}
+
 // Ganzes Programm: Zielblöcke als zonengefärbte Flächen, gefahrene Leistung
 // als Linie, senkrechter Cursor an der aktuellen Position (TrainerRoad-Muster).
 export class WorkoutChart {

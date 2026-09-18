@@ -5,6 +5,7 @@ import { Session } from './state.js';
 import { getSettings, setSetting, requestPersistence } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
+import { drawProfile } from './ui/chart.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
 import { initAudio } from './signals.js';
@@ -66,6 +67,17 @@ async function startRide(programm = null) {
   }, run);
 }
 
+// Blockliste eines Programms für gegebene Optionen (Generator oder klassisch)
+function baueBlocks(programm, opts, ftp) {
+  return programm.generieren
+    ? programm.generieren(opts, ftp)
+    : expand(programm.bauen(opts), ftp);
+}
+
+function defaultOpts(programm) {
+  return Object.fromEntries(Object.entries(programm.optionen).map(([k, v]) => [k, v.default]));
+}
+
 // Startdialog: Optionsfelder aus der Programmdefinition
 function startDialog(programm, settings = {}) {
   const dlg = $('#dlg-start');
@@ -83,13 +95,25 @@ function startDialog(programm, settings = {}) {
     label.append(input);
     fields.append(label);
   }
+
+  // Live-Vorschau des Intensitätsprofils, folgt den Eingaben
+  const preview = $('#dlg-preview');
+  const leseOpts = () => {
+    const opts = {};
+    for (const inp of fields.querySelectorAll('input'))
+      opts[inp.name] = Math.min(inp.max, Math.max(inp.min, Number(inp.value) || 0));
+    return opts;
+  };
+  const zeichne = () => {
+    try { drawProfile(preview, baueBlocks(programm, leseOpts(), settings.ftp), settings.ftp || EFF_FTP_DEFAULT); }
+    catch { /* unvollständige Eingabe während des Tippens */ }
+  };
+  fields.oninput = zeichne;
+  zeichne();
+
   return new Promise(resolve => {
     dlg.onclose = () => {
-      if (dlg.returnValue !== 'ok') return resolve(null);
-      const opts = {};
-      for (const inp of fields.querySelectorAll('input'))
-        opts[inp.name] = Math.min(inp.max, Math.max(inp.min, Number(inp.value) || 0));
-      resolve(opts);
+      resolve(dlg.returnValue === 'ok' ? leseOpts() : null);
     };
     dlg.showModal();
   });
@@ -112,15 +136,23 @@ async function openSettings() {
   dlg.showModal();
 }
 
-function renderProgrammTiles() {
+async function renderProgrammTiles() {
+  const settings = await getSettings();
+  const effFtp = settings.ftp || EFF_FTP_DEFAULT;
   const fill = (sel, list) => {
     const wrap = $(sel);
     for (const p of list) {
       const btn = document.createElement('button');
       btn.className = 'tile';
       btn.innerHTML = `<span class="tile-title">${p.name}</span><span class="tile-sub">${p.sub}</span>`;
+      const mini = document.createElement('canvas');
+      mini.className = 'tile-profile';
+      mini.width = 220; mini.height = 36;
+      btn.append(mini);
       btn.addEventListener('click', () => startRide(p));
       wrap.append(btn);
+      try { drawProfile(mini, baueBlocks(p, defaultOpts(p), settings.ftp), effFtp); }
+      catch { mini.remove(); }
     }
   };
   fill('#workout-tiles', WORKOUTS);
@@ -202,5 +234,11 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
 }
 
 const demoParam = new URLSearchParams(location.search).get('demo');
+const dlgParam = new URLSearchParams(location.search).get('dlg');
 if (demoParam !== null) startDemo(demoParam);
 else goHome();
+// ?dlg=<id> — Startdialog für UI-Arbeit/Screenshots direkt öffnen
+if (dlgParam) {
+  const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === dlgParam);
+  if (p) getSettings().then(s => startDialog(p, s));
+}
