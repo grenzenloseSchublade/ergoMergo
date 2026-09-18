@@ -29,6 +29,9 @@
     <div class="tiles-programme" id="workout-tiles"></div>
     <h2 class="listhead">Klassische Programme</h2>
     <div class="tiles-programme" id="programm-tiles"></div>
+    <h2 class="listhead">Eigene Workouts <button type="button" class="chip" id="btn-zwo">+ .zwo importieren</button></h2>
+    <div class="tiles-programme" id="custom-tiles"></div>
+    <input type="file" id="zwo-file" accept=".zwo,.xml" hidden>
   </div>
   <h2 class="listhead">Letzte Fahrten</h2>
   <p id="wochenbilanz" class="bilanz" hidden></p>
@@ -84,8 +87,10 @@
   </header>
   <div class="d-stats" id="d-stats"></div>
   <canvas id="detail-chart"></canvas>
+  <div id="d-compliance"></div>
   <div class="d-actions">
     <button id="btn-tcx">TCX exportieren</button>
+    <button id="btn-icu" hidden>→ intervals.icu</button>
     <button id="btn-delete" class="danger">Löschen</button>
   </div>
 </section>
@@ -117,6 +122,26 @@
       <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="10"></label>
       <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="5"></label>
     </div>
+    <details class="diagnose">
+      <summary>Erweitert</summary>
+      <div class="dlg-fields" style="margin-top:.5rem">
+        <label style="flex-direction:row;display:flex;align-items:center;gap:.5rem">
+          <input type="checkbox" id="set-sprache" style="width:auto"> Sprachansagen bei Blockwechsel
+        </label>
+        <label>intervals.icu API-Key (leer = aus)<input type="text" id="set-icukey" autocomplete="off"></label>
+        <label>Ride-Taste + (Bit, siehe Diagnose-Log)<input type="number" id="set-plusbit" min="0" max="31"></label>
+        <label>Ride-Taste − (Bit)<input type="number" id="set-minusbit" min="0" max="31"></label>
+      </div>
+    </details>
+    <details class="diagnose">
+      <summary>Sicherung</summary>
+      <p class="hint">Komplette Datenbank (Fahrten, Programme, Einstellungen) als JSON-Datei.</p>
+      <div class="dlg-actions" style="margin-top:.5rem">
+        <button type="button" id="btn-backup">Export</button>
+        <button type="button" id="btn-restore" class="ghost">Import</button>
+        <input type="file" id="backup-file" accept=".json" hidden>
+      </div>
+    </details>
     <details class="diagnose">
       <summary>Geräte</summary>
       <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht chrome://flags/#enable-web-bluetooth-new-permissions-backend — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
