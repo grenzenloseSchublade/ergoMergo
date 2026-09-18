@@ -94,8 +94,11 @@
     <canvas id="dlg-preview" width="600" height="90"></canvas>
     <div id="dlg-fields" class="dlg-fields"></div>
     <div class="dlg-actions">
-      <button value="cancel" class="ghost">Abbrechen</button>
+      <!-- Primärbutton zuerst im DOM: Enter im Eingabefeld löst die implizite
+           Formular-Absendung über den ERSTEN Submit-Button aus. Optische
+           Reihenfolge dreht das CSS (row-reverse). -->
       <button value="ok" class="primary">Los</button>
+      <button value="cancel" formnovalidate class="ghost">Abbrechen</button>
     </div>
   </form>
 </dialog>
@@ -111,8 +114,8 @@
       <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="5"></label>
     </div>
     <div class="dlg-actions">
-      <button value="cancel" class="ghost">Abbrechen</button>
       <button value="ok" class="primary">Speichern</button>
+      <button value="cancel" formnovalidate class="ghost">Abbrechen</button>
     </div>
   </form>
 </dialog>
