@@ -57,13 +57,25 @@ async function startRideInner(programm) {
       ? programm.generieren(opts, settings.ftp)
       : expand(programm.bauen(opts), settings.ftp);
   }
+  // Vorabcheck: ist der Bluetooth-Adapter überhaupt verfügbar/an?
+  if (await navigator.bluetooth.getAvailability?.() === false) {
+    alert('Bluetooth ist ausgeschaltet. Bitte einschalten und erneut versuchen.');
+    return;
+  }
   const ftms = new FTMS();
   try {
     await ftms.connect();
   } catch (err) {
-    if (err.name !== 'NotFoundError') alert('Verbindung fehlgeschlagen: ' + err.message);
+    console.warn('Verbindung fehlgeschlagen:', err);
+    if (err.name === 'NotFoundError') {
+      // Chooser abgebrochen ODER keine Berechtigung/kein Gerät — nicht still schlucken
+      $('#bt-support').textContent = 'Kein Gerät gewählt. Trainer wach? Chrome-Berechtigung „Geräte in der Nähe" erteilt?';
+    } else {
+      alert('Verbindung fehlgeschlagen: ' + err.message);
+    }
     return;
   }
+  $('#bt-support').textContent = '';
   requestPersistence();
   const session = new Session(ftms, settings, programm);
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
