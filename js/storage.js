@@ -27,7 +27,7 @@ function tx(store, mode, fn) {
   return db().then(d => new Promise((resolve, reject) => {
     const t = d.transaction(store, mode);
     const r = fn(t.objectStore(store));
-    t.oncomplete = () => resolve(r.result ?? r);
+    t.oncomplete = () => resolve(r?.result);
     t.onerror = () => reject(t.error);
   }));
 }

@@ -68,8 +68,9 @@ export const PROGRAMME = [
 let gruppenZaehler = 0;
 
 export function expand(schritte, ftp = 0) {
+  // 30-W-Boden: "%"-Ziele ohne hinterlegte FTP dürfen nicht zu 0-W-Blöcken werden
   const watt = w => typeof w === 'string' && w.endsWith('%')
-    ? Math.round(parseFloat(w) / 100 * ftp) : w;
+    ? Math.max(30, Math.round(parseFloat(w) / 100 * ftp)) : w;
   const out = [];
   for (const s of schritte) {
     if (s.wdh) {
@@ -121,6 +122,8 @@ export class ProgramRun extends EventTarget {
     const t = this.session.elapsed;
     const cur = this.blockAt(t);
     if (!cur) {
+      this.restImBlock = 0;
+      this.restGesamt = 0;
       if (this.index !== -2) { this.index = -2; this.dispatchEvent(new Event('done')); }
       return;
     }

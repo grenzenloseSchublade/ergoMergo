@@ -70,32 +70,36 @@ export class RideScreen {
       click.addEventListener('minus', () => adjust(-step));
       click.addEventListener('disconnected', () => btn.classList.remove('on'));
     });
+    // Alle Ride-Buttons per Handler-ZUWEISUNG statt addEventListener:
+    // die DOM-Elemente überleben die Session — Zuweisung überschreibt die
+    // Handler der vorherigen Fahrt, sonst feuert jeder Tap mehrfach.
     const hold = (btn, delta) => {
       const fire = () => adjust(delta);
-      btn.addEventListener('pointerdown', e => {
+      btn.onpointerdown = e => {
         e.preventDefault();
         fire();
         const tick = () => { fire(); this.#repeat = setTimeout(tick, 300); };
         this.#repeat = setTimeout(tick, 500);
-      });
-      for (const ev of ['pointerup', 'pointercancel', 'pointerleave'])
-        btn.addEventListener(ev, () => clearTimeout(this.#repeat));
+      };
+      btn.onpointerup = btn.onpointercancel = btn.onpointerleave =
+        () => clearTimeout(this.#repeat);
     };
     hold(this.$('#btn-plus'), step);
     hold(this.$('#btn-minus'), -step);
     // Large-Print-Umschalter (PM5-Muster): Tap auf die große Zahl
-    this.$('#m-watt').addEventListener('click', () =>
-      this.root.querySelector('.ride-grid').classList.toggle('large'));
+    this.$('#m-watt').onclick = () =>
+      this.root.querySelector('.ride-grid').classList.toggle('large');
     // Tap auf den Graphen: vergrößerte Darstellung (Details wie Klammern/Achse)
-    this.$('#live-chart').addEventListener('click', () => {
+    this.$('#live-chart').onclick = () => {
       this.root.querySelector('.ride-grid').classList.toggle('chartmax');
       this.render();
-    });
-    this.$('#btn-stop').addEventListener('click', () => this.session.emergencyStop());
-    this.$('#btn-end').addEventListener('click', async () => {
+    };
+    this.$('#btn-stop').onclick = () => this.session.emergencyStop();
+    this.$('#btn-end').onclick = async () => {
+      this.$('#btn-end').onclick = null;      // Doppel-Tap = doppeltes finish verhindern
       await this.session.finish();
       this.onEnd(this.session);
-    });
+    };
     // Tastatur (Laptop): Pfeile ±, Leertaste Stop
     this.#keys = e => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') adjust(step);

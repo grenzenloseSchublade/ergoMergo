@@ -28,7 +28,13 @@ export class FTMS extends EventTarget {
     });
     this.#device.addEventListener('gattserverdisconnected', () => this.#onDisconnected());
     this.#wantConnection = true;
-    await this.#setup();
+    try {
+      await this.#setup();
+    } catch (err) {
+      // Fehlgeschlagener Erstaufbau darf keine Reconnect-Schleife hinterlassen
+      this.disconnect();
+      throw err;
+    }
   }
 
   async #setup() {
@@ -102,8 +108,9 @@ export class FTMS extends EventTarget {
   }
 
   // Zielleistung in Watt. Aufrufer drosselt (max. 1 Write / 250 ms).
+  // Obergrenze sint16: darüber würde der Wert am Gerät negativ umschlagen.
   setTargetPower(watt) {
-    const w = Math.max(0, Math.round(watt));
+    const w = Math.max(0, Math.min(32767, Math.round(watt)));
     return this.#write(0x05, [w & 0xff, w >> 8 & 0xff]);
   }
 
@@ -111,8 +118,11 @@ export class FTMS extends EventTarget {
 
   #onDisconnected() {
     this.connected = false;
-    this.#pending?.reject(new Error('Verbindung getrennt'));
-    this.#pending = null;
+    if (this.#pending) {
+      clearTimeout(this.#pending.timer);
+      this.#pending.reject(new Error('Verbindung getrennt'));
+      this.#pending = null;
+    }
     this.dispatchEvent(new Event('disconnected'));
     if (this.#wantConnection) this.#scheduleReconnect(1000);
   }
@@ -143,7 +153,8 @@ export function parseBikeData(dv) {
   const flags = dv.getUint16(0, true);
   let i = 2;
   const out = {};
-  if ((flags & 0x0001) === 0) { out.kmh = dv.getUint16(i, true) / 100; i += 2; }  // Bit0 = More Data
+  // Instantaneous Speed ist vorhanden, wenn Bit 0 („More Data") = 0 ist
+  if ((flags & 0x0001) === 0) { out.kmh = dv.getUint16(i, true) / 100; i += 2; }
   if (flags & 0x0002) i += 2;                                       // Average Speed
   if (flags & 0x0004) { out.rpm = dv.getUint16(i, true) / 2; i += 2; }
   if (flags & 0x0008) i += 2;                                       // Average Cadence
@@ -153,5 +164,8 @@ export function parseBikeData(dv) {
   if (flags & 0x0080) i += 2;                                       // Average Power
   if (flags & 0x0100) i += 5;                                       // Expended Energy: Total + /h + /min
   if (flags & 0x0200) { out.hr = dv.getUint8(i); i += 1; }
+  if (flags & 0x0400) i += 2;                                       // Metabolic Equivalent
+  if (flags & 0x0800) i += 2;                                       // Elapsed Time
+  if (flags & 0x1000) i += 2;                                       // Remaining Time
   return out;
 }

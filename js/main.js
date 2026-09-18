@@ -34,8 +34,19 @@ document.addEventListener('visibilitychange', () => {
 });
 
 let rideScreen = null;
+let startLaeuft = false;    // Doppel-Tap auf eine Kachel → nur ein Verbindungsaufbau
 
 async function startRide(programm = null) {
+  if (startLaeuft || rideScreen) return;
+  startLaeuft = true;
+  try {
+    await startRideInner(programm);
+  } finally {
+    startLaeuft = false;
+  }
+}
+
+async function startRideInner(programm) {
   const settings = await getSettings();
   initAudio();                              // braucht die User-Geste des Start-Taps
   let run = null, blocks = null;
@@ -143,6 +154,7 @@ async function openSettings() {
     await setSetting('wattSchritt', Math.max(1, Number($('#set-schritt').value) || 10));
     await setSetting('maxWatt', Math.max(100, Number($('#set-max').value) || 400));
     await setSetting('startWatt', Math.max(20, Number($('#set-start').value) || 100));
+    renderProgrammTiles();      // Zonenfarben/Profile an neue FTP anpassen
   };
   dlg.showModal();
 }
@@ -152,6 +164,7 @@ async function renderProgrammTiles() {
   const effFtp = settings.ftp || EFF_FTP_DEFAULT;
   const fill = (sel, list) => {
     const wrap = $(sel);
+    wrap.replaceChildren();     // erneuter Aufruf (z. B. nach FTP-Änderung) ersetzt
     for (const p of list) {
       const btn = document.createElement('button');
       btn.className = 'tile';
@@ -171,8 +184,10 @@ async function renderProgrammTiles() {
 }
 
 let detailCleanup = null;
+let reloadAusstehend = false;   // SW-Update kam während einer Fahrt an
 
 async function goHome() {
+  if (reloadAusstehend) { location.reload(); return; }
   detailCleanup?.();
   detailCleanup = null;
   show('home');
@@ -250,9 +265,9 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
   let hatteController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hatteController && !screens.ride.hidden) return;   // nie mitten in der Fahrt
-    if (hatteController) location.reload();
-    hatteController = true;
+    if (!hatteController) { hatteController = true; return; }   // Erstinstallation
+    if (screens.ride.hidden) location.reload();
+    else reloadAusstehend = true;               // nie mitten in der Fahrt — nachholen
   });
 }
 

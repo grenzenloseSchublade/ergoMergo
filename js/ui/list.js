@@ -21,7 +21,7 @@ export async function renderList(ul, onOpen) {
     const d = new Date(s.start);
     li.innerHTML = `<span>${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
       ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-      <span class="meta">${s.programm} · ${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ</span>`;
+      <span class="meta">${s.programm} · ${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ${s.final ? '' : ' · abgebrochen'}</span>`;
     li.addEventListener('click', () => onOpen(s));
     ul.append(li);
   }

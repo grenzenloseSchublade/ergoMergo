@@ -110,9 +110,6 @@ export class Session extends EventTarget {
     return Math.round(sum / n);
   }
 
-  pause() { this.status = 'paused'; this.dispatchEvent(new Event('status')); }
-  resume() { this.status = 'riding'; this.dispatchEvent(new Event('status')); }
-
   stats() {
     let sumW = 0, maxW = 0, sumRpm = 0, rpmN = 0;
     for (let k = 0; k < this.count; k++) {
@@ -141,6 +138,7 @@ export class Session extends EventTarget {
   }
 
   async finish() {
+    if (this.status === 'done') return;
     this.status = 'done';
     clearInterval(this.#writeTimer);
     clearInterval(this.#tickTimer);
