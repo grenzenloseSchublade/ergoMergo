@@ -240,7 +240,7 @@ export function drawProfile(canvas, blocks, ftp) {
 export class WorkoutChart {
   constructor(canvas) { this.canvas = canvas; }
 
-  draw(blocks, total, samples, count, offset, ftp) {
+  draw(blocks, total, samples, count, offset, ftp, tOffset = 0) {
     const { ctx, w, h, css } = prepCanvas(this.canvas);
     const gruppen = sammleGruppen(blocks);
     const kopf = gruppen.size ? 13 : 0;
@@ -264,10 +264,12 @@ export class WorkoutChart {
     ctx.globalAlpha = 1;
     zeichneZeitachse(ctx, css, w, h, fuss, total);
 
+    // Linie bleibt auf aufgezeichneter Zeit; nur der Cursor folgt der
+    // Programmuhr (die Skip/+30 s verschieben kann)
     zeichneLeistungslinie(ctx, css, samples, count, k => x(samples[k * FIELDS]), y);
 
     if (count) {
-      const px = x(samples[(count - 1) * FIELDS]);
+      const px = x(samples[(count - 1) * FIELDS] + tOffset);
       ctx.strokeStyle = css('--ink2');
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);

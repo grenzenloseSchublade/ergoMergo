@@ -46,12 +46,19 @@ export const getSession = id => tx('sessions', 'readonly', st => st.get(id));
 export const saveSamples = (id, samples, count) =>
   tx('sessionData', 'readwrite', st => st.put({ id, count, samples: samples.slice(0, count * FIELDS) }));
 export const getSamples = id => tx('sessionData', 'readonly', st => st.get(id));
+export const getAllSamples = () => tx('sessionData', 'readonly', st => st.getAll());
+
+// Eigene (importierte) Programme
+export const listProgramme = () => tx('programme', 'readonly', st => st.getAll());
+export const saveProgramm = p => tx('programme', 'readwrite', st => st.put(p));
+export const deleteProgramm = id => tx('programme', 'readwrite', st => st.delete(id));
 
 export async function getSettings() {
   const rows = await tx('settings', 'readonly', st => st.getAll());
   const defaults = {
     ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100, theme: 'dark',
     controllerPlusBit: 4, controllerMinusBit: 0,   // Ride-Tastenbits, per Diagnose-Log ermittelbar
+    sprachansagen: true, icuApiKey: '',
   };
   return Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));
 }

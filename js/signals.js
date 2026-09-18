@@ -37,6 +37,17 @@ export function countdown() {
   tone(660, ctx.currentTime, 0.08, 0.25);
 }
 
+// Sprachansage (SpeechSynthesis) — z. B. „3 Minuten, 210 Watt"
+export function sage(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'de-DE';
+    u.rate = 1.1;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch { /* nicht überall verfügbar */ }
+}
+
 export function fertig() {
   navigator.vibrate?.([150, 80, 150, 80, 400]);
   if (!ctx) return;
