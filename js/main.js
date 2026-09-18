@@ -262,3 +262,12 @@ if (dlgParam) {
   const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === dlgParam);
   if (p) getSettings().then(s => startDialog(p, s));
 }
+// ?big=<id> — Graph-Vollbild direkt öffnen (UI-Arbeit/Screenshots)
+const bigParam = new URLSearchParams(location.search).get('big');
+if (bigParam) {
+  const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === bigParam);
+  if (p) getSettings().then(s => {
+    const blocks = baueBlocks(p, defaultOpts(p), s.ftp);
+    zeigeGraphOverlay(c => drawProfile(c, blocks, s.ftp || EFF_FTP_DEFAULT));
+  });
+}

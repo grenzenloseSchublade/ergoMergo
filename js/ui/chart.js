@@ -40,29 +40,62 @@ export function zoneColor(watt, ftp) {
   return `var(${zoneVar(watt, ftp)})`;
 }
 
+// Skalierungsfaktor: Schriften/Abstände wachsen mit der Canvas-Höhe,
+// damit Miniatur (36 px) und Vollbild (400 px+) gleichermaßen lesbar sind.
+function scaleOf(h) {
+  return Math.min(2.2, Math.max(1, h / 120));
+}
+
+// Schriftgrößen wachsen NICHT linear mit (Lesbarkeitskonvention: Achsen-
+// beschriftung 9–13 px, Labels bis 14 px — egal wie groß die Canvas ist)
+const axisFont = s => Math.min(13, Math.round(9 * Math.sqrt(s)) + (s > 1.4 ? 2 : 0));
+const labelFont = s => Math.min(14, Math.round(10 * Math.sqrt(s)) + (s > 1.4 ? 2 : 0));
+
 // Zeitachse am unteren Rand: Minuten-Ticks in sinnvollem Raster
-function zeichneZeitachse(ctx, css, w, h, fuss, total) {
+function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1) {
   const y = h - fuss + 0.5;
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink3');
   ctx.lineWidth = 1;
-  ctx.font = '9px system-ui';
+  ctx.font = `${axisFont(s)}px system-ui`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.beginPath();
   ctx.moveTo(0, y);
   ctx.lineTo(w, y);
-  const step = [60, 120, 300, 600, 900, 1200, 1800, 3600].find(s => s / total * w >= 34) ?? 3600;
+  const step = [60, 120, 300, 600, 900, 1200, 1800, 3600].find(x => x / total * w >= 34 * s) ?? 3600;
   for (let t = step; t < total; t += step) {
     const x = t / total * w;
-    if (x > w - 46) break;                   // Platz fürs Endlabel lassen
+    if (x > w - 46 * s) break;               // Platz fürs Endlabel lassen
     ctx.moveTo(x, y);
-    ctx.lineTo(x, y + 3);
-    ctx.fillText(String(t / 60), x, y + 4);
+    ctx.lineTo(x, y + 3 * s);
+    ctx.fillText(String(t / 60), x, y + 4 * s);
   }
   ctx.stroke();
   ctx.textAlign = 'right';
-  ctx.fillText(`${Math.round(total / 60)} min`, w - 1, y + 4);
+  ctx.fillText(`${Math.round(total / 60)} min`, w - 1, y + 4 * s);
+}
+
+// Watt-Achse links (nur große Canvas). Zwei Phasen: Rasterlinien liegen
+// unter den Balken, die Beschriftung darüber — sonst verdecken Balken den Text.
+function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
+  const raster = [25, 50, 100, 200].find(r => (h - kopf - fuss) * r / maxW >= 26 * s) ?? 200;
+  ctx.strokeStyle = css('--line');
+  ctx.fillStyle = css('--ink2');
+  ctx.lineWidth = 1;
+  ctx.font = `${axisFont(s)}px system-ui`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.beginPath();
+  for (let v = raster; v < maxW / 1.02; v += raster) {
+    const y = kopf + (h - kopf - fuss) * (1 - v / maxW);
+    if (phase !== 'labels') {
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(w, y + 0.5);
+    }
+    if (phase !== 'linien') ctx.fillText(`${v} W`, 3, y - 2);
+  }
+  ctx.stroke();
 }
 
 // Wiederholte Abschnitte (gruppe/gruppeLabel an den Blöcken) einsammeln
@@ -81,27 +114,45 @@ function sammleGruppen(blocks) {
 }
 
 // Klammer „n×" über einem wiederholten Abschnitt
-function zeichneKlammern(ctx, css, w, gruppen, total) {
+function zeichneKlammern(ctx, css, w, gruppen, total, s = 1) {
   ctx.strokeStyle = css('--ink3');
   ctx.fillStyle = css('--ink2');
   ctx.lineWidth = 1;
-  ctx.font = '600 10px monospace';
+  ctx.font = `600 ${labelFont(s)}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const g of gruppen.values()) {
     const x0 = g.von / total * w + 1, x1 = g.bis / total * w - 1;
-    if (x1 - x0 < 18) continue;              // zu schmal für eine lesbare Klammer
-    const y = 6.5;
+    if (x1 - x0 < 18 * s) continue;          // zu schmal für eine lesbare Klammer
+    const y = 6.5 * s;
     const label = g.label ?? '×';
     const lw = ctx.measureText(label).width + 6;
     const mitte = (x0 + x1) / 2;
     ctx.beginPath();
-    ctx.moveTo(x0, y + 3.5); ctx.lineTo(x0, y);
+    ctx.moveTo(x0, y + 3.5 * s); ctx.lineTo(x0, y);
     ctx.lineTo(mitte - lw / 2, y);
     ctx.moveTo(mitte + lw / 2, y);
-    ctx.lineTo(x1, y); ctx.lineTo(x1, y + 3.5);
+    ctx.lineTo(x1, y); ctx.lineTo(x1, y + 3.5 * s);
     ctx.stroke();
     ctx.fillText(label, mitte, y + 0.5);
+  }
+}
+
+// Wattzahl in breite Blöcke schreiben (nur Vollbild): Block muss Platz bieten
+function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) {
+  ctx.fillStyle = css('--ink');
+  ctx.font = `600 ${labelFont(s)}px system-ui`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  let t = 0;
+  for (const b of blocks) {
+    const bw = b.dauer / total * w;
+    const y = kopf + (h - kopf - fuss) * (1 - b.watt / maxW);
+    const label = String(b.watt);
+    if (bw >= ctx.measureText(label).width + 10 && h - fuss - y >= 22) {
+      ctx.fillText(label, (t + b.dauer / 2) / total * w, y + 3);
+    }
+    t += b.dauer;
   }
 }
 
@@ -126,10 +177,13 @@ export function drawProfile(canvas, blocks, ftp) {
   const { ctx, w, h, css } = prepCanvas(canvas);
   const total = blocks.reduce((a, b) => a + b.dauer, 0);
   if (!total) return;
+  const s = scaleOf(h);
   const gruppen = sammleGruppen(blocks);
-  const kopf = gruppen.size ? 13 : 0;
-  const fuss = h >= 56 ? 13 : 0;
+  const kopf = gruppen.size ? 13 * s : 0;
+  const fuss = h >= 56 ? 13 * s : 0;
   const maxW = Math.max(...blocks.map(b => b.watt)) * 1.08;
+  const gross = h >= 160;                    // Vollbild: Wattachse + Blocklabels
+  if (gross) zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien');
   let t = 0;
   ctx.globalAlpha = 0.9;
   for (const b of blocks) {
@@ -140,8 +194,12 @@ export function drawProfile(canvas, blocks, ftp) {
     t += b.dauer;
   }
   ctx.globalAlpha = 1;
-  if (fuss) zeichneZeitachse(ctx, css, w, h, fuss, total);
-  zeichneKlammern(ctx, css, w, gruppen, total);
+  if (gross) {
+    zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
+    zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s);
+  }
+  if (fuss) zeichneZeitachse(ctx, css, w, h, fuss, total, s);
+  zeichneKlammern(ctx, css, w, gruppen, total, s);
 }
 
 // Programm-Graph während der Fahrt: Zielblöcke, Ist-Linie, Positionscursor,
@@ -244,7 +302,8 @@ export class LiveChart {
 export function drawSessionChart(canvas, samples, count) {
   const { ctx, w, h, css } = prepCanvas(canvas);
   if (!count) return;
-  const fuss = 13;
+  const s = scaleOf(h);
+  const fuss = 13 * s;
   let maxW = 100;
   for (let k = 0; k < count; k++)
     maxW = Math.max(maxW, samples[k * FIELDS + 1], samples[k * FIELDS + 2]);
@@ -261,6 +320,7 @@ export function drawSessionChart(canvas, samples, count) {
   ctx.closePath();
   ctx.fill();
 
-  zeichneLeistungslinie(ctx, css, samples, count, x, y);
-  zeichneZeitachse(ctx, css, w, h, fuss, total);
+  if (h >= 160) zeichneWattachse(ctx, css, w, h, 0, fuss, maxW, s);
+  zeichneLeistungslinie(ctx, css, samples, count, x, y, 1.5 * s);
+  zeichneZeitachse(ctx, css, w, h, fuss, total, s);
 }
