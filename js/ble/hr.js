@@ -6,8 +6,8 @@ const CH_HR = 0x2a37;
 export class HeartRate extends EventTarget {
   #device = null;
 
-  async connect() {
-    this.#device = await navigator.bluetooth.requestDevice({
+  async connect(device = null) {
+    this.#device = device ?? await navigator.bluetooth.requestDevice({
       filters: [{ services: [HR_SERVICE] }],
     });
     const server = await this.#device.gatt.connect();
@@ -24,6 +24,7 @@ export class HeartRate extends EventTarget {
   }
 
   get deviceName() { return this.#device?.name ?? null; }
+  get device() { return this.#device; }
 
   disconnect() {
     try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }

@@ -5,9 +5,50 @@ import { toTCX, download } from '../export.js';
 import { drawSessionChart } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
 import { fmtTime } from './ride.js';
+import { kennwerte } from '../metrics.js';
+
+// Zeit-in-Zonen als schmaler Farbbalken (HTML, nutzt --z1..--z6)
+function zonenBalken(zonenSek, hoehe = 6) {
+  if (!zonenSek || !zonenSek.some(s => s > 0)) return '';
+  const total = zonenSek.reduce((a, b) => a + b, 0);
+  const teile = zonenSek.map((s, z) => s > 0
+    ? `<i style="flex:${s / total};background:var(--z${z + 1})"></i>` : '').join('');
+  return `<span class="zonen" style="height:${hoehe}px">${teile}</span>`;
+}
+
+// Wochenbilanz: aktuelle Woche (ab Montag) gegen Vorwoche
+export function wochenbilanz(sessions) {
+  const jetzt = new Date();
+  const wochenstart = new Date(jetzt);
+  wochenstart.setHours(0, 0, 0, 0);
+  wochenstart.setDate(wochenstart.getDate() - (wochenstart.getDay() + 6) % 7);
+  const vorwochenstart = new Date(wochenstart);
+  vorwochenstart.setDate(vorwochenstart.getDate() - 7);
+  const summe = list => list.reduce((a, s) => ({
+    n: a.n + 1, sek: a.sek + s.dauer, kJ: a.kJ + s.kJ, tss: a.tss + (s.tss ?? 0),
+  }), { n: 0, sek: 0, kJ: 0, tss: 0 });
+  return {
+    woche: summe(sessions.filter(s => s.start >= wochenstart.getTime())),
+    vorwoche: summe(sessions.filter(s => s.start >= vorwochenstart.getTime() && s.start < wochenstart.getTime())),
+  };
+}
 
 export async function renderList(ul, onOpen) {
   const sessions = await listSessions();
+
+  // Wochenbilanz über der Liste
+  const bilanzEl = document.querySelector('#wochenbilanz');
+  if (bilanzEl) {
+    if (sessions.length) {
+      const { woche, vorwoche } = wochenbilanz(sessions);
+      const fmt = b => `${b.n} ${b.n === 1 ? 'Fahrt' : 'Fahrten'} · ${fmtTime(b.sek)} · ${Math.round(b.kJ)} kJ${b.tss ? ` · ${b.tss} TSS` : ''}`;
+      bilanzEl.innerHTML = `<b>Diese Woche:</b> ${fmt(woche)}<br><span>Vorwoche: ${fmt(vorwoche)}</span>`;
+      bilanzEl.hidden = false;
+    } else {
+      bilanzEl.hidden = true;
+    }
+  }
+
   ul.replaceChildren();
   if (!sessions.length) {
     const li = document.createElement('li');
@@ -19,9 +60,10 @@ export async function renderList(ul, onOpen) {
   for (const s of sessions) {
     const li = document.createElement('li');
     const d = new Date(s.start);
-    li.innerHTML = `<span>${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+    li.innerHTML = `<span class="zeile"><span>${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
       ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-      <span class="meta">${s.programm} · ${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ${s.final ? '' : ' · abgebrochen'}</span>`;
+      <span class="meta">${s.programm} · ${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ${s.final ? '' : ' · abgebrochen'}</span></span>
+      ${zonenBalken(s.zonenSek, 5)}`;
     li.addEventListener('click', () => onOpen(s));
     ul.append(li);
   }
@@ -30,12 +72,23 @@ export async function renderList(ul, onOpen) {
 export async function renderDetail(root, session, onClose) {
   root.querySelector('#d-title').textContent =
     new Date(session.start).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
-  root.querySelector('#d-stats').innerHTML = [
+  const data = await getSamples(session.id);
+
+  // Fehlende Kennwerte (alte Sessions) aus den Rohsamples nachberechnen
+  if (data && session.np === undefined) {
+    Object.assign(session, kennwerte(data.samples, data.count, session.ftp ?? 0));
+  }
+
+  const stats = [
     ['Dauer', fmtTime(session.dauer)], ['Ø', `${session.avgW} W`], ['max', `${session.maxW} W`],
     ['Arbeit', `${session.kJ} kJ`], ['Ø Kadenz', `${session.avgRpm} rpm`],
-  ].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('');
-
-  const data = await getSamples(session.id);
+  ];
+  if (session.np) stats.push(['NP', `${session.np} W`]);
+  if (session.if) stats.push(['IF', session.if], ['TSS', session.tss]);
+  if (session.hrAvg) stats.push(['Ø HF', `${session.hrAvg} bpm`], ['max HF', `${session.hrMax} bpm`]);
+  root.querySelector('#d-stats').innerHTML =
+    stats.map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('')
+    + zonenBalken(session.zonenSek, 8);
   let cleanup = () => {};
   if (data) {
     const canvas = root.querySelector('#detail-chart');

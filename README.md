@@ -20,6 +20,20 @@ Auf dem Startbildschirm eine Dauer und einen Trainingstyp wählen — die App ge
 
 Strukturen, Formeln und Quellen: [docs/programme.md](docs/programme.md)
 
+## Daten & Speicherung
+
+Alle Daten liegen **lokal** in einer IndexedDB (`ergomergo`) im Chrome-Profil des jeweiligen Geräts — kein Server, kein Konto, keine Cloud. Stores: `sessions` (Kennwerte je Fahrt: Dauer, Ø/max Watt, kJ, NP, IF/TSS, HF, Zeit in Zonen, Gerät, Firmware), `sessionData` (Rohsamples, 1/s), `settings`, `programme`, `logs` (Diagnose). `navigator.storage.persist()` schützt vor automatischem Aufräumen durch den Browser. Sicherung: TCX-Export je Fahrt; „Browserdaten löschen" entfernt alles. Ein geräteübergreifender Verlauf existiert bewusst nicht (kein Backend).
+
+## Geräte & schnelles Starten
+
+Der Kachel-Tap bleibt der einzige nötige Schritt. Einmal verbundene Geräte (Trainer, HF-Gurt, Zwift Click/Ride) werden gemerkt; unterstützt der Browser persistente Web-Bluetooth-Berechtigungen (`chrome://flags/#enable-web-bluetooth-new-permissions-backend`), verbindet die App beim Start **ohne Geräteauswahl** direkt, HF-Gurt und Controller automatisch mit. Ohne Flag bleibt es bei einem Chooser-Tap pro Sitzung. Verwaltung unter Einstellungen → „Geräte".
+
+## Firmware
+
+Die App liest die Trainer-Firmware-Version aus (Geräte-Liste und Diagnose-Log). **Updates macht sie nicht** — dafür gibt es kein öffentliches Protokoll: der KICKR CORE 2 aktualisiert sich automatisch über WLAN (bzw. Wahoo-App), Zwift Ride/Click über die Zwift-Companion-App. Hinweis: Ride-Firmware ab Jan 2025 wechselt die BLE-Service-UUID auf `FC82` — die App unterstützt beide Varianten.
+
+Fehlersuche: [docs/debugging.md](docs/debugging.md)
+
 ## Entwicklung
 
 ```sh

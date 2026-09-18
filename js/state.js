@@ -3,6 +3,7 @@
 // höchstens alle 250 ms auf den Control Point.
 
 import { FIELDS, saveSamples, saveSession } from './storage.js';
+import { kennwerte } from './metrics.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
 const RAMP_MS = 2000;         // Zielsprünge als Rampe, nicht als Sprung
@@ -124,6 +125,7 @@ export class Session extends EventTarget {
       maxW,
       kJ: Math.round(this.kj),
       avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
+      ...kennwerte(this.samples, this.count, this.settings.ftp),
     };
   }
 
@@ -133,6 +135,10 @@ export class Session extends EventTarget {
     await saveSession({
       id: this.id, start: this.start,
       programm: this.programm?.name ?? 'Freies Fahren',
+      programmId: this.programm?.id ?? null,
+      geraet: this.ftms.deviceName ?? null,
+      fw: this.ftms.firmware ?? null,
+      ftp: this.settings.ftp || null,
       final, ...this.stats(),
     });
   }

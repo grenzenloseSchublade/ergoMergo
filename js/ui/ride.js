@@ -3,7 +3,8 @@
 import { LiveChart, WorkoutChart, zoneColor } from './chart.js';
 import * as signal from '../signals.js';
 import { HeartRate } from '../ble/hr.js';
-import { ZwiftClick } from '../ble/click.js';
+import { ZwiftController } from '../ble/zwift-controller.js';
+import { schnellverbinde, merkeGeraet } from '../ble/geraete.js';
 
 export class RideScreen {
   constructor(root, session, settings, onEnd, run = null) {
@@ -55,21 +56,39 @@ export class RideScreen {
         catch (err) { if (err.name !== 'NotFoundError') this.#status(err.message, 'err'); }
       };
     };
-    chip('#btn-hr', async btn => {
+    const verbindeHR = async (btn, device = null) => {
       const hr = new HeartRate();
-      await hr.connect();
+      await hr.connect(device);
       this.#geraete.push(hr);
       this.session.attachHR(hr);
+      merkeGeraet('hr', hr.device);
       hr.addEventListener('disconnected', () => btn.classList.remove('on'));
-    });
-    chip('#btn-click', async btn => {
-      const click = new ZwiftClick();
-      await click.connect();
-      this.#geraete.push(click);
-      click.addEventListener('plus', () => adjust(step));
-      click.addEventListener('minus', () => adjust(-step));
-      click.addEventListener('disconnected', () => btn.classList.remove('on'));
-    });
+    };
+    const verbindeCtrl = async (btn, device = null) => {
+      const ctrl = new ZwiftController({
+        plusBit: this.settings.controllerPlusBit,
+        minusBit: this.settings.controllerMinusBit,
+      });
+      await ctrl.connect(device);
+      this.#geraete.push(ctrl);
+      ctrl.addEventListener('plus', () => adjust(step));
+      ctrl.addEventListener('minus', () => adjust(-step));
+      merkeGeraet('controller', ctrl.device);
+      ctrl.addEventListener('disconnected', () => btn.classList.remove('on'));
+    };
+    chip('#btn-hr', verbindeHR);
+    chip('#btn-click', verbindeCtrl);
+
+    // Gemerkte Zusatzgeräte automatisch mitverbinden (best effort, ohne Chooser)
+    const auto = async (rolle, id, fn) => {
+      const device = await schnellverbinde(rolle);
+      if (!device) return;
+      const btn = this.$(id);
+      try { await fn(btn, device); btn.classList.add('on'); }
+      catch { /* Gerät nicht bereit — manueller Chip-Weg bleibt */ }
+    };
+    auto('hr', '#btn-hr', verbindeHR);
+    auto('controller', '#btn-click', verbindeCtrl);
     // Alle Ride-Buttons per Handler-ZUWEISUNG statt addEventListener:
     // die DOM-Elemente überleben die Session — Zuweisung überschreibt die
     // Handler der vorherigen Fahrt, sonst feuert jeder Tap mehrfach.

@@ -3,12 +3,17 @@
 // 0x00 Request Control → 0x07 Start → 0x05 Set Target Power.
 
 const FTMS_SERVICE = 0x1826;
+const DIS_SERVICE = 0x180a;          // Device Information (Firmware-Version)
+const CH_FW_REV = 0x2a26;
 const CH_BIKE_DATA = 0x2ad2;
 const CH_FEATURE = 0x2acc;
 const CH_CONTROL = 0x2ad9;
 const CH_STATUS = 0x2ada;
 
 const RESULT = { 1: 'Success', 2: 'Op Code Not Supported', 3: 'Invalid Parameter', 4: 'Operation Failed', 5: 'Control Not Permitted' };
+const BEKANNTE_FW = '3.5.37';        // zuletzt gegen diese CORE-2-Firmware getestet
+
+import { logInfo, logWarn, logError } from '../logger.js';
 
 export class FTMS extends EventTarget {
   #device = null;
@@ -18,13 +23,16 @@ export class FTMS extends EventTarget {
   #reconnectTimer = null;
   connected = false;
   features = null;
+  firmware = null;
 
   get deviceName() { return this.#device?.name ?? null; }
+  get device() { return this.#device; }
 
-  async connect() {
-    this.#device = await navigator.bluetooth.requestDevice({
+  // Optionales device: bereits autorisiertes Gerät (Schnellverbindung ohne Chooser)
+  async connect(device = null) {
+    this.#device = device ?? await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'KICKR' }, { services: [FTMS_SERVICE] }],
-      optionalServices: [FTMS_SERVICE],
+      optionalServices: [FTMS_SERVICE, DIS_SERVICE],
     });
     this.#device.addEventListener('gattserverdisconnected', () => this.#onDisconnected());
     this.#wantConnection = true;
@@ -51,6 +59,18 @@ export class FTMS extends EventTarget {
         simulation: !!(target & 1 << 13),
       };
     } catch { this.features = null; }
+
+    // Firmware-Version (Device Information Service) — rein informativ
+    if (!this.firmware) {
+      try {
+        const dis = await server.getPrimaryService(DIS_SERVICE);
+        const raw = await (await dis.getCharacteristic(CH_FW_REV)).readValue();
+        this.firmware = new TextDecoder().decode(raw).replace(/\0+$/, '');
+      } catch { /* nicht jedes Gerät bietet den Dienst an */ }
+      if (this.firmware && this.firmware !== BEKANNTE_FW)
+        logInfo('ftms', `Firmware ${this.firmware} weicht von getesteter ${BEKANNTE_FW} ab (nur Hinweis)`);
+    }
+    logInfo('ftms', `verbunden mit ${this.#device.name}` + (this.firmware ? ` (FW ${this.firmware})` : ''), this.features);
 
     // Chrome liefert beim Reconnect dieselben Characteristic-Objekte —
     // remove vor add verhindert doppelte Handler (und damit doppelte Events).
@@ -94,7 +114,10 @@ export class FTMS extends EventTarget {
     this.#pending = null;
     clearTimeout(p.timer);
     if (b[2] === 1) p.resolve();
-    else p.reject(new Error(`Control Point 0x${p.opcode.toString(16)}: ${RESULT[b[2]] ?? b[2]}`));
+    else {
+      logWarn('ftms', `CP 0x${p.opcode.toString(16)} → ${RESULT[b[2]] ?? b[2]}`);
+      p.reject(new Error(`Control Point 0x${p.opcode.toString(16)}: ${RESULT[b[2]] ?? b[2]}`));
+    }
   }
 
   #write(opcode, params = []) {
@@ -123,6 +146,7 @@ export class FTMS extends EventTarget {
       this.#pending.reject(new Error('Verbindung getrennt'));
       this.#pending = null;
     }
+    logWarn('ftms', 'Verbindung getrennt' + (this.#wantConnection ? ', versuche Reconnect' : ''));
     this.dispatchEvent(new Event('disconnected'));
     if (this.#wantConnection) this.#scheduleReconnect(1000);
   }
@@ -133,8 +157,10 @@ export class FTMS extends EventTarget {
       if (!this.#wantConnection) return;
       try {
         await this.#setup();
+        logInfo('ftms', 'Reconnect erfolgreich');
         this.dispatchEvent(new Event('reconnected'));
-      } catch {
+      } catch (err) {
+        logError('ftms', `Reconnect fehlgeschlagen (nächster in ${Math.min(delay * 2, 10000)} ms)`, err.message);
         this.#scheduleReconnect(Math.min(delay * 2, 10000));
       }
     }, delay);

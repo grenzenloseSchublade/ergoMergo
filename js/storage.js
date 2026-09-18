@@ -2,7 +2,7 @@
 // Samples liegen als Int16Array n×6 [s, watt, ziel, rpm, hf, kmh×10].
 
 const DB_NAME = 'ergomergo';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 export const FIELDS = 6;
 
 let dbPromise = null;
@@ -12,10 +12,12 @@ function db() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const d = req.result;
-      d.createObjectStore('sessions', { keyPath: 'id' });
-      d.createObjectStore('sessionData', { keyPath: 'id' });
-      d.createObjectStore('settings', { keyPath: 'key' });
-      d.createObjectStore('programme', { keyPath: 'id' });
+      for (const name of ['sessions', 'sessionData'])
+        if (!d.objectStoreNames.contains(name)) d.createObjectStore(name, { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
+      if (!d.objectStoreNames.contains('programme')) d.createObjectStore('programme', { keyPath: 'id' });
+      // v2: Diagnose-Log als ein Ringpuffer-Datensatz
+      if (!d.objectStoreNames.contains('logs')) d.createObjectStore('logs', { keyPath: 'key' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -47,10 +49,23 @@ export const getSamples = id => tx('sessionData', 'readonly', st => st.get(id));
 
 export async function getSettings() {
   const rows = await tx('settings', 'readonly', st => st.getAll());
-  const defaults = { ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100, theme: 'dark' };
+  const defaults = {
+    ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100, theme: 'dark',
+    controllerPlusBit: 4, controllerMinusBit: 0,   // Ride-Tastenbits, per Diagnose-Log ermittelbar
+  };
   return Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));
 }
 export const setSetting = (key, value) => tx('settings', 'readwrite', st => st.put({ key, value }));
+
+// Diagnose-Log: ein Datensatz mit gedeckeltem Eintrags-Array
+const LOG_MAX = 2000;
+export async function appendLogs(entries) {
+  const alt = await tx('logs', 'readonly', st => st.get('ring'));
+  const alle = [...(alt?.entries ?? []), ...entries].slice(-LOG_MAX);
+  await tx('logs', 'readwrite', st => st.put({ key: 'ring', entries: alle }));
+}
+export const getLogs = () => tx('logs', 'readonly', st => st.get('ring')).then(r => r?.entries ?? []);
+export const clearLogs = () => tx('logs', 'readwrite', st => st.delete('ring'));
 
 export function requestPersistence() {
   navigator.storage?.persist?.().catch(() => {});

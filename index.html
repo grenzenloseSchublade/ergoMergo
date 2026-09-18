@@ -31,6 +31,7 @@
     <div class="tiles-programme" id="programm-tiles"></div>
   </div>
   <h2 class="listhead">Letzte Fahrten</h2>
+  <p id="wochenbilanz" class="bilanz" hidden></p>
   <ul id="session-list" class="sessions"></ul>
 </section>
 
@@ -59,7 +60,7 @@
         <span id="m-total" hidden><b id="m-total-time">0:00</b> gesamt</span>
         <span id="m-status" class="status" aria-live="polite">verbinde …</span>
         <button class="chip" id="btn-hr">+ HF-Gurt</button>
-        <button class="chip" id="btn-click">+ Click</button>
+        <button class="chip" id="btn-click">+ Controller</button>
       </div>
     </div>
     <canvas id="live-chart"></canvas>
@@ -113,6 +114,19 @@
       <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="10"></label>
       <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="5"></label>
     </div>
+    <details class="diagnose">
+      <summary>Geräte</summary>
+      <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht chrome://flags/#enable-web-bluetooth-new-permissions-backend — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
+      <ul id="geraete-liste" class="geraete"></ul>
+    </details>
+    <details class="diagnose">
+      <summary>Diagnose-Log</summary>
+      <pre id="log-view">–</pre>
+      <div class="dlg-actions" style="margin-top:.5rem">
+        <button type="button" id="btn-log-export">Export</button>
+        <button type="button" id="btn-log-clear" class="ghost">Leeren</button>
+      </div>
+    </details>
     <div class="dlg-actions">
       <button value="ok" class="primary">Speichern</button>
       <button value="cancel" formnovalidate class="ghost">Abbrechen</button>

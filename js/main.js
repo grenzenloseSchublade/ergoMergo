@@ -7,6 +7,10 @@ import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
+import { logInfo, logError, formatLog } from './logger.js';
+import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
+import { getLogs, clearLogs } from './storage.js';
+import { download } from './export.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
 import { initAudio } from './signals.js';
@@ -64,9 +68,12 @@ async function startRideInner(programm) {
   }
   const ftms = new FTMS();
   try {
-    await ftms.connect();
+    // Schnellverbindung: gemerkter Trainer ohne Chooser (wenn getDevices verfügbar)
+    const bekannt = await schnellverbinde('trainer');
+    await ftms.connect(bekannt);
+    merkeGeraet('trainer', ftms.device, ftms.firmware ? { fw: ftms.firmware } : {});
   } catch (err) {
-    console.warn('Verbindung fehlgeschlagen:', err);
+    logError('app', 'Verbindung fehlgeschlagen', `${err.name}: ${err.message}`);
     if (err.name === 'NotFoundError') {
       // Chooser abgebrochen ODER keine Berechtigung/kein Gerät — nicht still schlucken
       $('#bt-support').textContent = 'Kein Gerät gewählt. Trainer wach? Chrome-Berechtigung „Geräte in der Nähe" erteilt?';
@@ -77,6 +84,7 @@ async function startRideInner(programm) {
   }
   $('#bt-support').textContent = '';
   requestPersistence();
+  logInfo('app', `Session-Start: ${programm?.name ?? 'Freies Fahren'}`);
   const session = new Session(ftms, settings, programm);
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
@@ -156,6 +164,38 @@ function startDialog(programm, settings = {}) {
 async function openSettings() {
   const s = await getSettings();
   const dlg = $('#dlg-settings');
+  // Diagnose-Log laden (letzte 200 Einträge, neueste unten)
+  getLogs().then(entries => {
+    $('#log-view').textContent = entries.length
+      ? formatLog(entries.slice(-200)) : 'Noch keine Einträge.';
+    $('#log-view').scrollTop = $('#log-view').scrollHeight;
+  });
+  $('#btn-log-export').onclick = async () =>
+    download(`ergomergo-log-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.txt`,
+      formatLog(await getLogs()), 'text/plain');
+  $('#btn-log-clear').onclick = async () => {
+    await clearLogs();
+    $('#log-view').textContent = 'Geleert.';
+  };
+
+  // Geräte-Bereich: gemerkte Geräte anzeigen, Entfernen je Rolle
+  $('#geraete-hint').hidden = kannMerken();
+  const rollen = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Controller']];
+  const liste = $('#geraete-liste');
+  liste.replaceChildren();
+  for (const [rolle, label] of rollen) {
+    const e = s.geraete?.[rolle];
+    const li = document.createElement('li');
+    li.innerHTML = `<span><span class="rolle">${label}:</span> ${e ? e.name ?? e.id : '— nicht gemerkt'}${e?.fw ? ` <span class="rolle">FW ${e.fw}</span>` : ''}</span>`;
+    if (e) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Entfernen';
+      btn.onclick = async () => { await vergissGeraet(rolle); li.remove(); };
+      li.append(btn);
+    }
+    liste.append(li);
+  }
   $('#set-ftp').value = s.ftp;
   $('#set-schritt').value = s.wattSchritt;
   $('#set-max').value = s.maxWatt;
@@ -223,6 +263,7 @@ async function startDemo(variante) {
   const ftms = new EventTarget();
   Object.assign(ftms, { connected: true, busy: false, setTargetPower: async () => {}, disconnect: () => {} });
   const session = new Session(ftms, settings);
+  session.save = async () => {};   // Demo-Fahrten nicht in die echte Historie schreiben
   let run = null;
   const prefill = (secs, zielAt) => {
     const F = 6;

@@ -5,6 +5,7 @@
 // drawProfile (statische Vorschau) und drawSessionChart (Detailansicht).
 
 import { FIELDS } from '../storage.js';
+import { zoneIndex } from '../metrics.js';
 
 // ---------- Helfer ----------
 
@@ -27,12 +28,10 @@ function prepCanvas(canvas) {
   return { ctx, w, h, css };
 }
 
-// Powerzone (Zwift-Konvention, 6 Zonen %FTP) → CSS-Variablenname
+// Powerzone → CSS-Variablenname (Grenzen zentral in metrics.js)
 function zoneVar(watt, ftp) {
-  if (!ftp) return '--accent';
-  const p = watt / ftp;
-  return p < 0.60 ? '--z1' : p < 0.76 ? '--z2' : p < 0.90 ? '--z3'
-       : p < 1.05 ? '--z4' : p < 1.19 ? '--z5' : '--z6';
+  const z = zoneIndex(watt, ftp);
+  return z < 0 ? '--accent' : `--z${z + 1}`;
 }
 
 // Für DOM-Styling (CSS löst var() selbst auf)
