@@ -1,15 +1,29 @@
 // Fahrbildschirm: Livewerte, ±-Bedienung mit Tastenwiederholung, Not-Stopp.
 
-import { LiveChart, zoneColor } from './chart.js';
+import { LiveChart, WorkoutChart, zoneColor } from './chart.js';
+import * as signal from '../signals.js';
 
 export class RideScreen {
-  constructor(root, session, settings, onEnd) {
+  constructor(root, session, settings, onEnd, run = null) {
     this.root = root;
     this.session = session;
     this.settings = settings;
     this.onEnd = onEnd;
-    this.chart = new LiveChart(root.querySelector('#live-chart'));
+    this.run = run;                          // ProgramRun oder null (Freies Fahren)
+    this.chart = run ? new WorkoutChart(root.querySelector('#live-chart'))
+                     : new LiveChart(root.querySelector('#live-chart'));
     this.$ = id => root.querySelector(id);
+    this.$('#m-time-label').textContent = run ? 'Intervall' : 'Zeit';
+    this.$('#m-total').hidden = !run;
+    if (run) {
+      let prevWatt = null;
+      run.addEventListener('block', e => {
+        if (prevWatt !== null) signal.blockwechsel(e.detail.watt > prevWatt);
+        prevWatt = e.detail.watt;
+      });
+      run.addEventListener('countdown', () => signal.countdown());
+      run.addEventListener('done', () => signal.fertig());
+    }
     this.#bind();
     session.addEventListener('tick', () => this.render());
     session.addEventListener('target', () => this.render());
@@ -24,8 +38,9 @@ export class RideScreen {
 
   #bind() {
     const step = this.settings.wattSchritt;
+    const adjust = d => this.run ? this.run.adjust(d) : this.session.adjust(d);
     const hold = (btn, delta) => {
-      const fire = () => this.session.adjust(delta);
+      const fire = () => adjust(delta);
       btn.addEventListener('pointerdown', e => {
         e.preventDefault();
         fire();
@@ -44,8 +59,8 @@ export class RideScreen {
     });
     // Tastatur (Laptop): Pfeile ±, Leertaste Stop
     this.#keys = e => {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') this.session.adjust(step);
-      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') this.session.adjust(-step);
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') adjust(step);
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') adjust(-step);
       else if (e.key === ' ') { e.preventDefault(); this.session.emergencyStop(); }
     };
     addEventListener('keydown', this.#keys);
@@ -66,11 +81,17 @@ export class RideScreen {
     el.textContent = watt;
     el.style.color = zoneColor(watt, this.settings.ftp);
     this.$('#m-target').textContent = s.target;
-    this.$('#m-time').textContent = fmtTime(s.elapsed);
+    if (this.run) {
+      this.$('#m-time').textContent = fmtTime(Math.max(0, this.run.restImBlock ?? 0));
+      this.$('#m-total-time').textContent = fmtTime(Math.max(0, this.run.restGesamt ?? this.run.total));
+    } else {
+      this.$('#m-time').textContent = fmtTime(s.elapsed);
+    }
     this.$('#m-rpm').textContent = s.live.rpm ? Math.round(s.live.rpm) : '–';
     this.$('#m-hr').textContent = s.live.hr || '–';
     this.$('#m-kj').textContent = Math.round(s.kj);
-    this.chart.draw(s.samples, s.count, s.target);
+    if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, this.settings.ftp);
+    else this.chart.draw(s.samples, s.count, s.target);
   }
 
   destroy() { removeEventListener('keydown', this.#keys); }

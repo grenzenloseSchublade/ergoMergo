@@ -14,6 +14,7 @@
   <header class="brand">
     <h1>ergo<b>Mergo</b></h1>
     <span id="bt-support" class="hint"></span>
+    <button class="gear" id="btn-settings" aria-label="Einstellungen">⚙</button>
   </header>
   <div class="tiles">
     <button class="tile tile-primary" id="start-free">
@@ -21,6 +22,7 @@
       <span class="tile-title">Freies Fahren</span>
       <span class="tile-sub">ERG · ± am Daumen</span>
     </button>
+    <div class="tiles-programme" id="programm-tiles"></div>
   </div>
   <h2 class="listhead">Letzte Fahrten</h2>
   <ul id="session-list" class="sessions"></ul>
@@ -41,13 +43,14 @@
         <span class="unit">Watt</span>
       </div>
       <div class="metric">
-        <span class="label">Zeit</span>
+        <span class="label" id="m-time-label">Zeit</span>
         <span class="value value-time" id="m-time">0:00</span>
       </div>
       <div class="row-secondary">
         <span><b id="m-rpm">–</b> rpm</span>
         <span><b id="m-hr">–</b> bpm</span>
         <span><b id="m-kj">0</b> kJ</span>
+        <span id="m-total" hidden><b id="m-total-time">0:00</b> gesamt</span>
         <span id="m-status" class="status">verbinde …</span>
       </div>
     </div>
@@ -74,6 +77,35 @@
     <button id="btn-delete" class="danger">Löschen</button>
   </div>
 </section>
+
+<!-- ============ START-DIALOG PROGRAMM ============ -->
+<dialog id="dlg-start">
+  <form method="dialog">
+    <h2 id="dlg-title"></h2>
+    <div id="dlg-fields" class="dlg-fields"></div>
+    <div class="dlg-actions">
+      <button value="cancel" class="ghost">Abbrechen</button>
+      <button value="ok" class="primary">Los</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ EINSTELLUNGEN ============ -->
+<dialog id="dlg-settings">
+  <form method="dialog">
+    <h2>Einstellungen</h2>
+    <div class="dlg-fields">
+      <label>FTP (Watt, 0 = unbekannt)<input type="number" id="set-ftp" min="0" max="500" step="5"></label>
+      <label>Wattschritt für ±<input type="number" id="set-schritt" min="1" max="50" step="1"></label>
+      <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="10"></label>
+      <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="5"></label>
+    </div>
+    <div class="dlg-actions">
+      <button value="cancel" class="ghost">Abbrechen</button>
+      <button value="ok" class="primary">Speichern</button>
+    </div>
+  </form>
+</dialog>
 
 <script type="module" src="js/main.js"></script>
 </body>

@@ -16,6 +16,78 @@ export function zoneColor(watt, ftp) {
   return 'var(--z6)';
 }
 
+// Hex-Werte der Zonenfarben für Canvas (fillStyle kann kein var())
+export function zoneHex(watt, ftp, css) {
+  if (!ftp) return css('--accent');
+  const p = watt / ftp;
+  const name = p < 0.60 ? '--z1' : p < 0.76 ? '--z2' : p < 0.90 ? '--z3'
+             : p < 1.05 ? '--z4' : p < 1.19 ? '--z5' : '--z6';
+  return css(name);
+}
+
+// Ganzes Programm: Zielblöcke als zonengefärbte Flächen, gefahrene Leistung
+// als Linie, senkrechter Cursor an der aktuellen Position (TrainerRoad-Muster).
+export class WorkoutChart {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+  }
+
+  #css = name => getComputedStyle(this.canvas).getPropertyValue(name).trim();
+
+  draw(blocks, total, samples, count, offset, ftp) {
+    const c = this.canvas, ctx = this.ctx;
+    const dpr = devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    let maxW = 150;
+    for (const b of blocks) maxW = Math.max(maxW, b.watt + offset);
+    for (let k = Math.max(0, count - 50); k < count; k++)
+      maxW = Math.max(maxW, samples[k * FIELDS + 1]);
+    maxW *= 1.15;
+    const x = t => t / total * w;
+    const y = v => h - Math.max(0, v) / maxW * (h - 6);
+
+    // Zielblöcke, 1 px Fuge zwischen den Flächen
+    let t = 0;
+    for (const b of blocks) {
+      const watt = b.watt + offset;
+      ctx.fillStyle = zoneHex(watt, ftp, this.#css);
+      ctx.globalAlpha = 0.42;
+      ctx.fillRect(x(t) + 0.5, y(watt), x(t + b.dauer) - x(t) - 1, h - y(watt));
+      t += b.dauer;
+    }
+    ctx.globalAlpha = 1;
+
+    // Gefahrene Leistung
+    ctx.strokeStyle = this.#css('--power-line');
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < count; k++) {
+      const px = x(samples[k * FIELDS]), py = y(samples[k * FIELDS + 1]);
+      k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+
+    // Positionscursor
+    if (count) {
+      const px = x(samples[(count - 1) * FIELDS]);
+      ctx.strokeStyle = this.#css('--ink2');
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+
 export class LiveChart {
   constructor(canvas) {
     this.canvas = canvas;

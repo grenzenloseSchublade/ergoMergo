@@ -47,6 +47,28 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .tile-title { font-size: 1.5rem; font-weight: 700; }
 .tile-sub { font-size: .85rem; color: var(--ink2); }
 
+.gear { margin-left: auto; background: none; color: var(--ink3); font-size: 1.3rem; padding: .2rem .4rem; }
+.tiles-programme { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.tiles-programme .tile { padding: .8rem 1rem; }
+.tiles-programme .tile-title { font-size: 1.1rem; }
+
+dialog {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 14px; padding: 1.2rem 1.4rem; min-width: min(20rem, 90vw);
+}
+dialog::backdrop { background: rgba(0, 0, 0, .55); }
+dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
+.dlg-fields { display: grid; gap: .7rem; }
+.dlg-fields label { display: grid; gap: .2rem; font-size: .85rem; color: var(--ink2); }
+.dlg-fields input {
+  background: var(--surface2); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 8px; padding: .55rem .7rem; font: inherit; font-variant-numeric: tabular-nums;
+}
+.dlg-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem; }
+.dlg-actions button { border-radius: 10px; padding: .6rem 1.1rem; font-weight: 600; }
+.dlg-actions .ghost { background: none; color: var(--ink2); }
+.dlg-actions .primary { background: var(--accent); color: var(--bg); }
+
 .listhead { font-size: .8rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; margin: 1.6rem 0 .5rem; }
 .sessions { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
 .sessions li {
