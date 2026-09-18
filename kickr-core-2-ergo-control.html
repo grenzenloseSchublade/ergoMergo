@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KICKR CORE 2 — Widerstandssteuerung: Recherche & Umsetzungsplan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F2F5F6; --surface:#FFFFFF; --surface2:#E9EEF0; --ink:#0E1618; --ink2:#46565C;
+  --ink3:#6F8188; --line:#D8E0E3; --accent:#0F6E7B; --accent-soft:#DCEFF1;
+  --ok:#1C7049; --ok-soft:#DCEFE4; --warn:#8C5A00; --warn-soft:#F7EBD4; --risk:#9E3128; --risk-soft:#F7E0DD;
+  --shadow:0 1px 2px rgba(14,22,24,.06);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1416; --surface:#161E21; --surface2:#1E282B; --ink:#E7EEF0; --ink2:#A6B4B9;
+    --ink3:#7E8F95; --line:#27343800; --line:#273438; --accent:#4BCEDA; --accent-soft:#12343A;
+    --ok:#5FC98D; --ok-soft:#133226; --warn:#E3A73F; --warn-soft:#32260F; --risk:#EF796D; --risk-soft:#331C1A;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1416; --surface:#161E21; --surface2:#1E282B; --ink:#E7EEF0; --ink2:#A6B4B9;
+  --ink3:#7E8F95; --line:#273438; --accent:#4BCEDA; --accent-soft:#12343A;
+  --ok:#5FC98D; --ok-soft:#133226; --warn:#E3A73F; --warn-soft:#32260F; --risk:#EF796D; --risk-soft:#331C1A;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.6;letter-spacing:-.005em;
+}
+.wrap{max-width:60rem;margin:0 auto;padding:0 clamp(.9rem,3vw,2rem) 5rem}
+header.top{
+  position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);
+}
+.topbar{max-width:60rem;margin:0 auto;padding:.7rem clamp(.9rem,3vw,2rem) .45rem;display:flex;align-items:flex-start;gap:.75rem}
+.topbar h1{
+  font-family:var(--serif);font-weight:600;font-size:1.02rem;line-height:1.35;margin:0;flex:1;letter-spacing:-.01em;
+}
+.topbar .sub{display:block;font-family:var(--sans);font-size:.74rem;font-weight:400;color:var(--ink3);margin-top:.15rem}
+button.icon{
+  background:var(--surface);border:1px solid var(--line);color:var(--ink2);border-radius:8px;
+  width:36px;height:36px;display:grid;place-items:center;cursor:pointer;flex:none
+}
+button.icon:hover{color:var(--accent);border-color:var(--accent)}
+button.icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+:root[data-theme="dark"] .sun,:root:not([data-theme="light"]) .sun{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .moon{display:none}:root:not([data-theme="light"]) .sun{display:block}}
+:root[data-theme="dark"] .moon{display:none}
+:root[data-theme="dark"] .sun{display:block}
+:root[data-theme="light"] .sun{display:none}
+:root[data-theme="light"] .moon{display:block}
+
+nav.tabs{max-width:60rem;margin:0 auto;padding:0 clamp(.9rem,3vw,2rem);overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs ul{display:flex;gap:.1rem;list-style:none;margin:0;padding:0;min-width:max-content}
+nav.tabs button{
+  background:none;border:0;border-bottom:2px solid transparent;color:var(--ink3);
+  font:500 .83rem/1 var(--sans);padding:.65rem .6rem .6rem;cursor:pointer;white-space:nowrap
+}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs button:focus-visible,button.icon:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+section[role="tabpanel"]{padding-top:1.4rem}
+section[hidden]{display:none}
+h2{font-family:var(--serif);font-size:1.32rem;font-weight:600;line-height:1.3;margin:2.2rem 0 .5rem;letter-spacing:-.015em}
+h2:first-child{margin-top:.4rem}
+h3{font-family:var(--sans);font-size:.98rem;font-weight:600;margin:1.6rem 0 .4rem}
+p{margin:.55rem 0;max-width:62ch}
+.lede{font-size:1.02rem;color:var(--ink2);max-width:58ch}
+ul.body,ol.body{margin:.5rem 0;padding-left:1.15rem;max-width:62ch}
+ul.body li,ol.body li{margin:.3rem 0}
+code{font-family:var(--mono);font-size:.85em;background:var(--surface2);padding:.1em .35em;border-radius:4px;word-break:break-word}
+a{color:var(--accent);text-underline-offset:2px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem;box-shadow:var(--shadow);margin:.7rem 0}
+.card h3{margin-top:0}
+.grid{display:grid;gap:.7rem;grid-template-columns:1fr}
+@media(min-width:44rem){.grid.two{grid-template-columns:1fr 1fr}}
+
+.kicker{font-family:var(--mono);font-size:.7rem;color:var(--ink3);letter-spacing:.02em}
+.badge{display:inline-block;font:500 .68rem/1.5 var(--mono);padding:.08rem .42rem;border-radius:4px;white-space:nowrap}
+.b-ok{background:var(--ok-soft);color:var(--ok)}
+.b-warn{background:var(--warn-soft);color:var(--warn)}
+.b-risk{background:var(--risk-soft);color:var(--risk)}
+.b-neutral{background:var(--surface2);color:var(--ink2)}
+.b-acc{background:var(--accent-soft);color:var(--accent)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:.8rem 0}
+table{border-collapse:collapse;width:100%;min-width:34rem;font-size:.85rem}
+th,td{text-align:left;padding:.5rem .65rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;font-size:.74rem;color:var(--ink3);background:var(--surface2);position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+td.mono,th.mono{font-family:var(--mono);font-size:.78rem;white-space:nowrap}
+
+details{border:1px solid var(--line);border-radius:10px;background:var(--surface);margin:.6rem 0;overflow:hidden}
+summary{cursor:pointer;padding:.65rem .85rem;font-weight:500;font-size:.9rem;list-style:none;display:flex;gap:.5rem;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";font-family:var(--mono);color:var(--accent);font-size:1rem;line-height:1}
+details[open] summary::before{content:"–"}
+details[open] summary{border-bottom:1px solid var(--line)}
+.details-body{padding:.3rem .85rem .9rem}
+pre{background:var(--surface2);border-radius:8px;padding:.7rem .8rem;overflow-x:auto;font-family:var(--mono);font-size:.76rem;line-height:1.55;margin:.6rem 0}
+
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;padding:.75rem .9rem;margin:.9rem 0}
+.callout.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.callout p{margin:.25rem 0}
+.callout .kicker{color:inherit;opacity:.8}
+
+.stack{display:flex;flex-direction:column;gap:.35rem;margin:.9rem 0}
+.layer{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:.55rem .75rem;font-size:.82rem}
+.layer b{font-weight:600}
+.layer span{color:var(--ink3);font-family:var(--mono);font-size:.72rem;display:block;margin-top:.15rem}
+.layer.hw{border-style:dashed}
+.arrow{text-align:center;color:var(--ink3);font-family:var(--mono);font-size:.75rem;line-height:1}
+
+.chips{display:flex;flex-wrap:wrap;gap:.35rem;margin:.9rem 0 .4rem}
+.chip{background:var(--surface);border:1px solid var(--line);color:var(--ink2);border-radius:999px;padding:.3rem .7rem;font:500 .76rem/1 var(--sans);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+:root[data-theme="dark"] .chip[aria-pressed="true"],:root:not([data-theme="light"]) .chip[aria-pressed="true"]{color:#0E1416}
+
+.phase{display:flex;gap:.75rem;padding:.8rem 0;border-bottom:1px solid var(--line)}
+.phase:last-child{border-bottom:0}
+.phase .num{font-family:var(--mono);font-size:.78rem;color:var(--accent);flex:none;width:2.4rem;padding-top:.15rem}
+.phase h3{margin:0 0 .15rem}
+.phase p{margin:.2rem 0;font-size:.88rem;color:var(--ink2)}
+.meta{font-family:var(--mono);font-size:.72rem;color:var(--ink3);margin-top:.3rem}
+
+footer{margin-top:3rem;padding-top:1.2rem;border-top:1px solid var(--line);font-size:.78rem;color:var(--ink3)}
+footer a{color:var(--ink3)}
+img{max-width:100%}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topbar">
+    <h1>KICKR CORE 2 als Ergometer steuern
+      <span class="sub">Protokoll-Recherche, Entscheidungen, Fahrplan · Stand 17.09.2026</span>
+    </h1>
+    <button class="icon" id="theme" aria-label="Hell/Dunkel umschalten">
+      <svg class="moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4m0-12.8-1.4 1.4m-10 10-1.4 1.4"/></svg>
+    </button>
+  </div>
+  <nav class="tabs" aria-label="Abschnitte">
+    <ul>
+      <li><button role="tab" aria-selected="true" aria-controls="p1" id="t1">Überblick</button></li>
+      <li><button role="tab" aria-selected="false" aria-controls="p2" id="t2">Trainer &amp; Protokolle</button></li>
+      <li><button role="tab" aria-selected="false" aria-controls="p3" id="t3">Schalthebel</button></li>
+      <li><button role="tab" aria-selected="false" aria-controls="p4" id="t4">Bestehende Lösungen</button></li>
+      <li><button role="tab" aria-selected="false" aria-controls="p5" id="t5">Architektur &amp; Fahrplan</button></li>
+      <li><button role="tab" aria-selected="false" aria-controls="p6" id="t6">Risiken &amp; offene Punkte</button></li>
+    </ul>
+  </nav>
+</header>
+
+<main class="wrap">
+
+<!-- ============ 1 ÜBERBLICK ============ -->
+<section role="tabpanel" id="p1" aria-labelledby="t1">
+  <h2>Kernbefund</h2>
+  <p class="lede">Der Widerstands-Regler ist technisch trivial und in ein bis zwei Abenden lauffähig — über den offenen Bluetooth-Standard FTMS. Alles, was mit virtuellem Schalten und Zwift-Click zusammenhängt, liegt auf proprietären, reverse-engineerten Protokollen und ist der eigentliche Aufwandstreiber.</p>
+
+  <div class="grid two">
+    <div class="card">
+      <span class="kicker">Teil 1 — Widerstand regeln</span>
+      <h3>Machbar, offener Standard <span class="badge b-ok">gering</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Der CORE 2 spricht Bluetooth FTMS und ANT+ FE-C. Zielleistung setzen, Steuerung anfordern, Leistung/Trittfrequenz lesen — alles dokumentierter Bluetooth-SIG-Standard, kein Reverse Engineering nötig.</p>
+    </div>
+    <div class="card">
+      <span class="kicker">Teil 2 — Schalthebel einbinden</span>
+      <h3>Machbar, aber proprietär <span class="badge b-warn">mittel bis hoch</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Zwift Click/Play: reverse-engineert, Referenzcode in Python und C# vorhanden. Di2 und SRAM AXS: kein öffentliches Protokoll, nur über Fremdsoftware oder Eigenbau-Fernbedienung praktikabel.</p>
+    </div>
+  </div>
+
+  <h2>Was „Widerstand wie am Ergometer" konkret heißt</h2>
+  <p>Der Punkt ist klar: ein Regler, der sofort spürbar ist, ohne virtuelle Welt, ohne Streckenprofil, ohne Abo. Der Trainer kennt dafür drei verschiedene Betriebsarten — die Wahl entscheidet über das Fahrgefühl und über den Rest der Architektur.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Modus</th><th>Was du einstellst</th><th>Fahrgefühl</th><th>Eignung als Regler</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>ERG / Zielleistung</b></td>
+          <td class="mono">150 W, 200 W …</td>
+          <td>Watt bleiben konstant, egal welche Trittfrequenz oder Gang. Langsamer treten → mehr Widerstand.</td>
+          <td><span class="badge b-ok">Empfehlung</span> Exakt das Verhalten eines wattgesteuerten Studio-Ergometers. Funktioniert mit Kassette <i>und</i> mit Zwift Cog.</td>
+        </tr>
+        <tr>
+          <td><b>Level / Resistance</b></td>
+          <td class="mono">Stufe 0–9 bzw. 0–100 %</td>
+          <td>Fester Bremswert. Leistung steigt mit Trittfrequenz und Gang — wie eine Wirbelstrombremse.</td>
+          <td><span class="badge b-acc">Zweitwahl</span> Besser für Sprints und freies Spielen mit der Trittfrequenz. Unterstützung beim CORE 2 <b>empirisch zu prüfen</b>.</td>
+        </tr>
+        <tr>
+          <td><b>SIM / Steigung</b></td>
+          <td class="mono">−5 % … +16 %</td>
+          <td>Steigung wird simuliert, Gangwahl bestimmt die Last.</td>
+          <td>Nur sinnvoll mit echter Kassette und echten Gängen — oder mit virtuellem Schalten.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <span class="kicker">Entschieden — 17.09.2026</span>
+    <p><b>Version 1 ist eine Progressive Web App mit ERG-Regelung, kein Backend.</b> Dieselbe HTML-Datei läuft in Chrome unter Android und unter Ubuntu. Damit ist auch die Frage Kassette oder Zwift Cog für den Anfang erledigt: ERG hält die Zielleistung unabhängig vom Gang, beide Varianten verhalten sich identisch. Begründungen und Fahrplan im Tab „Architektur &amp; Fahrplan".</p>
+  </div>
+
+  <h2>Die elegante Abkürzung</h2>
+  <p>Der offensichtliche Weg für „Click soll schalten" wäre, Zwifts virtuelles Getriebe nachzubauen: Gang 1–24 in ein Übersetzungsverhältnis umrechnen und über Zwifts proprietäres Trainer-Protokoll an den CORE 2 schicken. Das geht, ist aber der teuerste Teil des ganzen Projekts.</p>
+  <p>Für einen Ergometer-Regler brauchst du das nicht. Der Click ist ein eigenständiges BLE-Gerät und hat mit dem Trainer <i>keine</i> direkte Verbindung — Zwift vermittelt dazwischen. Deine App kann sich also einfach selbst an den Click hängen und seine beiden Tasten auf <b>±10 W Zielleistung</b> oder <b>±1 Widerstandsstufe</b> legen. Kein Zwift-Protokoll, keine Protobuf-Nachrichten an den Trainer, keine Übersetzungstabelle. Nur FTMS.</p>
+
+  <h3>Bauen oder nehmen, was es gibt?</h3>
+  <ul class="body">
+    <li><b>Nur Regler, sofort:</b> <a href="https://github.com/dvmarinoff/Auuki">Auuki</a> im Chrome auf Ubuntu — Open Source, Vanilla JS, Web Bluetooth, ERG + Steigung + Widerstandsstufe, FIT-Export. Null Zeilen Code. Testaufwand: 20 Minuten.</li>
+    <li><b>Schalthebel in beliebiger App:</b> <a href="https://bikecontrol.app">BikeControl</a> deckt Click, Play, Ride, Di2 und AXS ab. Lizenz seit 2026 nicht mehr GPL (siehe Tab „Bestehende Lösungen").</li>
+    <li><b>Selbst bauen — so entschieden:</b> Der Auslöser ist nicht fehlende Funktion, sondern Startzeit und Unabhängigkeit. Zwei, drei Taps bis zum Treten, kein Konto, kein Ladebildschirm, kein PC-Zwang. Dazu eigene Programme und Daten im eigenen Format.</li>
+  </ul>
+
+  <h2>Aufwand in Zahlen</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Ausbaustufe</th><th>Umfang</th><th>Aufwand</th><th>Risiko</th></tr></thead>
+      <tbody>
+        <tr><td>GATT-Spike</td><td>Scannen, Dienste auslesen, Fähigkeiten protokollieren</td><td class="mono">1 Abend</td><td><span class="badge b-ok">niedrig</span></td></tr>
+        <tr><td>ERG-Regler CLI</td><td>Steuerung anfordern, Zielwatt ±, Livewerte</td><td class="mono">1–2 Abende</td><td><span class="badge b-ok">niedrig</span></td></tr>
+        <tr><td>Web-Oberfläche</td><td>Lokaler Server, große Zahlen, Tastenkürzel, Presets</td><td class="mono">2 Abende</td><td><span class="badge b-ok">niedrig</span></td></tr>
+        <tr><td>Level-/SIM-Modus</td><td>Zusätzliche Modi, Wahoo-Fallback</td><td class="mono">1–2 Abende</td><td><span class="badge b-warn">mittel</span></td></tr>
+        <tr><td>BLE-HID-Taster</td><td>Billiger Bluetooth-Knopf als ±-Geber</td><td class="mono">2 Stunden</td><td><span class="badge b-ok">niedrig</span></td></tr>
+        <tr><td>Zwift Click</td><td>Handshake, Protobuf, Tastenereignisse</td><td class="mono">1–4 Tage</td><td><span class="badge b-warn">mittel</span></td></tr>
+        <tr><td>Virtuelles Getriebe</td><td>Zwift-Hub-Protokoll, Gangverhältnisse, Physikparameter</td><td class="mono">3–7 Tage</td><td><span class="badge b-risk">hoch</span></td></tr>
+        <tr><td>Di2 / AXS direkt</td><td>Kein öffentliches Protokoll</td><td class="mono">offen</td><td><span class="badge b-risk">hoch</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 2 TRAINER & PROTOKOLLE ============ -->
+<section role="tabpanel" id="p2" aria-labelledby="t2" hidden>
+  <h2>Der CORE 2 als Zielgerät</h2>
+  <p>Erschienen September 2025. Mechanisch identisch zum CORE 1, komplett neue Elektronik. Für dieses Projekt zählen fast nur die neuen Funkeigenschaften.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Eigenschaft</th><th>Wert</th><th>Relevanz</th></tr></thead>
+      <tbody>
+        <tr><td>Maximale Leistung</td><td class="mono">1.800 W</td><td>Obergrenze für ERG-Ziele</td></tr>
+        <tr><td>Maximale Steigung</td><td class="mono">16 %</td><td>Obergrenze im SIM-Modus</td></tr>
+        <tr><td>Genauigkeit</td><td class="mono">± 2 %</td><td>Kalibrierung via Spindown</td></tr>
+        <tr><td>Schwungmasse</td><td class="mono">5,4 kg</td><td>Trägheit, ERG-Regelverhalten</td></tr>
+        <tr><td>Gleichzeitige BLE-Verbindungen</td><td class="mono">3</td><td><b>Harte Grenze.</b> Wahoo-App, Uhr und eigene App konkurrieren.</td></tr>
+        <tr><td>ANT+-Verbindungen</td><td class="mono">unbegrenzt</td><td>Umgehungsweg bei BLE-Engpass</td></tr>
+        <tr><td>Bluetooth-Kopplung</td><td class="mono">bonded/verschlüsselt</td><td><b>Neu ab CORE 2</b> wegen EU-Funkrichtlinie. Betrifft Pairing im eigenen Code.</td></tr>
+        <tr><td>Sensor-Bridge</td><td class="mono">HR über Trainer</td><td>Laut DC Rainmaker aktuell unzuverlässig</td></tr>
+        <tr><td>Race Mode</td><td class="mono">10 Hz</td><td>Nur WLAN, bei Bluetooth nur für Zwift</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Fünf Wege in den Trainer</h2>
+  <p>Der CORE 2 bringt fünf Steuerkanäle mit. Für das Projekt sind zwei davon interessant, einer ist ein Umgehungsweg, zwei sind Sackgassen bzw. Kür.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Kanal</th><th>Dokumentation</th><th>Kann</th><th>Urteil</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Bluetooth FTMS</b><br><span class="kicker">Service 0x1826</span></td>
+          <td><span class="badge b-ok">offener Standard</span></td>
+          <td>Zielleistung, Widerstandsstufe, Steigung, Start/Stop, Livedaten</td>
+          <td><b>Primärweg.</b> Vollständig spezifiziert, in jeder BLE-Bibliothek abgedeckt.</td>
+        </tr>
+        <tr>
+          <td><b>ANT+ FE-C</b></td>
+          <td><span class="badge b-ok">offener Standard</span></td>
+          <td>Grundwiderstand 0–100 %, Zielleistung, Streckenwiderstand</td>
+          <td><b>Rückfallebene.</b> Braucht USB-Stick (~20 €), umgeht BLE-Bonding und die 3-Verbindungen-Grenze.</td>
+        </tr>
+        <tr>
+          <td><b>Wahoo-Eigenprotokoll</b><br><span class="kicker">in Service 0x1818</span></td>
+          <td><span class="badge b-warn">reverse engineered</span></td>
+          <td>Level-Modus, ERG, SIM, Nutzergewicht</td>
+          <td>Nur relevant, falls FTMS die Widerstandsstufe nicht anbietet.</td>
+        </tr>
+        <tr>
+          <td><b>Zwift-Protokoll</b><br><span class="kicker">Service 00000001-19ca-…</span></td>
+          <td><span class="badge b-warn">reverse engineered</span></td>
+          <td>Zusätzlich virtuelles Getriebe, Crr/CdA, Radfahrergewicht</td>
+          <td>Einziger Weg zu echtem virtuellen Schalten. Hoher Aufwand, firmwareabhängig.</td>
+        </tr>
+        <tr>
+          <td><b>Direct Connect / WLAN</b><br><span class="kicker">_wahoo-fitness-tnp._tcp</span></td>
+          <td><span class="badge b-warn">teils dokumentiert</span></td>
+          <td>Dieselbe GATT-Semantik über TCP</td>
+          <td>Kür. Quellen widersprechen sich, ob offen für Drittanbieter — selbst prüfen.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="kicker">Widerspruch in den Quellen</span>
+    <p>DC Rainmaker schreibt zum CORE 2 ausdrücklich „Direct Connect to all apps via WiFi". Eine andere Testquelle behauptet, WLAN-Pairing sei auf Wahoo-App und Zwift beschränkt. Klären lässt sich das in fünf Minuten: <code>avahi-browse -rt _wahoo-fitness-tnp._tcp</code> im gleichen Netz.</p>
+  </div>
+
+  <h2>Protokolldetails</h2>
+
+  <details>
+    <summary>FTMS — Fitness Machine Service, der Primärweg</summary>
+    <div class="details-body">
+      <p style="font-size:.88rem">Der Control Point ist ein Request/Response-Protokoll mit Zustand. Wer die Reihenfolge nicht einhält, bekommt keine Fehlermeldung, sondern schlicht keine Wirkung — der häufigste Implementierungsfehler.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">UUID</th><th>Charakteristik</th><th>Nutzung</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">0x2AD2</td><td>Indoor Bike Data</td><td>Notify: Leistung, Trittfrequenz, Geschwindigkeit</td></tr>
+            <tr><td class="mono">0x2ACC</td><td>Fitness Machine Feature</td><td><b>Zuerst lesen.</b> Sagt, welche Steuerbefehle das Gerät tatsächlich kann</td></tr>
+            <tr><td class="mono">0x2AD6</td><td>Supported Resistance Level Range</td><td>Beantwortet, ob es echte Widerstandsstufen gibt</td></tr>
+            <tr><td class="mono">0x2AD8</td><td>Supported Power Range</td><td>Min/Max/Schrittweite für ERG</td></tr>
+            <tr><td class="mono">0x2AD9</td><td>Control Point</td><td>Write + Indicate — alle Stellbefehle</td></tr>
+            <tr><td class="mono">0x2ADA</td><td>Status</td><td>Meldet u. a. Kontrollverlust</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:.88rem;margin-top:.9rem"><b>Opcodes auf dem Control Point</b></p>
+<pre>0x00  Request Control          ← zwingend als Erstes, Antwort abwarten
+0x01  Reset
+0x04  Set Target Resistance Level    uint8, Schrittweite gerätespezifisch
+0x05  Set Target Power               sint16, Watt
+0x07  Start / Resume
+0x08  Stop / Pause
+0x11  Set Indoor Bike Simulation Parameters
+        Wind   sint16  0,001 m/s
+        Grade  sint16  0,01 %
+        Crr    uint8   0,0001
+        Cw     uint8   0,01 kg/m</pre>
+      <p style="font-size:.88rem"><b>Ablauf:</b> Notify auf 0x2AD2 aktivieren → Indicate auf 0x2AD9 aktivieren → <code>0x00</code> Request Control schreiben → Erfolgsantwort abwarten → <code>0x07</code> Start → danach <code>0x05</code> mit dem Zielwert, bei jeder Änderung neu.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Wahoo-Eigenprotokoll — Fallback für den Level-Modus</summary>
+    <div class="details-body">
+      <p style="font-size:.88rem">Wahoo hängt eine eigene Charakteristik in den Standard-Dienst Cycling Power (0x1818). Keine öffentliche Dokumentation. Die folgenden Opcodes stimmen über drei unabhängige Open-Source-Implementierungen hinweg überein (incyclist, qdomyos-zwift, GoldenCheetah):</p>
+<pre>Charakteristik  A026E005-0A7D-4AB3-97FA-F1500F9FEB8B
+
+0x20  Unlock            Nutzlast 0x20 0xEE 0xFC
+0x40  Resistance        Bremswert in Prozent
+0x41  Level             Stufe
+0x42  ERG               Zielwatt
+0x43  Simulation        Nutzergewicht, Crr, CdA
+0x46  Simulation Grade  Steigung
+0x48  Radumfang</pre>
+      <p style="font-size:.88rem"><b>Zwei ernste Vorbehalte:</b> Erstens widersprechen sich GoldenCheetah und qdomyos-zwift um den Faktor 10 bei der Crr-Skalierung — Simulationsparameter niemals ungetestet schreiben. Zweitens ist unbestätigt, ob aktuelle KICKR-Modelle diese Opcodes überhaupt noch bedienen; moderne Geräte sprechen FTMS. Behandle das als reine Rückfallebene, falls der Spike zeigt, dass FTMS <code>0x04</code> nicht unterstützt wird.</p>
+      <p style="font-size:.88rem">Regel aus GoldenCheetah, die du übernehmen solltest: standardisierten Steuerdienst bevorzugen, Eigenprotokoll nur, wenn keiner gefunden wurde.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Zwift-Trainer-Protokoll — nur für virtuelles Schalten nötig</summary>
+    <div class="details-body">
+      <p style="font-size:.88rem">Reverse-engineert von Néstor Matas (Makinolo) <b>am KICKR CORE der ersten Generation</b>. Dass der CORE 2 dieselbe Dienstfamilie nutzt, ist plausibel und wird von mehreren Projekten angenommen, ist aber für den CORE 2 nicht unabhängig verifiziert. Die Trainer-Nachrichten sind laut Makinolo <b>unverschlüsselt</b> — im Gegensatz zu den Controllern.</p>
+<pre>Service       00000001-19ca-4651-86e5-fa29dcdd09d1
+Notify        ...0002...    Messwerte
+Control       ...0003...    Befehle
+Response      ...0004...    Antworten
+
+0x03  HubRidingData    Power, Cadence, SpeedX100, HR, 2× unbekannt
+0x04  HubCommand
+        PowerTarget   = 3
+        Simulation    = 4   Wind m/s ×100 · InclineX100 · CWa ×10000 · Crr ×100000
+        Physical      = 5   GearRatioX10000 · BikeWeightx100 · RiderWeightx100
+0x00  Infoabfrage      Parameter 520 liefert das aktuelle Übersetzungsverhältnis</pre>
+      <p style="font-size:.88rem"><b>Referenzwerte, die Zwift selbst schickt:</b> CWa = 5100 (also 0,51), Crr = 400 (also 0,004), Wind fest 0. Makinolo beschreibt, dass er eine Woche gesucht hat, bis er merkte, dass die Skalierung von der FTMS-Skalierung abweicht — falsche Werte führen zu Last, die scheinbar willkürlich reagiert.</p>
+      <p style="font-size:.88rem">Die 24 virtuellen Gänge sind laut Wahoo eine <b>lineare, nicht konfigurierbare</b> Progression — anders als beim KICKR BIKE, wo man Übersetzungen frei wählen kann.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>ANT+ FE-C — der unterschätzte Umgehungsweg</summary>
+    <div class="details-body">
+      <p style="font-size:.88rem">Braucht einen USB-Stick, löst dafür gleich mehrere Probleme auf einmal: kein BLE-Bonding, keine 3-Verbindungen-Grenze, keine Konkurrenz mit der Wahoo-App, und unter Linux deutlich berechenbarer als BlueZ.</p>
+      <p style="font-size:.88rem">Relevante Datenseiten: Page 48 Grundwiderstand (0–100 % in 0,5-%-Schritten), Page 49 Zielleistung (0,25-W-Auflösung), Page 51 Streckenwiderstand (Steigung 0,01 %, Crr). Unter Python über <code>openant</code>.</p>
+      <p style="font-size:.88rem"><b>Nebenbefund mit Praxisrelevanz:</b> Zwift Insider hat gemessen, dass Wahoo-Trainer über ANT+ FE-C spürbar mehr Grundwiderstand liefern als über Bluetooth. Wenn dir am Ende „zu wenig Widerstand" auffällt, ist das eine ernstzunehmende Spur.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ 3 SCHALTHEBEL ============ -->
+<section role="tabpanel" id="p3" aria-labelledby="t3" hidden>
+  <h2>Elektronische Schalthebel als Eingabegerät</h2>
+  <p class="lede">Zwei grundverschiedene Ansätze: den vorhandenen Schalthebel mitlesen, oder einen dedizierten Taster ans Lenkerband setzen. Der zweite ist billiger, schneller und robuster — der erste ist reizvoller.</p>
+
+  <h3>Was der Schalthebel eigentlich steuern soll</h3>
+  <p>Drei sinnvolle Zuordnungen, je nach Aufbau:</p>
+  <ul class="body">
+    <li><b>Kassette + SIM-Modus:</b> Du schaltest ohnehin physisch. Die Tasten regeln die simulierte Steigung — die App muss den Hebel gar nicht kennen.</li>
+    <li><b>Zwift Cog + ERG:</b> Tasten auf ±5 oder ±10 W. Der direkteste Ergometer-Ersatz, kein Zwift-Protokoll nötig.</li>
+    <li><b>Zwift Cog + virtuelles Getriebe:</b> Tasten auf Gang 1–24, Übersetzung über das Zwift-Protokoll an den Trainer. Realistisches Fahrgefühl, größter Aufwand.</li>
+  </ul>
+
+  <h2>Gerätematrix</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Gerät</th><th>Funk</th><th>Protokollstand</th><th>Eigenbau-Aufwand</th><th>Anmerkung</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Zwift Click v1</b></td><td>BLE</td>
+          <td><span class="badge b-warn">RE, Referenzcode</span></td><td class="mono">1–2 Tage</td>
+          <td>Python-Vorlage von jat255 vorhanden, läuft unter BlueZ. Verschlüsselung ließ sich nach Geräte-Reset umgehen.</td>
+        </tr>
+        <tr>
+          <td><b>Zwift Click v2</b></td><td>BLE</td>
+          <td><span class="badge b-warn">teilweise</span></td><td class="mono">2–4 Tage</td>
+          <td>Liegt dem CORE 2 mit Cog bei. Selbst BikeControl führt sie als „größtenteils" unterstützt.</td>
+        </tr>
+        <tr>
+          <td><b>Zwift Play / Ride</b></td><td>BLE</td>
+          <td><span class="badge b-warn">RE, Referenzcode</span></td><td class="mono">2–4 Tage</td>
+          <td>Gleiche Dienstfamilie, zusätzlich Lenk- und Bremsknöpfe. ECDH P-256 + HKDF + AES-CCM.</td>
+        </tr>
+        <tr>
+          <td><b>Shimano Di2</b></td><td>BLE + privates ANT</td>
+          <td><span class="badge b-risk">nicht öffentlich</span></td><td class="mono">offen</td>
+          <td>D-Fly-Kanäle müssen in E-Tube aktiviert werden. ANT-Broadcast ist verschlüsselt, Schlüssel nur bei Partnerherstellern. BikeControl kann es, dokumentiert das Protokoll aber nicht.</td>
+        </tr>
+        <tr>
+          <td><b>SRAM AXS / eTap</b></td><td>BLE + AIREA</td>
+          <td><span class="badge b-risk">nicht öffentlich</span></td><td class="mono">offen</td>
+          <td>BikeControl konfiguriert die Tasten so um, dass sie nicht mehr am Schaltwerk wirken. Schaltfunk selbst ist proprietär.</td>
+        </tr>
+        <tr>
+          <td><b>CYCPLUS BC2, Thinkrider VS200</b></td><td>BLE</td>
+          <td><span class="badge b-neutral">unbekannt</span></td><td class="mono">offen</td>
+          <td>Günstige dedizierte Schalter, von BikeControl unterstützt. Protokoll nicht recherchiert — potenziell einfacher als Zwift.</td>
+        </tr>
+        <tr>
+          <td><b>BLE-HID-Taster</b> (10–20 €)</td><td>BLE HID</td>
+          <td><span class="badge b-ok">Standard</span></td><td class="mono">2 Stunden</td>
+          <td>Meldet sich als Tastatur am Betriebssystem an. Kein Protokollcode nötig, nur Tastenabfrage. Schnellster Weg zu Tasten am Lenker.</td>
+        </tr>
+        <tr>
+          <td><b>Eigenbau nRF52840 / ESP32</b></td><td>BLE HID</td>
+          <td><span class="badge b-ok">volle Kontrolle</span></td><td class="mono">1 Tag</td>
+          <td>XIAO nRF52840 passt in ein Schalthebelgehäuse. Vorlagen: Di2-zu-Tastatur-Umbau von Brian Dorey, Zwift-Control von Berg0162.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="kicker">Wichtige Randbedingung</span>
+    <p>Der Zwift Click funktioniert ohne laufende Zwift-App nicht — DC Rainmaker formuliert es als „Tasten drücken ohne Wirkung". Das ist kein Defekt, sondern die Architektur: der Click spricht nie direkt mit dem Trainer. Genau deshalb muss deine App beide Seiten selbst halten: Verbindung zum Click <i>und</i> Verbindung zum Trainer.</p>
+  </div>
+
+  <h3>Realistische Empfehlung</h3>
+  <p>Wenn ein Zwift Click ohnehin im Haus ist: Click einbinden, Tasten auf Wattschritte legen. Wenn Di2 oder AXS an deinem Rad hängen: nicht selbst reverse-engineeren. Entweder BikeControl nutzen oder eine eigene kleine Lenkerfernbedienung bauen — das kostet weniger Zeit als der erste Sniffing-Versuch am Di2 und funktioniert dann auf jedem Rad, auch draußen am Trainer im Keller.</p>
+
+  <div class="callout">
+    <span class="kicker">Variante für Bastler</span>
+    <p>Wenn die App ohnehin headless auf einem Raspberry Pi laufen soll: ein Drehimpulsgeber mit Rastung an GPIO, montiert am Lenker oder am Trainertisch. Das ist buchstäblich der Ergometer-Drehknopf — eine Raste gleich 5 W, Druck auf die Achse gleich Pause. Etwa 4 € Hardware, eine Stunde Code.</p>
+  </div>
+</section>
+
+<!-- ============ 4 BESTEHENDE LÖSUNGEN ============ -->
+<section role="tabpanel" id="p4" aria-labelledby="t4" hidden>
+  <h2>Was es schon gibt</h2>
+  <p class="lede">Vollständige Anwendungen, Bibliotheken und Protokollquellen. Filter setzen, um die Liste einzugrenzen.</p>
+
+  <div class="chips" id="filters">
+    <button class="chip" aria-pressed="true" data-f="all">alle</button>
+    <button class="chip" aria-pressed="false" data-f="app">fertige App</button>
+    <button class="chip" aria-pressed="false" data-f="lib">Bibliothek</button>
+    <button class="chip" aria-pressed="false" data-f="proto">Protokollquelle</button>
+    <button class="chip" aria-pressed="false" data-f="oss">frei nutzbar</button>
+  </div>
+
+  <div id="projects">
+
+    <div class="card" data-tags="app oss">
+      <h3>Auuki <span class="badge b-ok">Open Source</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Browserbasierte PWA für strukturiertes Training. ERG, Steigungssimulation <b>und</b> Widerstandsstufe, FIT-Aufzeichnung, Intervals.icu-Anbindung. Vanilla JS, keine Abhängigkeiten, Web Bluetooth und Web Serial. Läuft unter Ubuntu in Chrome.</p>
+      <p class="kicker">Das ist deinem Zielbild am nächsten — inklusive deines eigenen Tech-Stacks. Vor jeder Zeile Eigencode testen.</p>
+      <p class="kicker">github.com/dvmarinoff/Auuki</p>
+    </div>
+
+    <div class="card" data-tags="app">
+      <h3>BikeControl, früher SwiftControl <span class="badge b-warn">nicht kommerziell</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Flutter-App für Windows, Linux, macOS, Android, iOS. Bindet Click, Play, Ride, Di2, AXS, KICKR-BIKE-Hebel, CYCPLUS und Gamepads ein und steuert damit beliebige Trainer-Apps — über Netzwerk, als simuliertes Bluetooth-Gerät oder per Bedienungshilfen. Kann sich auch direkt mit dem Trainer verbinden und Gang, Intensität und Modus setzen.</p>
+      <p style="font-size:.88rem;color:var(--ink2)"><b>Lizenz beachten:</b> Versionen vor dem Tag <code>gpl3</code> bleiben GPL-3.0. Alles danach steht unter einer eigenen Non-Commercial-Lizenz der OpenBikeControl UG — privat und zur Evaluation nutzbar, Weitergabe nur unentgeltlich im Quellcode. Zusätzlich liegt ein Teil der Logik in einem separaten, nicht öffentlichen Submodul <code>prop</code>.</p>
+      <p class="kicker">github.com/OpenBikeControl/bikecontrol · bikecontrol.app</p>
+    </div>
+
+    <div class="card" data-tags="lib oss">
+      <h3>pycycling <span class="badge b-ok">Open Source</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Python-Paket auf Basis von Bleak für Trainer, Leistungsmesser und Sensoren. Deckt FTMS, Cycling Power, CSC und FE-C-über-BLE ab. Getestet primär an Tacx-Geräten — Wahoo-Pfad also selbst verifizieren.</p>
+      <p class="kicker">github.com/zacharyedwardbull/pycycling</p>
+    </div>
+
+    <div class="card" data-tags="lib oss">
+      <h3>Bleak + PyFTMS <span class="badge b-ok">Open Source</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Bleak ist die plattformübergreifende BLE-Basis für Python (BlueZ, WinRT, CoreBluetooth). PyFTMS setzt einen reinen FTMS-Client darauf, inklusive Indoor Bike. Zusammen die schlankste Grundlage für den Regler.</p>
+      <p class="kicker">pypi.org/project/bleak · pypi.org/project/pyftms</p>
+    </div>
+
+    <div class="card" data-tags="proto oss">
+      <h3>Makinolo — Protokollanalysen <span class="badge b-acc">Primärquelle</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Die maßgebliche öffentliche Dokumentation des Zwift-Trainer-Protokolls, am KICKR CORE ermittelt: Nachrichtencodes, Protobuf-Definitionen, Skalierungen, konkrete Beispielpakete. Dazu getrennte Beiträge zu Play, Click und Ride.</p>
+      <p class="kicker">makinolo.com/blog/2024/10/20/zwift-trainer-protocol/</p>
+    </div>
+
+    <div class="card" data-tags="proto oss">
+      <h3>ajchellew/zwiftplay + jat255/zwift_click_handling</h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Ersteres dokumentiert den Handshake der Zwift-Controller in C# und Android inklusive der HCI-Snoop-Methodik. Letzteres ist die Python-Portierung für den Click, entwickelt unter Linux mit BlueZ 5.75, die Tastendrücke in Tastenanschläge übersetzt — die direkteste Vorlage für deinen Fall.</p>
+      <p class="kicker">Verschlüsselung ließ sich nach Reset der Geräte umgehen, dokumentiert in Pull Request #3.</p>
+    </div>
+
+    <div class="card" data-tags="app oss">
+      <h3>qdomyos-zwift, GoldenCheetah, incyclist</h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Die drei unabhängigen Implementierungen, aus deren Übereinstimmung die Wahoo-Opcodes abgeleitet sind. GoldenCheetah (GPL-2.0) und qdomyos-zwift (GPL-3.0) sind als Codereferenz brauchbar, incyclist ist MIT-lizenziert. Achtung bei GPL-Code, falls du später anders lizenzieren willst.</p>
+    </div>
+
+    <div class="card" data-tags="proto">
+      <h3>pymmog/virtual-cog <span class="badge b-warn">unverifiziert</span></h3>
+      <p style="font-size:.88rem;color:var(--ink2)">macOS-Client speziell für CORE 2 plus Click, mit sehr detailliertem Umsetzungsplan: Modulschnitt, Protokollpfade, Phasenplan, Risikotabelle. Inhaltlich deckungsgleich mit den Primärquellen und deshalb als Strukturvorlage nützlich.</p>
+      <p style="font-size:.88rem;color:var(--ink2)"><b>Vorsicht:</b> null Sterne, acht Commits, Phasen als „Code + Mocks" markiert — kein Beleg, dass es je an echter Hardware lief. Die dort genannte Mindest-Firmware 2.2.44 / 3.2.44 für virtuelles Schalten konnte ich <b>nicht gegenprüfen</b>.</p>
+    </div>
+
+    <div class="card" data-tags="proto oss">
+      <h3>Berg0162 — DirCon und Zwift-Control</h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Vorarbeit zu Wahoos Direct-Connect-Protokoll (GATT über TCP) und zu einer ESP32-/nRF52-Fernbedienung mit zwei Tasten und drei Zuständen je Taste. Zweites ist die Bauanleitung für den Lenker-Taster.</p>
+    </div>
+
+    <div class="card" data-tags="app">
+      <h3>Kommerzielle Minimal-Apps</h3>
+      <p style="font-size:.88rem;color:var(--ink2)">Im App Store existiert mindestens eine App, die exakt deine Beschreibung erfüllt: FTMS-Trainer verbinden, ERG, feste Widerstandsstufe oder Steigung, Livewerte, keine virtuelle Welt, kein Konto. Als Referenz für den Funktionsumfang und als Beleg, dass der FTMS-Weg in der Praxis trägt.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ 5 ARCHITEKTUR & PLAN ============ -->
+<section role="tabpanel" id="p5" aria-labelledby="t5" hidden>
+  <h2>Entscheidungsprotokoll</h2>
+  <p class="lede">Festgelegt am 17.09.2026. Der ursprüngliche Vorschlag — Python-Dienst mit Weboberfläche — ist damit überholt und steht unten nur noch als bewusst verworfene Alternative.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Entscheidung</th><th>Grund</th><th>Konsequenz</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Progressive Web App, eine HTML-Datei</b></td>
+          <td>Handy und Desktop teilen dieselbe Laufzeitumgebung. Eine Codebasis, kein Setup, kein Dienst, der laufen muss, bevor man treten kann.</td>
+          <td>Vanilla JS, Web Bluetooth, keine Buildkette, keine Abhängigkeiten</td>
+        </tr>
+        <tr>
+          <td><b>Kein Backend</b></td>
+          <td>Ein Python-Dienst braucht das Funkmodul der Maschine, auf der er läuft. Auf Android hieße das Termux — also genau der Gerätezwang, der wegsoll.</td>
+          <td>Autoconnect ohne Geräteauswahl und ANT+ entfallen vorerst</td>
+        </tr>
+        <tr>
+          <td><b>Android + Ubuntu und Windows, kein iOS</b></td>
+          <td>Web Bluetooth existiert unter iOS nicht, auch nicht in Chrome für iOS. Nativ ginge nur über einen Mac.</td>
+          <td>Bewusst ausgeschlossen. Notlösung wäre der Browser Bluefy.</td>
+        </tr>
+        <tr>
+          <td><b>ERG zuerst, ±10 W</b></td>
+          <td>Der Trainer hält die Zielleistung unabhängig vom Gang.</td>
+          <td><b>Kassette oder Zwift Cog ist für Version 1 irrelevant.</b> Die Frage kehrt erst bei Steigungssimulation oder virtuellem Schalten zurück.</td>
+        </tr>
+        <tr>
+          <td><b>Hosting statisch über HTTPS</b></td>
+          <td>Web Bluetooth verlangt einen sicheren Kontext. Eine lokal geöffnete Datei reicht unter Android nicht.</td>
+          <td>Privates Repo auf GitHub Pages. Online nur beim Installieren, danach nie wieder.</td>
+        </tr>
+        <tr>
+          <td><b>IndexedDB, ein Datensatz je Session</b></td>
+          <td>Metadaten getrennt von Rohdaten halten die Trainingsliste auch nach Jahren sofort verfügbar.</td>
+          <td>Rohdaten als typisierter Array-Blob, Export als CSV und später FIT</td>
+        </tr>
+        <tr>
+          <td><b>Canvas direkt statt Chart-Bibliothek</b></td>
+          <td>Ein Datenpunkt pro Sekunde. Weniger Code als jede Bibliothek, kein CDN, volle Kontrolle über die Darstellung.</td>
+          <td>Ringpuffer, Neuzeichnen einmal pro Sekunde</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Aufbau</h2>
+  <div class="stack">
+    <div class="layer"><b>Oberfläche</b> — große Wattzahl, ±-Tasten für den Daumen, Canvas-Kurve, Restzeit, Trainingsliste
+      <span>DOM + Canvas 2D · Inter / JetBrains Mono · Querformat für den Lenker</span></div>
+    <div class="arrow">↕</div>
+    <div class="layer"><b>Anwendungslogik</b> — Zustandsautomat, Programm-Engine, Ziel-Rampen, Autosave alle 5 s
+      <span>ES-Module, kein Framework</span></div>
+    <div class="arrow">↕</div>
+    <div class="layer"><b>Speicher</b> — Sessions, Programme, Einstellungen
+      <span>IndexedDB · navigator.storage.persist()</span></div>
+    <div class="arrow">↕</div>
+    <div class="layer"><b>Transport</b> — FTMS-Client, entprellte Schreibvorgänge, Wiederverbindung
+      <span>Web Bluetooth GATT</span></div>
+    <div class="arrow">↓</div>
+    <div class="layer hw"><b>KICKR CORE 2</b>
+      <span>Service 0x1826 · Control Point 0x2AD9 · Indoor Bike Data 0x2AD2</span></div>
+  </div>
+
+  <h3>Was das verworfene Backend gebracht hätte</h3>
+  <p>Damit die Entscheidung überprüfbar bleibt, hier ohne Beschönigung, was dadurch wegfällt:</p>
+  <ul class="body">
+    <li><b>Verbinden ohne Geräteauswahl.</b> Chrome fragt bei jedem Start nach dem Gerät. Umgehbar über <code>chrome://flags/#enable-web-bluetooth-new-permissions-backend</code>, dann merkt sich Chrome den Trainer und die App verbindet selbst.</li>
+    <li><b>ANT+ FE-C.</b> Im Browser prinzipbedingt unmöglich. Damit fehlt die Rückfallebene, falls der BLE-Weg klemmt.</li>
+    <li><b>Geräteübergreifende History.</b> Sessions liegen jeweils nur auf dem Gerät, auf dem gefahren wurde. Export überbrückt das manuell.</li>
+  </ul>
+  <p>Alles drei lässt sich später nachrüsten, ohne die App neu zu schreiben — der FTMS-Client bleibt derselbe, nur der Transport wechselt.</p>
+
+  <h3>Performanz</h3>
+  <p>Kein Engpass, und zwar mit Abstand. FTMS liefert ein Paket pro Sekunde. Eine Stunde Training sind 3.600 Datenpunkte zu je sechs Feldern, als <code>Int16Array</code> unter 50 kB. Das Neuzeichnen der Kurve bleibt unter einer Millisekunde. Die einzige Stelle mit echtem Belastungsrisiko ist die Gegenrichtung: zu schnell aufeinanderfolgende Schreibvorgänge auf den Control Point. Deshalb werden ±-Taps gebündelt, maximal ein Schreibvorgang alle 250 ms.</p>
+
+  <h3>Datenmodell</h3>
+<pre>sessions      { id, start, programm, dauer, avgW, maxW, kJ, np, avgRpm }
+sessionData   { id, samples: Int16Array[n×6] }   // s, watt, ziel, rpm, hf, km/h
+programme     { id, name, dauer, schritte[] }
+settings      { ftp, deviceId, wattSchritt, theme }</pre>
+  <p>Trainingsliste liest nur <code>sessions</code>, die Rohdaten erst beim Öffnen einer einzelnen Fahrt.</p>
+
+  <h2>Trainingsprogramme</h2>
+  <p>Programme sind Daten, kein Code. Damit lassen sich neue Einheiten anlegen, ohne die App anzufassen. Zielwerte wahlweise absolut in Watt oder relativ zur hinterlegten FTP.</p>
+<pre>{
+  "name": "4×4 Intervalle",
+  "schritte": [
+    { "min": 8, "watt": "55%" },
+    { "wdh": 4, "block": [ { "min": 4, "watt": "105%" },
+                           { "min": 3, "watt": "45%"  } ] },
+    { "min": 5, "watt": "45%" }
+  ]
+}</pre>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Programm</th><th>Aufbau</th><th>Besonderheit</th></tr></thead>
+      <tbody>
+        <tr><td><b>Freies Fahren</b></td><td>Kein Ablauf, nur ± und Uhr</td><td>Der eigentliche Ergometer-Modus. Startet ohne jede Einstellung.</td></tr>
+        <tr><td><b>Grundlage nach Zeit</b></td><td>Konstante oder leicht wellige Last</td><td>Dauer frei wählbar, 20 bis 90 Minuten. Zielwert bleibt während der Fahrt per ± korrigierbar.</td></tr>
+        <tr><td><b>Intervalle 4×4</b></td><td>8 min ein, 4× (4 min hart / 3 min locker), 5 min aus</td><td>Wiederholungen und Blocklängen im Startdialog anpassbar</td></tr>
+        <tr><td><b>Pyramide / Fartlek</b></td><td>Auf- und absteigende Blöcke, 1-2-3-4-3-2-1 min</td><td>Unregelmäßige Variante mit zufälligen Blocklängen innerhalb gesetzter Grenzen</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Bedienkonzept</h3>
+  <ul class="body">
+    <li>Startkacheln statt Menü. Kachel antippen, Bluetooth bestätigen, fahren.</li>
+    <li>Ist-Leistung dominiert die Anzeige, Zielwert kleiner darunter, Restzeit des Blocks daneben.</li>
+    <li>±10 W auf zwei große Flächen, ±5 und ±25 über langes Drücken. In laufenden Programmen verschiebt ± den gesamten Ablauf, nicht nur den aktuellen Block.</li>
+    <li>Blockwechsel per Vibration und Ton, damit man nicht auf den Bildschirm sehen muss.</li>
+    <li>Not-Stopp jederzeit erreichbar, setzt die Zielleistung auf Null.</li>
+    <li>Zielsprünge werden als Rampe über zwei Sekunden gefahren, nicht als Sprung.</li>
+  </ul>
+
+  <h2>Fahrplan</h2>
+  <div class="card">
+    <div class="phase">
+      <div class="num">V0</div>
+      <div>
+        <h3>Vorabcheck am Gerät</h3>
+        <p>Einmalig per Python und Bleak auf dem Ubuntu-Rechner alle Dienste dumpen. Das ist kein Widerspruch zur Browser-Entscheidung, sondern Voraussetzung: Web Bluetooth zwingt dazu, alle benötigten Dienst-UUIDs vorab zu deklarieren. Man muss also wissen, was das Gerät anbietet, bevor man danach fragen darf.</p>
+        <p><b>Liefert außerdem:</b> ob FTMS-Widerstandsstufen existieren, wie sich der Gerätename für den Scanfilter schreibt, und ob die verschlüsselte Kopplung des CORE 2 Probleme macht.</p>
+        <p class="meta">1 Abend · Ergebnis: services.json</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="num">V1</div>
+      <div>
+        <h3>Der Regler</h3>
+        <p>Verbinden, Steuerung anfordern, ±10 W, Live-Kurve, Uhr, Session in IndexedDB, Trainingsliste, CSV-Export. Läuft in Chrome unter Ubuntu und unter Android.</p>
+        <p><b>Abnahme:</b> Zielwert ändern, Widerstand folgt in zwei bis drei Sekunden. Session übersteht ein Verbindungsabbruch ohne Datenverlust.</p>
+        <p class="meta">Erster Bauabschnitt</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="num">V2</div>
+      <div>
+        <h3>Programme</h3>
+        <p>Programm-Engine, die vier Einheiten, FTP-Einstellung, Restzeitanzeige, Blockwechsel mit Vibration und Ton, Startdialog mit einstellbarer Dauer.</p>
+        <p class="meta">Zweiter Bauabschnitt</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="num">V3</div>
+      <div>
+        <h3>Alltagstauglichkeit</h3>
+        <p>Manifest und Service Worker für die Installation auf dem Homescreen, Offlinebetrieb, Wake Lock, Speicherpersistenz anfordern, Querformat-Layout, Autosave, FIT-Export.</p>
+        <p><b>Abnahme:</b> Flugmodus an, App vom Homescreen starten, Training fahren, Daten sind vollständig.</p>
+        <p class="meta">Dritter Bauabschnitt</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="num">V4</div>
+      <div>
+        <h3>Optional, nach Bedarf</h3>
+        <p>Herzfrequenzgurt über 0x180D. Level- und SIM-Modus. Schalthebel oder BLE-Taster als ±-Geber. Python-Dienst nachgerüstet für Autoconnect und ANT+. Virtuelles Getriebe über das Zwift-Protokoll.</p>
+        <p class="meta">erst wenn V1 bis V3 im Alltag standhalten</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Skizze für den Vorabcheck</h3>
+<pre>import asyncio, json
+from bleak import BleakScanner, BleakClient
+
+async def main():
+    d = await BleakScanner.find_device_by_filter(
+        lambda dev, ad: dev.name and "KICKR" in dev.name, timeout=20)
+    print("Name:", d.name)                    # exakter Scanfilter für die PWA
+    async with BleakClient(d) as c:
+        dump = {s.uuid: {ch.uuid: list(ch.properties)
+                         for ch in s.characteristics} for s in c.services}
+        print(json.dumps(dump, indent=2))
+        for u in ("00002acc-0000-1000-8000-00805f9b34fb",   # Feature
+                  "00002ad8-0000-1000-8000-00805f9b34fb",   # Power Range
+                  "00002ad6-0000-1000-8000-00805f9b34fb"):  # Resistance Range
+            try: print(u, (await c.read_gatt_char(u)).hex())
+            except Exception as e: print(u, "nicht lesbar:", e)
+
+asyncio.run(main())</pre>
+  <p style="font-size:.85rem;color:var(--ink3)">Die drei Reads sind der Zweck. Ihre Antworten legen fest, welche Modi die App überhaupt anbieten kann.</p>
+</section>
+
+<!-- ============ 6 RISIKEN ============ -->
+<section role="tabpanel" id="p6" aria-labelledby="t6" hidden>
+  <h2>Risiken und Gegenmaßnahmen</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Risiko</th><th>Bewertung</th><th>Gegenmaßnahme</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>BLE-Bonding des CORE 2</b><br><span class="kicker">neu wegen EU-Funkrichtlinie</span></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Einmalig über das Betriebssystem koppeln (<code>bluetoothctl pair</code>), erst danach mit Bleak verbinden. Wenn es hakt: ANT+ FE-C umgeht das Thema vollständig.</td>
+        </tr>
+        <tr>
+          <td><b>Nur drei BLE-Verbindungen</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Wahoo-App und Sportuhr während der Entwicklung schließen. Ein hängengebliebener Slot lässt sich nur durch 30–35 Sekunden stromlos machen lösen.</td>
+        </tr>
+        <tr>
+          <td><b>Widerstandseinheit friert ein</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Dokumentierter Firmwarefehler des CORE 2, laut DC Rainmaker im November 2025 per Update behoben. Vor dem Projektstart Firmware aktualisieren, sonst suchst du den Fehler in deinem Code.</td>
+        </tr>
+        <tr>
+          <td><b>Wahoo-Opcodes veraltet</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Unbestätigt, ob aktuelle Modelle sie noch bedienen. Deshalb FTMS zuerst, Eigenprotokoll nur als Fallback hinter demselben Interface.</td>
+        </tr>
+        <tr>
+          <td><b>Falsche Crr-/CdA-Skalierung</b></td>
+          <td><span class="badge b-risk">hoch, wenn SIM</span></td>
+          <td>Quellen widersprechen sich um Faktor 10. Nur mit dokumentierten Referenzwerten starten, Paketinhalte in Tests festschreiben, schrittweise verifizieren.</td>
+        </tr>
+        <tr>
+          <td><b>Zwift ändert das Protokoll</b></td>
+          <td><span class="badge b-risk">hoch</span></td>
+          <td>Betrifft nur das virtuelle Getriebe. Deshalb steht es in P6 und nicht in P1. FTMS bleibt davon unberührt.</td>
+        </tr>
+        <tr>
+          <td><b>ERG-Todesspirale</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Physikalische Eigenschaft von ERG, kein Bug: Trittfrequenz fällt, Widerstand steigt, Trittfrequenz fällt weiter. Not-Stopp und Rückwärtstreten lösen es. Die ERG-Glättung in der Wahoo-App beeinflusst das Regelverhalten — Einstellung notieren, sonst sind Messungen nicht vergleichbar.</td>
+        </tr>
+        <tr>
+          <td><b>Verschlüsselte Kopplung im Browser</b><br><span class="kicker">größte offene Unbekannte</span></td>
+          <td><span class="badge b-risk">hoch</span></td>
+          <td>Ob Chrome die gebondete Verbindung des CORE 2 sauber aufbaut, ist ungeprüft. Zeigt der Vorabcheck Probleme: vorher über das Betriebssystem koppeln, sonst kippt die Entscheidung zurück zum Python-Dienst. <b>Vor V1 klären.</b></td>
+        </tr>
+        <tr>
+          <td><b>Bildschirm schläft ein</b></td>
+          <td><span class="badge b-ok">gelöst</span></td>
+          <td>Wake Lock API während der Session anfordern und bei Sichtbarkeitswechsel erneuern.</td>
+        </tr>
+        <tr>
+          <td><b>Android friert den Hintergrund-Tab ein</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>App im Vordergrund lassen. Autosave alle 5 Sekunden, damit ein eingefrorener oder beendeter Tab nie mehr als fünf Sekunden kostet.</td>
+        </tr>
+        <tr>
+          <td><b>Zu schnelle Schreibvorgänge</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Die einzige Stelle, an der man den Trainer überfahren kann. ±-Taps entprellen und bündeln, maximal ein Write alle 250 ms, Zielsprünge als Rampe.</td>
+        </tr>
+        <tr>
+          <td><b>Browser räumt den Speicher</b></td>
+          <td><span class="badge b-ok">gelöst</span></td>
+          <td><code>navigator.storage.persist()</code> anfordern, dazu Export als CSV, damit die History nicht in der Datenbank gefangen ist.</td>
+        </tr>
+        <tr>
+          <td><b>Web Bluetooth unter Linux</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Je nach Chrome-Version ist <code>chrome://flags/#enable-experimental-web-platform-features</code> nötig. Unter Android ohne Flag.</td>
+        </tr>
+        <tr>
+          <td><b>Rechtliche Einordnung</b></td>
+          <td><span class="badge b-neutral">beachten</span></td>
+          <td>Reverse Engineering zur Herstellung von Interoperabilität ist in der EU eng begrenzt zulässig (§ 69e UrhG). Für private Nutzung unkritisch. Bei Veröffentlichung auf Lizenzen achten: GPL bei GoldenCheetah und qdomyos-zwift, Non-Commercial bei aktuellem BikeControl. Keine Rechtsberatung.</td>
+        </tr>
+        <tr>
+          <td><b>Sicherheit am Rad</b></td>
+          <td><span class="badge b-warn">mittel</span></td>
+          <td>Sprünge in der Zielleistung begrenzen (Rampe statt Sprung), Obergrenze konfigurierbar, Not-Stopp auf einer Taste, die man blind trifft.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Wissenslücken, ehrlich benannt</h2>
+  <ul class="body">
+    <li><b>Ob der CORE 2 FTMS-Widerstandsstufen unterstützt</b>, konnte ich nicht klären. Wahoo dokumentiert einen Resistance-Modus in der eigenen App, sagt aber nichts über den FTMS-Weg. Nur der Spike beantwortet das.</li>
+    <li><b>Ob der Zwift-Dienst am CORE 2 identisch zum CORE 1 ist.</b> Makinolos Analyse entstand am Vorgänger. Mehrere Projekte nehmen Gleichheit an, unabhängig verifiziert habe ich sie nicht.</li>
+    <li><b>Firmware-Mindestversion für virtuelles Schalten.</b> Die Angabe 2.2.44 / 3.2.44 stammt aus einer einzigen, schwach belegten Quelle.</li>
+    <li><b>Direct Connect für Drittanbieter.</b> Zwei Testquellen widersprechen sich direkt.</li>
+    <li><b>Protokoll der günstigen Fremdschalter</b> (CYCPLUS BC2, Thinkrider VS200). Nicht recherchiert — könnte ein deutlich einfacherer Weg als der Zwift Click sein, wenn dort ohnehin ein Kauf ansteht.</li>
+  </ul>
+
+  <h2>Offene Punkte</h2>
+  <p>Die Plattformfragen sind beantwortet. Was bleibt, klärt der Vorabcheck aus V0 — nicht weitere Recherche:</p>
+  <ol class="body">
+    <li><b>Baut Chrome die gebondete Verbindung des CORE 2 auf?</b> Das ist die einzige Frage, die das gesamte Architekturkonzept kippen könnte. Antwort: Gerät koppeln und im Browser verbinden, zehn Minuten.</li>
+    <li><b>Bietet der CORE 2 FTMS-Widerstandsstufen?</b> Entscheidet, ob es neben ERG einen Level-Modus geben kann.</li>
+    <li><b>Wie heißt das Gerät im Scan exakt?</b> Web Bluetooth braucht einen Namensfilter und die Liste der Dienst-UUIDs vorab.</li>
+    <li><b>FTP-Referenzwert</b> für die relativen Zielwerte in den Programmen. Notfalls absolut in Watt arbeiten und später nachtragen.</li>
+  </ol>
+
+  <footer>
+    <p>Belege: Makinolo (Zwift-Trainer- und Controller-Protokoll), DC Rainmaker (CORE-2-Test, Protokollliste, Verbindungsgrenzen), Wahoo Support (Steuermodi, virtuelles Schalten), Bluetooth SIG (FTMS), OpenBikeControl (Geräteliste, Lizenz), Auuki, pycycling, ajchellew/zwiftplay, jat255/zwift_click_handling, Zwift Insider (ANT+ gegen BLE), openzigs/onyourleft (Opcode-Abgleich über drei Implementierungen).</p>
+    <p>Alle Protokollangaben außerhalb von FTMS und ANT+ FE-C beruhen auf Reverse Engineering durch Dritte und sind ohne Gewähr. Am eigenen Gerät verifizieren, bevor Code darauf aufbaut.</p>
+  </footer>
+</section>
+
+</main>
+
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('[role="tab"]'));
+  function show(id){
+    tabs.forEach(function(t){
+      var sel=t.id===id;
+      t.setAttribute('aria-selected',sel?'true':'false');
+      document.getElementById(t.getAttribute('aria-controls')).hidden=!sel;
+    });
+    window.scrollTo({top:0});
+  }
+  tabs.forEach(function(t){t.addEventListener('click',function(){show(t.id);});});
+
+  var root=document.documentElement, btn=document.getElementById('theme');
+  try{var s=localStorage.getItem('kickr-theme'); if(s) root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme');
+    if(!cur){cur=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}
+    var next=cur==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem('kickr-theme',next);}catch(e){}
+  });
+
+  var chips=[].slice.call(document.querySelectorAll('#filters .chip'));
+  var cards=[].slice.call(document.querySelectorAll('#projects .card'));
+  chips.forEach(function(c){
+    c.addEventListener('click',function(){
+      chips.forEach(function(x){x.setAttribute('aria-pressed',x===c?'true':'false');});
+      var f=c.dataset.f;
+      cards.forEach(function(card){
+        card.style.display=(f==='all'||card.dataset.tags.indexOf(f)>-1)?'':'none';
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

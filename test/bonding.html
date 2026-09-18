@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ergoMergo — Bonding-Gegenprobe</title>
+<style>
+  body{font-family:system-ui;background:#0e1416;color:#e7eef0;margin:0;padding:1rem;font-size:16px}
+  button{font-size:1.1rem;padding:.8rem 1.2rem;margin:.3rem .3rem .3rem 0;border-radius:8px;border:0;background:#0f6e7b;color:#fff}
+  button:disabled{opacity:.4}
+  pre{background:#161e21;padding:.8rem;border-radius:8px;white-space:pre-wrap;word-break:break-all;font-size:.8rem}
+  .val{font-size:2rem;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<h1>Bonding-Gegenprobe KICKR CORE 2</h1>
+<p>Prüft, ob Chrome die gebondete BLE-Verbindung aufbaut, Livedaten liefert und Steuerbefehle wirken.</p>
+<button id="connect">1 · Verbinden</button>
+<button id="control" disabled>2 · Steuerung anfordern</button>
+<button id="power" disabled>3 · 100 W setzen</button>
+<button id="stop" disabled>Stop (0 W)</button>
+<div class="val" id="live">— W · — rpm</div>
+<pre id="log"></pre>
+<script>
+const FTMS = 0x1826, BIKE_DATA = 0x2ad2, CONTROL = 0x2ad9, FEATURE = 0x2acc;
+const $ = id => document.getElementById(id);
+const log = m => { $('log').textContent += m + '\n'; console.log(m); };
+let cp = null;
+
+function parseBikeData(dv) {
+  const flags = dv.getUint16(0, true);
+  let i = 2, out = {};
+  // Bit0 = "More Data": Instantaneous Speed ist vorhanden, wenn Bit0 == 0
+  if ((flags & 0x0001) === 0) { out.kmh = dv.getUint16(i, true) / 100; i += 2; }
+  if (flags & 0x0002) i += 2;                             // Average Speed
+  if (flags & 0x0004) { out.rpm = dv.getUint16(i, true) / 2; i += 2; }
+  if (flags & 0x0008) i += 2;                             // Average Cadence
+  if (flags & 0x0010) i += 3;                             // Total Distance
+  if (flags & 0x0020) i += 2;                             // Resistance Level
+  if (flags & 0x0040) { out.watt = dv.getInt16(i, true); i += 2; }
+  return out;
+}
+
+$('connect').onclick = async () => {
+  try {
+    log('requestDevice … (Chooser)');
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'KICKR CORE' }, { namePrefix: 'KICKR' }],
+      optionalServices: [FTMS]
+    });
+    log('Gerät: ' + device.name);
+    device.addEventListener('gattserverdisconnected', () => log('!! getrennt'));
+    const server = await device.gatt.connect();
+    log('GATT verbunden');
+    const svc = await server.getPrimaryService(FTMS);
+    log('FTMS-Dienst gefunden');
+
+    const feat = await svc.getCharacteristic(FEATURE);
+    const fv = await feat.readValue();               // Read auf ggf. geschützte Characteristic → löst Bonding aus
+    log('Feature gelesen (Bonding ok): ' + [...new Uint8Array(fv.buffer)].map(b => b.toString(16).padStart(2, '0')).join(''));
+
+    const bike = await svc.getCharacteristic(BIKE_DATA);
+    await bike.startNotifications();
+    bike.addEventListener('characteristicvaluechanged', e => {
+      const d = parseBikeData(e.target.value);
+      $('live').textContent = `${d.watt ?? '—'} W · ${d.rpm ?? '—'} rpm`;
+    });
+    log('Indoor Bike Data abonniert');
+
+    cp = await svc.getCharacteristic(CONTROL);
+    await cp.startNotifications();
+    cp.addEventListener('characteristicvaluechanged', e => {
+      const b = new Uint8Array(e.target.value.buffer);
+      const codes = { 1: 'Success', 2: 'Op Code Not Supported', 3: 'Invalid Parameter', 4: 'Operation Failed', 5: 'Control Not Permitted' };
+      log(`CP-Antwort: op=0x${b[1]?.toString(16)} → ${codes[b[2]] ?? b[2]}`);
+    });
+    log('Control Point abonniert');
+    $('control').disabled = false;
+  } catch (err) { log('FEHLER: ' + err); }
+};
+
+$('control').onclick = async () => {
+  await cp.writeValueWithResponse(new Uint8Array([0x00]));
+  await cp.writeValueWithResponse(new Uint8Array([0x07]));
+  $('power').disabled = $('stop').disabled = false;
+};
+$('power').onclick = async () => {
+  await cp.writeValueWithResponse(new Uint8Array([0x05, 100, 0]));  // 100 W little-endian
+  log('Ziel 100 W geschrieben — treten und fühlen.');
+};
+$('stop').onclick = async () => {
+  await cp.writeValueWithResponse(new Uint8Array([0x05, 0, 0]));
+  log('Ziel 0 W.');
+};
+</script>
+</body>
+</html>
