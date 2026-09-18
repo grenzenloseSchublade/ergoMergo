@@ -15,7 +15,8 @@ function prepCanvas(canvas) {
   const dpr = devicePixelRatio || 1;
   const w = canvas.clientWidth || canvas.width;
   const h = canvas.clientHeight || canvas.height;
-  if (canvas.clientWidth && canvas.width !== Math.round(w * dpr)) {
+  if (canvas.clientWidth &&
+      (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr))) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
   }

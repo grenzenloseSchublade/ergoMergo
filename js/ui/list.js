@@ -3,6 +3,7 @@
 import { listSessions, getSamples, deleteSession } from '../storage.js';
 import { toTCX, download } from '../export.js';
 import { drawSessionChart } from './chart.js';
+import { zeigeGraphOverlay } from './overlay.js';
 import { fmtTime } from './ride.js';
 
 export async function renderList(ul, onOpen) {
@@ -40,6 +41,7 @@ export async function renderDetail(root, session, onClose) {
     const canvas = root.querySelector('#detail-chart');
     const redraw = () => drawSessionChart(canvas, data.samples, data.count);
     redraw();
+    canvas.onclick = () => zeigeGraphOverlay(c => drawSessionChart(c, data.samples, data.count));
     // Bei Orientierungswechsel neu zeichnen; Aufrufer baut den Listener ab
     addEventListener('resize', redraw);
     cleanup = () => removeEventListener('resize', redraw);

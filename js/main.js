@@ -6,6 +6,7 @@ import { getSettings, setSetting, requestPersistence } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
+import { zeigeGraphOverlay } from './ui/overlay.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
 import { initAudio } from './signals.js';
@@ -109,6 +110,13 @@ function startDialog(programm, settings = {}) {
     catch { /* unvollständige Eingabe während des Tippens */ }
   };
   fields.oninput = zeichne;
+  // Tap auf die Vorschau: Vollbild mit gut lesbaren Klammern und Zeitachse
+  preview.onclick = () => {
+    try {
+      const blocks = baueBlocks(programm, leseOpts(), settings.ftp);
+      zeigeGraphOverlay(c => drawProfile(c, blocks, settings.ftp || EFF_FTP_DEFAULT));
+    } catch { /* unvollständige Eingabe */ }
+  };
 
   return new Promise(resolve => {
     dlg.onclose = () => {
