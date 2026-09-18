@@ -6,6 +6,7 @@ import { getSettings, setSetting, requestPersistence } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
+import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
 import { initAudio } from './signals.js';
 
 const $ = s => document.querySelector(s);
@@ -37,9 +38,11 @@ async function startRide(programm = null) {
   initAudio();                              // braucht die User-Geste des Start-Taps
   let run = null, blocks = null;
   if (programm) {
-    const opts = await startDialog(programm);
+    const opts = await startDialog(programm, settings);
     if (!opts) return;
-    blocks = expand(programm.bauen(opts), settings.ftp);
+    blocks = programm.generieren
+      ? programm.generieren(opts, settings.ftp)
+      : expand(programm.bauen(opts), settings.ftp);
   }
   const ftms = new FTMS();
   try {
@@ -64,9 +67,12 @@ async function startRide(programm = null) {
 }
 
 // Startdialog: Optionsfelder aus der Programmdefinition
-function startDialog(programm) {
+function startDialog(programm, settings = {}) {
   const dlg = $('#dlg-start');
   $('#dlg-title').textContent = programm.name;
+  const hint = $('#dlg-hint');
+  hint.hidden = !(programm.generieren && !settings.ftp);
+  hint.textContent = `Kein FTP-Wert hinterlegt — Annahme ${EFF_FTP_DEFAULT} W. In den Einstellungen anpassen.`;
   const fields = $('#dlg-fields');
   fields.replaceChildren();
   for (const [key, o] of Object.entries(programm.optionen)) {
@@ -107,14 +113,18 @@ async function openSettings() {
 }
 
 function renderProgrammTiles() {
-  const wrap = $('#programm-tiles');
-  for (const p of PROGRAMME) {
-    const btn = document.createElement('button');
-    btn.className = 'tile';
-    btn.innerHTML = `<span class="tile-title">${p.name}</span><span class="tile-sub">${p.sub}</span>`;
-    btn.addEventListener('click', () => startRide(p));
-    wrap.append(btn);
-  }
+  const fill = (sel, list) => {
+    const wrap = $(sel);
+    for (const p of list) {
+      const btn = document.createElement('button');
+      btn.className = 'tile';
+      btn.innerHTML = `<span class="tile-title">${p.name}</span><span class="tile-sub">${p.sub}</span>`;
+      btn.addEventListener('click', () => startRide(p));
+      wrap.append(btn);
+    }
+  };
+  fill('#workout-tiles', WORKOUTS);
+  fill('#programm-tiles', PROGRAMME);
 }
 
 async function goHome() {
@@ -150,7 +160,13 @@ async function startDemo(variante) {
     }
     session.count = secs;
   };
-  if (variante === 'programm') {
+  const workout = WORKOUTS.find(x => x.id === variante);
+  if (workout) {
+    const o = Object.fromEntries(Object.entries(workout.optionen).map(([k, v]) => [k, v.default]));
+    const blocks = workout.generieren(o, settings.ftp);
+    prefill(600, () => 120);
+    run = new ProgramRun(session, workout.name, blocks);
+  } else if (variante === 'programm') {
     const p = PROGRAMME.find(x => x.id === 'intervalle44');
     const blocks = expand(p.bauen({ wdh: 4, hart: 210, locker: 90 }), settings.ftp);
     prefill(600, k => k < 480 ? 108 : 210);
@@ -160,11 +176,14 @@ async function startDemo(variante) {
     session.setTarget(160, { instant: true });
   }
   Object.assign(session.live, { watt: session.target, rpm: 89, hr: 142, kmh: 32.5 });
+  const ping = new URLSearchParams(location.search).has('ping');
   setInterval(() => {
     ftms.dispatchEvent(new CustomEvent('data', { detail: {
       watt: Math.round(session.target + (Math.random() - 0.5) * 10),
       rpm: 88 + Math.round(Math.random() * 4), kmh: 32.5, hr: 142,
     } }));
+    // ?ping — Hintergrund-Throttling messen: 1 Request/s, Servlog zeigt Lücken
+    if (ping) fetch(`ping?t=${session.elapsed}&vis=${document.visibilityState}`).catch(() => {});
   }, 1000);
   show('ride');
   rideScreen = new RideScreen(screens.ride, session, settings, async () => { location.search = ''; }, run);
