@@ -125,6 +125,11 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .ctl-stop { background: var(--danger); color: #fff; font-size: 1.05rem; letter-spacing: .05em; }
 .ctl-end { background: none; border: 1px solid var(--line); color: var(--ink2); font-size: .95rem; font-weight: 500; }
 
+/* Large Print (PM5-Muster): Tap auf die Wattzahl — nur die Kernwerte, riesig */
+.ride-grid.large #live-chart, .ride-grid.large .row-secondary { display: none; }
+.ride-grid.large .metric-power .value { font-size: clamp(6rem, 34vmin, 14rem); }
+.ride-grid.large .metric:not(.metric-power) .value { font-size: clamp(2.6rem, 12vmin, 5rem); }
+
 /* Querformat: Werte links, Bedienung rechts, Kurve unten */
 @media (orientation: landscape) and (max-height: 500px) {
   .ride-grid { grid-template-rows: 1fr auto; grid-template-columns: 1fr auto; grid-template-areas: "metrics controls" "chart chart"; }

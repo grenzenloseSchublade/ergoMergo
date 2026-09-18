@@ -52,6 +52,9 @@ export class RideScreen {
     };
     hold(this.$('#btn-plus'), step);
     hold(this.$('#btn-minus'), -step);
+    // Large-Print-Umschalter (PM5-Muster): Tap auf die große Zahl
+    this.$('#m-watt').addEventListener('click', () =>
+      this.root.querySelector('.ride-grid').classList.toggle('large'));
     this.$('#btn-stop').addEventListener('click', () => this.session.emergencyStop());
     this.$('#btn-end').addEventListener('click', async () => {
       await this.session.finish();

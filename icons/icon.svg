@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b1113"/>
+  <!-- Wattblöcke wie im Workout-Graph -->
+  <rect x="72"  y="300" width="70" height="120" rx="10" fill="#45c7d4" opacity=".45"/>
+  <rect x="152" y="200" width="70" height="220" rx="10" fill="#45c7d4" opacity=".75"/>
+  <rect x="232" y="140" width="70" height="280" rx="10" fill="#45c7d4"/>
+  <rect x="312" y="230" width="70" height="190" rx="10" fill="#45c7d4" opacity=".75"/>
+  <rect x="392" y="330" width="48" height="90"  rx="10" fill="#45c7d4" opacity=".45"/>
+  <!-- Leistungslinie -->
+  <path d="M60 330 L140 320 L200 210 L268 155 L330 240 L400 340 L452 348"
+        fill="none" stroke="#ecf3f5" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

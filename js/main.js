@@ -177,6 +177,11 @@ if (!navigator.bluetooth) {
   $('#start-free').disabled = true;
 }
 
+// Service Worker nur unter HTTPS/Produktion — localhost-Entwicklung bleibt cachefrei
+if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 const demoParam = new URLSearchParams(location.search).get('demo');
 if (demoParam !== null) startDemo(demoParam);
 else goHome();
