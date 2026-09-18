@@ -266,8 +266,13 @@ async function startDemo(variante) {
 
 
 if (!navigator.bluetooth) {
-  $('#bt-support').textContent = 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig';
+  $('#bt-support').textContent = navigator.brave
+    ? 'Brave blockiert Web Bluetooth — bitte Chrome verwenden (oder brave://flags/#brave-web-bluetooth-api)'
+    : 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig';
   $('#start-free').disabled = true;
+} else if (navigator.brave) {
+  // Brave lässt die API teils existieren, blockt aber den Chooser
+  $('#bt-support').textContent = 'Brave blockiert Web Bluetooth meist — bei Problemen Chrome verwenden';
 }
 
 // Service Worker nur unter HTTPS/Produktion — localhost-Entwicklung bleibt cachefrei.
