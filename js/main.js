@@ -9,6 +9,7 @@ import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError, formatLog } from './logger.js';
 import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
+import { starteUpdateWatchdog } from './version.js';
 import { getLogs, clearLogs } from './storage.js';
 import { download } from './export.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
@@ -255,6 +256,7 @@ $('#start-free').addEventListener('click', () => startRide());
 $('#btn-settings').addEventListener('click', openSettings);
 $('#btn-back').addEventListener('click', goHome);
 renderProgrammTiles();
+starteUpdateWatchdog($('#version-status'));
 
 // ?demo — Fahrbildschirm mit synthetischen Daten, ohne Trainer (UI-Arbeit, Screenshots).
 // ?demo=programm zeigt den Programm-Modus mit Workout-Graph.

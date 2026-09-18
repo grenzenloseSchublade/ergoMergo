@@ -59,7 +59,7 @@ export class RideScreen {
     const verbindeHR = async (btn, device = null) => {
       const hr = new HeartRate();
       await hr.connect(device);
-      this.#geraete.push(hr);
+      this.#geraete.push({ client: hr, btn });
       this.session.attachHR(hr);
       merkeGeraet('hr', hr.device);
       hr.addEventListener('disconnected', () => btn.classList.remove('on'));
@@ -70,7 +70,7 @@ export class RideScreen {
         minusBit: this.settings.controllerMinusBit,
       });
       await ctrl.connect(device);
-      this.#geraete.push(ctrl);
+      this.#geraete.push({ client: ctrl, btn });
       ctrl.addEventListener('plus', () => adjust(step));
       ctrl.addEventListener('minus', () => adjust(-step));
       merkeGeraet('controller', ctrl.device);
@@ -126,9 +126,21 @@ export class RideScreen {
       else if (e.key === ' ') { e.preventDefault(); this.session.emergencyStop(); }
     };
     addEventListener('keydown', this.#keys);
+
+    // Geräte-Watchdog: erkennt still abgerissene GATT-Verbindungen und hält
+    // die Chip-/Statusanzeige ehrlich (5-s-Takt)
+    this.#watchdog = setInterval(() => {
+      if (!this.session.ftms.connected && this.session.status !== 'done')
+        this.#status('Trainer getrennt — verbinde neu …', 'err');
+      for (const g of this.#geraete) {
+        if (g.btn.classList.contains('on') && !g.client.device?.gatt.connected)
+          g.btn.classList.remove('on');
+      }
+    }, 5000);
   }
 
   #keys = null;
+  #watchdog = null;
 
   #status(text, cls = '') {
     const el = this.$('#m-status');
@@ -158,7 +170,8 @@ export class RideScreen {
 
   destroy() {
     removeEventListener('keydown', this.#keys);
-    for (const g of this.#geraete) g.disconnect();
+    clearInterval(this.#watchdog);
+    for (const g of this.#geraete) g.client.disconnect();
     this.#geraete = [];
     this.root.querySelector('.ride-grid').classList.remove('large', 'chartmax');
   }
