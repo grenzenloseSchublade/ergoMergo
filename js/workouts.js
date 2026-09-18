@@ -14,6 +14,15 @@ const EFF_FTP_DEFAULT = 170;   // Annahme für Freizeitfahrer ohne FTP-Wert (~2 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const block = (sekunden, watt) => ({ dauer: Math.round(sekunden), watt: Math.max(30, Math.round(watt / 5) * 5) });
 
+// Wiederholte Abschnitte fürs Profil markieren: alle Blöcke einer Gruppe
+// bekommen dieselbe ID + Label („4×") — drawProfile zeichnet die Klammer.
+let gruppenZaehler = 0;
+function markiere(blocks, label) {
+  const gruppe = `g${++gruppenZaehler}`;
+  for (const b of blocks) { b.gruppe = gruppe; b.gruppeLabel = label; }
+  return blocks;
+}
+
 // Rampe als Stufenfolge (ERG kennt keine echten Rampen — 3 Stufen reichen)
 function rampe(min, vonPct, bisPct, f, stufen = 3) {
   const out = [];
@@ -52,7 +61,9 @@ export const WORKOUTS = [
       const blocks = rampe(wu, 0.45, 0.72, f);
       for (let s = 0; s < saetze; s++) {
         if (s > 0) blocks.push(block(4 * 60, 0.5 * f));
-        for (let r = 0; r < 8; r++) blocks.push(block(30, 1.18 * f), block(30, 0.5 * f));
+        const satz = [];
+        for (let r = 0; r < 8; r++) satz.push(block(30, 1.18 * f), block(30, 0.5 * f));
+        blocks.push(...markiere(satz, '8×'));
       }
       blocks.push(...fueller(main - saetze * 8 - (saetze - 1) * 4, f));
       blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
@@ -75,7 +86,9 @@ export const WORKOUTS = [
       const blocks = rampe(wu, 0.45, 0.72, f);
       for (let s = 0; s < saetze; s++) {
         if (s > 0) blocks.push(block(5 * 60, 0.5 * f));
-        for (let r = 0; r < 8; r++) blocks.push(block(40, 1.2 * f), block(20, 0.45 * f));
+        const satz = [];
+        for (let r = 0; r < 8; r++) satz.push(block(40, 1.2 * f), block(20, 0.45 * f));
+        blocks.push(...markiere(satz, '8×'));
       }
       blocks.push(...fueller(main - saetze * 8 - (saetze - 1) * 5, f));
       blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
@@ -96,10 +109,12 @@ export const WORKOUTS = [
       const { wu, cd, main } = rahmen(o.dauer);
       const n = clamp(Math.floor((main + 3) / 7), 3, 6);
       const blocks = rampe(wu, 0.45, 0.72, f);
+      const serie = [];
       for (let r = 0; r < n; r++) {
-        if (r > 0) blocks.push(block(3 * 60, 0.55 * f));
-        blocks.push(block(4 * 60, 1.1 * f));
+        if (r > 0) serie.push(block(3 * 60, 0.55 * f));
+        serie.push(block(4 * 60, 1.1 * f));
       }
+      blocks.push(...markiere(serie, `${n}×`));
       blocks.push(...fueller(main - n * 4 - (n - 1) * 3, f));
       blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
       return blocks;
@@ -124,10 +139,12 @@ export const WORKOUTS = [
       const alt = Math.floor((main - n * pause) / (n + 1));
       if (alt >= 10) { n += 1; blockLen = Math.min(20, alt); pause = Math.round(blockLen / 4); }
       const blocks = rampe(wu, 0.45, 0.72, f);
+      const serie = [];
       for (let r = 0; r < n; r++) {
-        if (r > 0) blocks.push(block(pause * 60, 0.5 * f));
-        blocks.push(block(blockLen * 60, 0.9 * f));
+        if (r > 0) serie.push(block(pause * 60, 0.5 * f));
+        serie.push(block(blockLen * 60, 0.9 * f));
       }
+      blocks.push(...markiere(serie, `${n}×`));
       blocks.push(...fueller(main - n * blockLen - (n - 1) * pause, f));
       blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
       return blocks;
@@ -148,9 +165,11 @@ export const WORKOUTS = [
       const blocks = rampe(wu, 0.45, 0.65, f);
       if (main >= 24) {
         const n = Math.min(4, Math.floor(main / 12));
+        const serie = [];
         for (let r = 0; r < n; r++) {
-          blocks.push(block(8 * 60, 0.8 * f), block(4 * 60, 0.65 * f));
+          serie.push(block(8 * 60, 0.8 * f), block(4 * 60, 0.65 * f));
         }
+        blocks.push(...(n > 1 ? markiere(serie, `${n}×`) : serie));
         blocks.push(...fueller(main - n * 12, f));
       } else {
         blocks.push(block(main * 60, 0.68 * f));

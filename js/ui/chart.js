@@ -32,19 +32,55 @@ export function drawProfile(canvas, blocks, ftp) {
   const w = canvas.width, h = canvas.height;
   const total = blocks.reduce((a, b) => a + b.dauer, 0);
   if (!total) return;
+
+  // Wiederholte Abschnitte (gruppe/gruppeLabel) → Klammer „n×" über dem Profil
+  const gruppen = new Map();
+  let t = 0;
+  for (const b of blocks) {
+    if (b.gruppe) {
+      const g = gruppen.get(b.gruppe) ?? { von: t, label: b.gruppeLabel };
+      g.bis = t + b.dauer;
+      gruppen.set(b.gruppe, g);
+    }
+    t += b.dauer;
+  }
+  const kopf = gruppen.size ? 13 : 0;        // Platz für die Klammern reservieren
+
   const maxW = Math.max(...blocks.map(b => b.watt)) * 1.08;
   const css = n => getComputedStyle(canvas).getPropertyValue(n).trim();
   ctx.clearRect(0, 0, w, h);
-  let t = 0;
+  t = 0;
   for (const b of blocks) {
     const x = t / total * w, bw = b.dauer / total * w;
-    const y = h - b.watt / maxW * h;
+    const y = kopf + (h - kopf) * (1 - b.watt / maxW);
     ctx.fillStyle = zoneHex(b.watt, ftp, css);
     ctx.globalAlpha = 0.9;
     ctx.fillRect(x + 0.5, y, Math.max(bw - 1, 0.5), h - y);
     t += b.dauer;
   }
   ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = css('--ink3');
+  ctx.fillStyle = css('--ink2');
+  ctx.lineWidth = 1;
+  ctx.font = `600 10px ${css('--mono') || 'monospace'}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const g of gruppen.values()) {
+    const x0 = g.von / total * w + 1, x1 = g.bis / total * w - 1;
+    if (x1 - x0 < 18) continue;              // zu schmal für eine lesbare Klammer
+    const y = 6.5;
+    const label = g.label ?? '×';
+    const lw = ctx.measureText(label).width + 6;
+    const mitte = (x0 + x1) / 2;
+    ctx.beginPath();
+    ctx.moveTo(x0, y + 3.5); ctx.lineTo(x0, y);                    // linker Abschluss
+    ctx.lineTo(mitte - lw / 2, y);
+    ctx.moveTo(mitte + lw / 2, y);
+    ctx.lineTo(x1, y); ctx.lineTo(x1, y + 3.5);                    // rechter Abschluss
+    ctx.stroke();
+    ctx.fillText(label, mitte, y + 0.5);
+  }
 }
 
 // Ganzes Programm: Zielblöcke als zonengefärbte Flächen, gefahrene Leistung

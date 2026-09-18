@@ -65,13 +65,26 @@ export const PROGRAMME = [
 
 // Schrittliste → flache Blockliste [{dauer, watt}] in Sekunden.
 // wattWert löst "55%" gegen die FTP auf.
+let gruppenZaehler = 0;
+
 export function expand(schritte, ftp = 0) {
   const watt = w => typeof w === 'string' && w.endsWith('%')
     ? Math.round(parseFloat(w) / 100 * ftp) : w;
   const out = [];
   for (const s of schritte) {
-    if (s.wdh) for (let i = 0; i < s.wdh; i++) out.push(...expand(s.block, ftp));
-    else out.push({ dauer: Math.round(s.min * 60), watt: watt(s.watt) });
+    if (s.wdh) {
+      // Wiederholung fürs Intensitätsprofil markieren (Klammer „n×")
+      const gruppe = `p${++gruppenZaehler}`;
+      for (let i = 0; i < s.wdh; i++) {
+        for (const b of expand(s.block, ftp)) {
+          b.gruppe ??= gruppe;
+          b.gruppeLabel ??= `${s.wdh}×`;
+          out.push(b);
+        }
+      }
+    } else {
+      out.push({ dauer: Math.round(s.min * 60), watt: watt(s.watt) });
+    }
   }
   return out;
 }
