@@ -1,8 +1,8 @@
 // Trainingsliste (Start) und Detailansicht mit Export/Löschen.
 
-import { listSessions, getSamples, deleteSession, FIELDS } from '../storage.js';
+import { listSessions, getSamples, deleteSession } from '../storage.js';
 import { toTCX, download } from '../export.js';
-import { LiveChart } from './chart.js';
+import { drawSessionChart } from './chart.js';
 import { fmtTime } from './ride.js';
 
 export async function renderList(ul, onOpen) {
@@ -35,11 +35,14 @@ export async function renderDetail(root, session, onClose) {
   ].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('');
 
   const data = await getSamples(session.id);
+  let cleanup = () => {};
   if (data) {
-    // Ganze Fahrt in den Kurven-Viewport skalieren: Chart erwartet ein 600-s-Fenster,
-    // deshalb hier direkt zeichnen statt LiveChart wiederzuverwenden, sobald länger.
-    const chart = new LiveChart(root.querySelector('#detail-chart'));
-    drawWhole(chart, data.samples, data.count);
+    const canvas = root.querySelector('#detail-chart');
+    const redraw = () => drawSessionChart(canvas, data.samples, data.count);
+    redraw();
+    // Bei Orientierungswechsel neu zeichnen; Aufrufer baut den Listener ab
+    addEventListener('resize', redraw);
+    cleanup = () => removeEventListener('resize', redraw);
   }
 
   root.querySelector('#btn-tcx').onclick = () =>
@@ -48,6 +51,7 @@ export async function renderDetail(root, session, onClose) {
   root.querySelector('#btn-delete').onclick = async () => {
     if (confirm('Fahrt endgültig löschen?')) { await deleteSession(session.id); onClose(); }
   };
+  return cleanup;
 }
 
 function drawWhole(chart, samples, count) {

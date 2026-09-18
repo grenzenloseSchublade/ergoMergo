@@ -40,6 +40,8 @@ function rahmen(T) {
   return { wu, cd, main: T - wu - cd };
 }
 
+// Rundung von Warmup/Cooldown kann den Hauptteil minimal überziehen —
+// negative Restzeit fällt hier still auf null zurück.
 function fueller(minuten, f) {
   return minuten >= 1 ? [block(minuten * 60, 0.65 * f)] : [];
 }

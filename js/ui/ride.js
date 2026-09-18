@@ -37,32 +37,38 @@ export class RideScreen {
   }
 
   #repeat = null;
+  #geraete = [];              // verbundene Zusatzgeräte, beim Beenden trennen
 
   #bind() {
     const step = this.settings.wattSchritt;
     const adjust = d => this.run ? this.run.adjust(d) : this.session.adjust(d);
     this.adjust = adjust;
 
-    // Zusatzgeräte: Herzgurt und Zwift Click (experimentell)
+    // Zusatzgeräte: Herzgurt und Zwift Click (experimentell).
+    // onclick statt addEventListener: die Buttons überleben die Session,
+    // Zuweisung überschreibt den Handler der vorherigen Fahrt.
     const chip = (id, connectFn) => {
       const btn = this.$(id);
-      btn.addEventListener('click', async () => {
-        try { await connectFn(); btn.classList.add('on'); }
+      btn.classList.remove('on');
+      btn.onclick = async () => {
+        try { await connectFn(btn); btn.classList.add('on'); }
         catch (err) { if (err.name !== 'NotFoundError') this.#status(err.message, 'err'); }
-      });
+      };
     };
-    chip('#btn-hr', async () => {
+    chip('#btn-hr', async btn => {
       const hr = new HeartRate();
       await hr.connect();
+      this.#geraete.push(hr);
       this.session.attachHR(hr);
-      hr.addEventListener('disconnected', () => this.$('#btn-hr').classList.remove('on'));
+      hr.addEventListener('disconnected', () => btn.classList.remove('on'));
     });
-    chip('#btn-click', async () => {
+    chip('#btn-click', async btn => {
       const click = new ZwiftClick();
       await click.connect();
+      this.#geraete.push(click);
       click.addEventListener('plus', () => adjust(step));
       click.addEventListener('minus', () => adjust(-step));
-      click.addEventListener('disconnected', () => this.$('#btn-click').classList.remove('on'));
+      click.addEventListener('disconnected', () => btn.classList.remove('on'));
     });
     const hold = (btn, delta) => {
       const fire = () => adjust(delta);
@@ -80,6 +86,11 @@ export class RideScreen {
     // Large-Print-Umschalter (PM5-Muster): Tap auf die große Zahl
     this.$('#m-watt').addEventListener('click', () =>
       this.root.querySelector('.ride-grid').classList.toggle('large'));
+    // Tap auf den Graphen: vergrößerte Darstellung (Details wie Klammern/Achse)
+    this.$('#live-chart').addEventListener('click', () => {
+      this.root.querySelector('.ride-grid').classList.toggle('chartmax');
+      this.render();
+    });
     this.$('#btn-stop').addEventListener('click', () => this.session.emergencyStop());
     this.$('#btn-end').addEventListener('click', async () => {
       await this.session.finish();
@@ -122,7 +133,12 @@ export class RideScreen {
     else this.chart.draw(s.samples, s.count, s.target);
   }
 
-  destroy() { removeEventListener('keydown', this.#keys); }
+  destroy() {
+    removeEventListener('keydown', this.#keys);
+    for (const g of this.#geraete) g.disconnect();
+    this.#geraete = [];
+    this.root.querySelector('.ride-grid').classList.remove('large', 'chartmax');
+  }
 }
 
 export function fmtTime(sec) {

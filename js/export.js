@@ -13,11 +13,12 @@ export function toTCX(session, samples, count) {
     const kmh = samples[i + 5] / 10;
     dist += kmh / 3.6;
     const hr = samples[i + 4];
+    // Elementreihenfolge laut TCX-XSD: Time, DistanceMeters, HeartRateBpm, Cadence, Extensions
     pts.push(`      <Trackpoint>
         <Time>${t}</Time>
-        <DistanceMeters>${dist.toFixed(1)}</DistanceMeters>
-        <Cadence>${samples[i + 3]}</Cadence>${hr > 0 ? `
+        <DistanceMeters>${dist.toFixed(1)}</DistanceMeters>${hr > 0 ? `
         <HeartRateBpm><Value>${hr}</Value></HeartRateBpm>` : ''}
+        <Cadence>${samples[i + 3]}</Cadence>
         <Extensions><ns3:TPX><ns3:Watts>${samples[i + 1]}</ns3:Watts></ns3:TPX></Extensions>
       </Trackpoint>`);
   }

@@ -27,6 +27,7 @@ export class Session extends EventTarget {
   }
 
   #ramp = null;               // { from, to, t0 }
+  #onReconnect = () => { this.#lastWritten = -1; };
   #lastWritten = -1;
   #writeTimer = null;
   #tickTimer = null;
@@ -75,8 +76,8 @@ export class Session extends EventTarget {
       }
     }, WRITE_INTERVAL);
 
-    // Nach Reconnect Kontrolle + Ziel neu setzen
-    this.ftms.addEventListener('reconnected', () => { this.#lastWritten = -1; });
+    // Nach Reconnect Ziel neu schreiben
+    this.ftms.addEventListener('reconnected', this.#onReconnect);
 
     this.#tickTimer = setInterval(() => this.#tick(), 1000);
     this.#autosaveTimer = setInterval(() => this.save(), AUTOSAVE_MS);
@@ -145,6 +146,7 @@ export class Session extends EventTarget {
     clearInterval(this.#tickTimer);
     clearInterval(this.#autosaveTimer);
     this.ftms.removeEventListener('data', this.#onData);
+    this.ftms.removeEventListener('reconnected', this.#onReconnect);
     try { if (this.ftms.connected) await this.ftms.setTargetPower(0); } catch { /* Trainer ggf. weg */ }
     await this.save(true);
   }

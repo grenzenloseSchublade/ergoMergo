@@ -57,6 +57,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 dialog {
   background: var(--surface); color: var(--ink); border: 1px solid var(--line);
   border-radius: 14px; padding: 1.2rem 1.4rem; min-width: min(20rem, 90vw);
+  max-height: 90dvh; overflow-y: auto;
 }
 dialog::backdrop { background: rgba(0, 0, 0, .55); }
 dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
@@ -131,6 +132,11 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .ctl:active { background: var(--accent); color: var(--bg); }
 .ctl-stop { background: var(--danger); color: #fff; font-size: 1.05rem; letter-spacing: .05em; }
 .ctl-end { background: none; border: 1px solid var(--line); color: var(--ink2); font-size: .95rem; font-weight: 500; }
+
+/* Vergrößerter Graph: Tap auf die Kurve — Details wie Klammern und Zeitachse */
+.ride-grid.chartmax #live-chart { height: min(58vh, 420px); }
+.ride-grid.chartmax .metric-power .value { font-size: clamp(2.4rem, 10vmin, 4rem); }
+.ride-grid.chartmax .metric:not(.metric-power) .value { font-size: clamp(1.3rem, 5vmin, 2rem); }
 
 /* Large Print (PM5-Muster): Tap auf die Wattzahl — nur die Kernwerte, riesig */
 .ride-grid.large #live-chart, .ride-grid.large .row-secondary { display: none; }

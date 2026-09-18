@@ -46,21 +46,22 @@ export class FTMS extends EventTarget {
       };
     } catch { this.features = null; }
 
+    // Chrome liefert beim Reconnect dieselben Characteristic-Objekte —
+    // remove vor add verhindert doppelte Handler (und damit doppelte Events).
     const bike = await svc.getCharacteristic(CH_BIKE_DATA);
-    bike.addEventListener('characteristicvaluechanged', e => {
-      this.dispatchEvent(new CustomEvent('data', { detail: parseBikeData(e.target.value) }));
-    });
+    bike.removeEventListener('characteristicvaluechanged', this.#onBikeData);
+    bike.addEventListener('characteristicvaluechanged', this.#onBikeData);
     await bike.startNotifications();
 
     this.#cp = await svc.getCharacteristic(CH_CONTROL);
-    this.#cp.addEventListener('characteristicvaluechanged', e => this.#onIndication(e.target.value));
+    this.#cp.removeEventListener('characteristicvaluechanged', this.#onCpIndication);
+    this.#cp.addEventListener('characteristicvaluechanged', this.#onCpIndication);
     await this.#cp.startNotifications();
 
     try {
       const st = await svc.getCharacteristic(CH_STATUS);
-      st.addEventListener('characteristicvaluechanged', e => {
-        this.dispatchEvent(new CustomEvent('machinestatus', { detail: new Uint8Array(e.target.value.buffer)[0] }));
-      });
+      st.removeEventListener('characteristicvaluechanged', this.#onMachineStatus);
+      st.addEventListener('characteristicvaluechanged', this.#onMachineStatus);
       await st.startNotifications();
     } catch { /* Status-Characteristic ist optional */ }
 
@@ -69,6 +70,16 @@ export class FTMS extends EventTarget {
     this.connected = true;
     this.dispatchEvent(new Event('connected'));
   }
+
+  #onBikeData = e => {
+    this.dispatchEvent(new CustomEvent('data', { detail: parseBikeData(e.target.value) }));
+  };
+
+  #onCpIndication = e => this.#onIndication(e.target.value);
+
+  #onMachineStatus = e => {
+    this.dispatchEvent(new CustomEvent('machinestatus', { detail: new Uint8Array(e.target.value.buffer)[0] }));
+  };
 
   #onIndication(value) {
     const b = new Uint8Array(value.buffer);

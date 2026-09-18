@@ -159,14 +159,18 @@ async function renderProgrammTiles() {
   fill('#programm-tiles', PROGRAMME);
 }
 
+let detailCleanup = null;
+
 async function goHome() {
+  detailCleanup?.();
+  detailCleanup = null;
   show('home');
   await renderList($('#session-list'), openDetail);
 }
 
 async function openDetail(sessionMeta) {
   show('detail');
-  await renderDetail(screens.detail, sessionMeta, goHome);
+  detailCleanup = await renderDetail(screens.detail, sessionMeta, goHome);
 }
 
 $('#start-free').addEventListener('click', () => startRide());
@@ -228,9 +232,17 @@ if (!navigator.bluetooth) {
   $('#start-free').disabled = true;
 }
 
-// Service Worker nur unter HTTPS/Produktion — localhost-Entwicklung bleibt cachefrei
+// Service Worker nur unter HTTPS/Produktion — localhost-Entwicklung bleibt cachefrei.
+// Übernimmt ein neuer Worker die Kontrolle (Update deployt), einmal neu laden,
+// damit sofort die frische Version läuft statt erst beim übernächsten Start.
 if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+  let hatteController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hatteController && !screens.ride.hidden) return;   // nie mitten in der Fahrt
+    if (hatteController) location.reload();
+    hatteController = true;
+  });
 }
 
 const demoParam = new URLSearchParams(location.search).get('demo');
