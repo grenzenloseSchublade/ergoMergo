@@ -194,24 +194,55 @@ async function openSettings() {
     $('#log-view').textContent = 'Geleert.';
   };
 
-  // Geräte-Bereich: gemerkte Geräte anzeigen, Entfernen je Rolle
+  // Geräte-Bereich: Karten je Rolle mit Koppeln/Entfernen
   $('#geraete-hint').hidden = kannMerken();
-  const rollen = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Controller']];
-  const liste = $('#geraete-liste');
-  liste.replaceChildren();
-  for (const [rolle, label] of rollen) {
-    const e = s.geraete?.[rolle];
-    const li = document.createElement('li');
-    li.innerHTML = `<span><span class="rolle">${label}:</span> ${e ? e.name ?? e.id : '— nicht gemerkt'}${e?.fw ? ` <span class="rolle">FW ${e.fw}</span>` : ''}</span>`;
-    if (e) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = 'Entfernen';
-      btn.onclick = async () => { await vergissGeraet(rolle); li.remove(); toast(`${label} vergessen`); };
-      li.append(btn);
+  const chooserFilter = {
+    trainer: { filters: [{ namePrefix: 'KICKR' }, { services: [0x1826] }], optionalServices: [0x1826, 0x180a] },
+    hr: { filters: [{ services: [0x180d] }] },
+    controller: { filters: [{ namePrefix: 'Zwift' }], optionalServices: ['00000001-19ca-4651-86e5-fa29dcdd09d1', 0xfc82] },
+  };
+  const rollen = [['trainer', 'Trainer', '⚙'], ['hr', 'Herzgurt', '♥'], ['controller', 'Controller', '±']];
+  const zeichneGeraete = geraete => {
+    const liste = $('#geraete-liste');
+    liste.replaceChildren();
+    for (const [rolle, label, icon] of rollen) {
+      const e = geraete?.[rolle];
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <span class="g-icon">${icon}</span>
+        <span class="g-info">
+          <span class="g-rolle">${label}</span>
+          <span class="g-name">${e ? `<i class="dot on"></i>${e.name ?? e.id}` : '<i class="dot"></i>nicht gemerkt'}${e?.fw ? ` <span class="g-fw">FW ${e.fw}</span>` : ''}</span>
+        </span>`;
+      const aktion = document.createElement('button');
+      aktion.type = 'button';
+      if (e) {
+        aktion.textContent = 'Entfernen';
+        aktion.className = 'ghost';
+        aktion.onclick = async () => {
+          await vergissGeraet(rolle);
+          toast(`${label} vergessen`);
+          zeichneGeraete((await getSettings()).geraete);
+        };
+      } else {
+        aktion.textContent = 'Koppeln';
+        aktion.onclick = async () => {
+          try {
+            const device = await navigator.bluetooth.requestDevice(chooserFilter[rolle]);
+            await merkeGeraet(rolle, device);
+            toastOk(`${label} gekoppelt: ${device.name ?? device.id}`);
+            zeichneGeraete((await getSettings()).geraete);
+            aktualisiereStatuszeile();
+          } catch (err) {
+            if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
+          }
+        };
+      }
+      li.append(aktion);
+      liste.append(li);
     }
-    liste.append(li);
-  }
+  };
+  zeichneGeraete(s.geraete);
   $('#set-ftp').value = s.ftp;
   $('#set-schritt').value = s.wattSchritt;
   $('#set-max').value = s.maxWatt;
@@ -470,6 +501,11 @@ else goHome();
 if (dlgParam) {
   const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === dlgParam);
   if (p) getSettings().then(s => startDialog(p, s));
+}
+// ?settings — Einstellungsdialog direkt öffnen (UI-Arbeit/Screenshots)
+if (new URLSearchParams(location.search).has('settings')) {
+  openSettings().then(() =>
+    document.querySelectorAll('#dlg-settings details').forEach(d => { d.open = true; }));
 }
 // ?big=<id> — Graph-Vollbild direkt öffnen (UI-Arbeit/Screenshots)
 const bigParam = new URLSearchParams(location.search).get('big');
