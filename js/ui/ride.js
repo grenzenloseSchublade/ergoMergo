@@ -186,7 +186,7 @@ export class RideScreen {
     endBtn.onclick = async () => {
       if (endBtn.dataset.armiert !== '1') {
         endBtn.dataset.armiert = '1';
-        endBtn.textContent = 'Wirklich beenden?';
+        endBtn.textContent = 'Sicher?';
         endBtn.classList.add('armiert');
         clearTimeout(this.#endArm);
         this.#endArm = setTimeout(() => {

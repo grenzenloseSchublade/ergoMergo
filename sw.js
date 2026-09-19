@@ -2,7 +2,7 @@
 // offline startet. VERSION bei jedem Release hochzählen — alte Caches werden
 // beim Aktivieren entsorgt.
 
-const VERSION = 'v24';
+const VERSION = 'v25';
 const CACHE = `ergomergo-${VERSION}`;
 const SHELL = [
   '.', 'index.html', 'css/app.css', 'manifest.webmanifest',
