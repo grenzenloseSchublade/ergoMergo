@@ -1,12 +1,12 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v18';
+export const APP_VERSION = 'v19';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
 // angestoßen — das vorhandene Auto-Update (controllerchange → reload)
 // übernimmt den Rest. Läuft beim Start, beim Sichtbarwerden und alle 10 min.
 export function starteUpdateWatchdog(statusEl) {
-  if (location.hostname === 'localhost') { statusEl.textContent = APP_VERSION; return; }
+  if (location.hostname === 'localhost') { statusEl.textContent = `${APP_VERSION} · dev (localhost)`; return; }
 
   const pruefe = async () => {
     try {

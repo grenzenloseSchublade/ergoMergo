@@ -2,7 +2,7 @@
 
 import { FTMS } from './ble/ftms.js';
 import { Session } from './state.js';
-import { getSettings, setSetting, requestPersistence } from './storage.js';
+import { getSettings, setSetting, requestPersistence, listSessions } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
@@ -313,6 +313,22 @@ async function goHome() {
   detailCleanup = null;
   show('home');
   await renderList($('#session-list'), openDetail);
+  aktualisiereStatuszeile();
+}
+
+// Statuszeile im Footer: Datenbestand + Speicherschutz, gemerkte Geräte.
+// (Die App-Aktualität daneben pflegt der Update-Watchdog aus version.js.)
+async function aktualisiereStatuszeile() {
+  try {
+    const [sessions, s, persistent] = await Promise.all([
+      listSessions(), getSettings(), navigator.storage?.persisted?.() ?? false,
+    ]);
+    $('#db-status').textContent =
+      `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'} · Speicher ${persistent ? 'geschützt' : 'ungeschützt'}`;
+    const mark = rolle => s.geraete?.[rolle] ? '✓' : '–';
+    $('#geraete-status').textContent =
+      `Trainer ${mark('trainer')} · HF ${mark('hr')} · Ctrl ${mark('controller')}`;
+  } catch { /* Statuszeile ist nie kritisch */ }
 }
 
 async function openDetail(sessionMeta) {
