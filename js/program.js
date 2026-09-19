@@ -193,16 +193,16 @@ export class ProgramRun extends EventTarget {
     return 'vorheriger';
   }
 
-  // Aktuellen Block um Sekunden verlängern. Clamp: die Programmuhr darf
-  // nicht vor den Beginn des aktuellen Blocks zurückfallen, sonst wiederholt
-  // Dauerdrücken frühere Blöcke.
+  // Aktuellen Block um Sekunden verlängern: die Zeit wird HINTEN angehängt
+  // (Blockdauer wächst), statt die Programmuhr zurückzuspulen — der Graph
+  // läuft vorwärts weiter, nichts wird doppelt durchlaufen oder gezeichnet.
   verlaengern(sek) {
-    if (this.index === -2) return;             // nach Programmende nicht zurückspulen
-    this.#schliessePause();
-    const t = Math.max(0, this.session.elapsed + this.zeitOffset);
-    const cur = this.blockAt(t);
-    const blockStart = cur ? cur.ende - cur.block.dauer : 0;
-    this.#setzeZeitOffset(Math.max(this.zeitOffset - sek, blockStart - this.session.elapsed));
+    if (this.index === -2) return;             // nach Programmende nichts anhängen
+    const b = this.blocks[Math.max(0, this.index)];
+    if (!b) return;
+    b.dauer += sek;
+    this.total += sek;
+    this.#tick();
   }
 
   // Aktuelles Blockziel inkl. Watt-Offset (für Resume nach Not-Stopp).

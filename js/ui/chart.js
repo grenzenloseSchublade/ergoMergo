@@ -219,34 +219,48 @@ function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) 
 }
 
 // Gefahrene Leistung als Linie über den Samples. xFn darf null liefern
-// (Sample ohne Position, z. B. Not-Stopp-Pause → Lücke); springt x rückwärts
-// (+30 s/Zurück), beginnt ein neues Segment — der ältere Durchlauf bleibt
-// halbtransparent stehen statt einer hässlichen Rückwärtskante.
+// (Sample ohne Position, z. B. Not-Stopp-Pause → Lücke). Springt x rückwärts
+// (Block zurück), wird vom alten Durchlauf nur der tatsächlich ÜBERHOLTE
+// Teil (x hinter der Sprungstelle) grau abgesetzt — er zählt nicht mehr;
+// der Verlauf davor bleibt normal weiß.
 function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5) {
-  ctx.strokeStyle = css('--power-line');
-  ctx.lineWidth = breite;
-  ctx.lineJoin = 'round';
-  const flush = alpha => {
+  const zeichne = (pts, farbe, alpha) => {
+    if (!pts.length) return;
     ctx.globalAlpha = alpha;
-    ctx.stroke();
+    if (pts.length === 1) {                    // Einzelpunkt sichtbar halten
+      ctx.fillStyle = farbe;
+      ctx.fillRect(pts[0][0] - breite / 2, pts[0][1] - breite / 2, breite, breite);
+    } else {
+      ctx.strokeStyle = farbe;
+      ctx.lineWidth = breite;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
-    ctx.beginPath();
   };
-  ctx.beginPath();
-  let prevX = -Infinity, offen = false;
+  const seg = [];
   for (let k = 0; k < count; k++) {
     const px = xFn(k);
-    if (px === null) {                        // Lücke: Segment normal beenden
-      if (offen) { flush(1); offen = false; prevX = -Infinity; }
+    if (px === null) {                         // Lücke: Segment normal beenden
+      zeichne(seg, css('--power-line'), 1);
+      seg.length = 0;
       continue;
     }
-    if (px < prevX && offen) { flush(0.45); offen = false; }   // Rücksprung
     const py = yFn(samples[k * FIELDS + 1]);
-    offen ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-    offen = true;
-    prevX = px;
+    if (seg.length && px < seg[seg.length - 1][0]) {
+      // Rücksprung: Segment an der Sprungstelle teilen — vorderer Teil
+      // bleibt gültig, der überholte hintere wird grau verworfen
+      let i = seg.findIndex(p => p[0] >= px);
+      if (i < 0) i = seg.length - 1;
+      zeichne(seg.slice(0, i + 1), css('--power-line'), 1);
+      zeichne(seg.slice(i), css('--ink3'), 0.8);
+      seg.length = 0;
+    }
+    seg.push([px, py]);
   }
-  if (offen) flush(1);
+  zeichne(seg, css('--power-line'), 1);
 }
 
 // ---------- Darstellungen ----------
