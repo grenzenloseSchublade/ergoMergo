@@ -111,9 +111,29 @@ export class ProgramRun extends EventTarget {
     this.blocks = blocks;
     this.total = blocks.reduce((a, b) => a + b.dauer, 0);
     this.offset = 0;                       // ± verschiebt den gesamten Ablauf (Watt)
-    this.zeitOffset = 0;                   // Skip/Verlängern verschiebt die Programmuhr
+    this.zeitOffset = 0;                   // Skip/Verlängern/Zurück verschiebt die Programmuhr
+    // Offset-Historie: [{ab (Aufzeichnungssekunde), offset}] — damit der Graph
+    // jeden Samplepunkt an seiner DAMALIGEN Programmzeit zeichnen kann
+    this.offsetLog = [{ ab: 0, offset: 0 }];
     this.index = -1;
     session.addEventListener('tick', () => this.#tick());
+    this.#tick();
+  }
+
+  // Aufzeichnungszeit → Programmzeit (stückweise konstante Offsets)
+  programmZeit(sampleT) {
+    let offset = 0;
+    for (const e of this.offsetLog) {
+      if (e.ab > sampleT) break;
+      offset = e.offset;
+    }
+    return Math.max(0, sampleT + offset);
+  }
+
+  #setzeZeitOffset(neu) {
+    this.zeitOffset = neu;
+    this.offsetLog.push({ ab: this.session.elapsed, offset: neu });
+    this.dispatchEvent(new Event('zeitsprung'));
     this.#tick();
   }
 
@@ -126,8 +146,24 @@ export class ProgramRun extends EventTarget {
   // Aktuellen Block überspringen (Programmuhr ans Blockende springen)
   skip() {
     if (this.index < 0 || !this.restImBlock) return;
-    this.zeitOffset += this.restImBlock;
-    this.#tick();
+    this.#setzeZeitOffset(this.zeitOffset + this.restImBlock);
+  }
+
+  // Player-Logik: erst an den Blockanfang, kurz nach Blockanfang (<3 s
+  // gefahren) zum vorherigen Block. Liefert 'anfang' | 'vorheriger' | null.
+  zurueck() {
+    const t = Math.max(0, this.session.elapsed + this.zeitOffset);
+    const cur = this.blockAt(t);
+    if (!cur) return null;
+    const blockStart = cur.ende - cur.block.dauer;
+    const gefahren = t - blockStart;
+    if (gefahren >= 3 || cur.i === 0) {
+      this.#setzeZeitOffset(blockStart - this.session.elapsed);
+      return 'anfang';
+    }
+    const prev = this.blocks[cur.i - 1];
+    this.#setzeZeitOffset(blockStart - prev.dauer - this.session.elapsed);
+    return 'vorheriger';
   }
 
   // Aktuellen Block um Sekunden verlängern. Clamp: die Programmuhr darf
@@ -137,8 +173,13 @@ export class ProgramRun extends EventTarget {
     const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
     const blockStart = cur ? cur.ende - cur.block.dauer : 0;
-    this.zeitOffset = Math.max(this.zeitOffset - sek, blockStart - this.session.elapsed);
-    this.#tick();
+    this.#setzeZeitOffset(Math.max(this.zeitOffset - sek, blockStart - this.session.elapsed));
+  }
+
+  // Aktuelles Blockziel inkl. Watt-Offset (für Resume nach Not-Stopp)
+  aktuellesZiel() {
+    const b = this.blocks[Math.max(0, this.index)];
+    return b ? b.watt + this.offset : 0;
   }
 
   blockAt(t) {

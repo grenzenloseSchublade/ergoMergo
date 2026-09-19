@@ -184,13 +184,24 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .metric:nth-child(2) { grid-area: target; }
 .metric:nth-child(3) { grid-area: time; }
 .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 8vmin, 3rem); }
+/* Countdown-Balken unter der Intervall-Restzeit: leert sich mit dem Block */
+.restbalken {
+  width: 100%; max-width: 9rem; height: 3px; margin-top: .3rem;
+  background: var(--surface2); border-radius: 2px; overflow: hidden; display: block;
+}
+.restbalken i {
+  display: block; height: 100%; background: var(--balken-farbe, var(--accent));
+  width: 100%; transition: width .9s linear;
+}
+
 .row-secondary {
   grid-area: sec; display: flex; flex-wrap: wrap; justify-content: center;
   gap: .3rem 1.6rem; margin-top: .4rem;
   color: var(--ink3); font-size: .9rem; font-variant-numeric: tabular-nums;
 }
 .row-secondary .status {
-  max-width: 24rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-basis: 100%; text-align: center;
+  max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .row-secondary .status[hidden] { display: none; }
 /* Aktions-Chips in eigener Zeile, fahrtauglich groß */
@@ -225,6 +236,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 }
 .ctl:active { background: var(--accent); color: var(--bg); }
 .ctl-stop { background: var(--danger); color: #fff; font-size: 1.05rem; letter-spacing: .05em; }
+.ctl-stop:disabled { opacity: .55; }
+.ctl-weiter { background: var(--ok); color: var(--bg); font-size: 1.05rem; letter-spacing: .05em; }
 .ctl-end { background: none; border: 1px solid var(--line); color: var(--ink2); font-size: .95rem; font-weight: 500; }
 
 /* Vergrößerter Graph: Tap auf die Kurve — Details wie Klammern und Zeitachse */
@@ -240,7 +253,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 /* Querformat: Werte links, Bedienung rechts, Kurve unten */
 @media (orientation: landscape) and (max-height: 500px) {
   .ride-grid { grid-template-rows: minmax(0, 1fr) auto; grid-template-columns: 1fr auto; grid-template-areas: "metrics controls" "chart chart"; }
-  .metrics { grid-area: metrics; min-height: 0; overflow: auto; }
+  .metrics { grid-area: metrics; min-height: 0; overflow: auto; scrollbar-width: none; }
+  .metrics::-webkit-scrollbar { display: none; }
   #live-chart { grid-area: chart; height: clamp(70px, 24vh, 130px); }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
   .ctl { min-width: 96px; }

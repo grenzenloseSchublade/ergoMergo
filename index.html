@@ -74,6 +74,7 @@
       <div class="metric">
         <span class="label" id="m-time-label">Zeit</span>
         <span class="value value-time" id="m-time">0:00</span>
+        <span class="restbalken" id="m-restbalken" hidden><i></i></span>
       </div>
       <div class="row-secondary">
         <span><b id="m-rpm">–</b> rpm</span>
@@ -85,6 +86,7 @@
       <div class="row-actions">
         <button class="chip" id="btn-hr">+ Herzgurt</button>
         <button class="chip" id="btn-click">+ Controller</button>
+        <button class="chip" id="btn-prev" hidden>⏮ Block</button>
         <button class="chip" id="btn-skip" hidden>Block ⏭</button>
         <button class="chip" id="btn-ext" hidden>+30 s</button>
       </div>
@@ -92,7 +94,7 @@
     <canvas id="live-chart"></canvas>
     <div class="controls">
       <button class="ctl ctl-minus" id="btn-minus">−10</button>
-      <button class="ctl ctl-stop" id="btn-stop">STOP</button>
+      <button class="ctl ctl-stop" id="btn-stop">STOPP</button>
       <button class="ctl ctl-plus" id="btn-plus">+10</button>
       <button class="ctl ctl-end" id="btn-end">Beenden</button>
     </div>

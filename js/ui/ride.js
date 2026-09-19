@@ -17,7 +17,7 @@ export class RideScreen {
     this.chart = run ? new WorkoutChart(root.querySelector('#live-chart'))
                      : new LiveChart(root.querySelector('#live-chart'));
     this.$ = id => root.querySelector(id);
-    this.$('#m-time-label').textContent = run ? 'Intervall' : 'Zeit';
+    this.$('#m-time-label').textContent = run ? 'Intervall Rest' : 'Zeit';
     this.$('#m-total').hidden = !run;
     if (run) {
       let prevWatt = null;
@@ -31,6 +31,9 @@ export class RideScreen {
         }
       });
       run.addEventListener('countdown', () => signal.countdown());
+      run.addEventListener('zeitsprung', () => {
+        this.#cursorBlinkBis = Date.now() + 2000;   // Cursor kurz hervorheben
+      });
       run.addEventListener('done', () => {
         signal.fertig();
         if (settings.sprachansagen) signal.sage('Programm beendet, gut gemacht');
@@ -101,8 +104,12 @@ export class RideScreen {
     auto('controller', '#btn-click', verbindeCtrl);
 
     // Intervallsteuerung nur im Programm-Modus
-    this.$('#btn-skip').hidden = this.$('#btn-ext').hidden = !this.run;
+    this.$('#btn-skip').hidden = this.$('#btn-ext').hidden = this.$('#btn-prev').hidden = !this.run;
     this.$('#btn-skip').onclick = () => { this.run?.skip(); this.render(); toast('Block übersprungen'); };
+    this.$('#btn-prev').onclick = () => {
+      const art = this.run?.zurueck();
+      if (art) { this.render(); toast(art === 'anfang' ? 'Blockanfang' : 'Vorheriger Block'); }
+    };
     this.$('#btn-ext').onclick = () => { this.run?.verlaengern(30); this.render(); toast('Block +30 s'); };
     // Alle Ride-Buttons per Handler-ZUWEISUNG statt addEventListener:
     // die DOM-Elemente überleben die Session — Zuweisung überschreibt die
@@ -128,7 +135,42 @@ export class RideScreen {
       this.root.querySelector('.ride-grid').classList.toggle('chartmax');
       this.render();
     };
-    this.$('#btn-stop').onclick = () => this.session.emergencyStop();
+    // Not-Stopp mit Panik-Schutz: nach dem Stopp bleibt der Slot 3 s
+    // gesperrt („GESTOPPT"), erst dann wird er zum grünen WEITER —
+    // ein Doppel-Tap in der Schrecksekunde reaktiviert nichts.
+    const stopBtn = this.$('#btn-stop');
+    const zeigeStop = () => {
+      stopBtn.textContent = 'STOPP';
+      stopBtn.className = 'ctl ctl-stop';
+      stopBtn.disabled = false;
+    };
+    zeigeStop();
+    stopBtn.onclick = () => {
+      if (this.session.gestoppt && stopBtn.classList.contains('ctl-weiter')) {
+        // WEITER: 50 % des Ziels sofort, dann sanfte Rampe (Recherche: harter
+        // ERG-Wiedereinstieg ist die häufigste Beschwerde bei Resume)
+        if (this.run) this.session.weiterZu(this.run.aktuellesZiel());
+        else this.session.weiter();
+        this.#status('weiter', 'ok');
+        zeigeStop();
+        return;
+      }
+      this.session.emergencyStop();
+      this.#status('gestoppt — Ziel 0 W', 'err');
+      stopBtn.textContent = 'GESTOPPT';
+      stopBtn.disabled = true;
+      clearTimeout(this.#stopSperre);
+      this.#stopSperre = setTimeout(() => {
+        if (!this.session.gestoppt) { zeigeStop(); return; }
+        stopBtn.textContent = 'WEITER';
+        stopBtn.className = 'ctl ctl-weiter';
+        stopBtn.disabled = false;
+      }, 3000);
+    };
+    // ±-Tap beendet den Stopp-Zustand ebenfalls → Button zurück auf STOP
+    this.session.addEventListener('target', () => {
+      if (!this.session.gestoppt && stopBtn.classList.contains('ctl-weiter')) zeigeStop();
+    });
     this.$('#btn-end').onclick = async () => {
       this.$('#btn-end').onclick = null;      // Doppel-Tap = doppeltes finish verhindern
       await this.session.finish();
@@ -138,7 +180,7 @@ export class RideScreen {
     this.#keys = e => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') adjust(step);
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') adjust(-step);
-      else if (e.key === ' ') { e.preventDefault(); this.session.emergencyStop(); }
+      else if (e.key === ' ') { e.preventDefault(); this.$('#btn-stop').click(); }
     };
     addEventListener('keydown', this.#keys);
 
@@ -158,6 +200,8 @@ export class RideScreen {
 
   #keys = null;
   #watchdog = null;
+  #stopSperre = null;
+  #cursorBlinkBis = 0;
 
   #statusTimer = null;
 
@@ -184,13 +228,22 @@ export class RideScreen {
     if (this.run) {
       this.$('#m-time').textContent = fmtTime(Math.max(0, this.run.restImBlock ?? 0));
       this.$('#m-total-time').textContent = fmtTime(Math.max(0, this.run.restGesamt ?? this.run.total));
+      const balken = this.$('#m-restbalken');
+      const b = this.run.blocks[Math.max(0, this.run.index)];
+      if (b) {
+        balken.hidden = false;
+        balken.firstElementChild.style.width =
+          `${Math.max(0, Math.min(100, (this.run.restImBlock ?? 0) / b.dauer * 100))}%`;
+        balken.style.setProperty('--balken-farbe', zoneColor(b.watt + this.run.offset, this.settings.ftp));
+      }
     } else {
       this.$('#m-time').textContent = fmtTime(s.elapsed);
     }
     this.$('#m-rpm').textContent = s.live.rpm ? Math.round(s.live.rpm) : '–';
     this.$('#m-hr').textContent = s.live.hr || '–';
     this.$('#m-kj').textContent = Math.round(s.kj);
-    if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, this.settings.ftp, this.run.zeitOffset);
+    if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, this.settings.ftp,
+      t => this.run.programmZeit(t), Date.now() < this.#cursorBlinkBis);
     else this.chart.draw(s.samples, s.count, s.target);
   }
 

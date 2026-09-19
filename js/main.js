@@ -2,7 +2,7 @@
 
 import { FTMS } from './ble/ftms.js';
 import { Session } from './state.js';
-import { getSettings, setSetting, requestPersistence, listSessions } from './storage.js';
+import { getSettings, setSetting, requestPersistence, listSessions, getSession } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
@@ -95,6 +95,8 @@ async function startRideInner(programm) {
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
   show('ride');
+  history.pushState({ screen: 'ride' }, '');
+  speichereUiState();
   keepAwake(true);
   rideScreen = new RideScreen(screens.ride, session, settings, async () => {
     rideScreen.destroy();
@@ -172,6 +174,7 @@ function startDialog(programm, settings = {}) {
     dlg.onclose = () => {
       resolve(dlg.returnValue === 'ok' ? leseOpts() : null);
     };
+    history.pushState({ dialog: 'start' }, '');
     dlg.showModal();
     zeichne();            // erst nach showModal: Canvas braucht sein Layout
   });
@@ -243,6 +246,7 @@ async function openSettings() {
     }
   };
   zeichneGeraete(s.geraete);
+  history.pushState({ dialog: 'settings' }, '');
   $('#set-ftp').value = s.ftp;
   $('#set-schritt').value = s.wattSchritt;
   $('#set-max').value = s.maxWatt;
@@ -380,12 +384,71 @@ $('#zwo-file').addEventListener('change', async e => {
 
 let detailCleanup = null;
 let reloadAusstehend = false;   // SW-Update kam während einer Fahrt an
+let aktuelleDetailId = null;
+
+// --- App-Zustand (M7): Screen + Scroll überleben App-Kill, 30-min-Fenster ---
+history.scrollRestoration = 'manual';
+const UISTATE_GUELTIG_MS = 30 * 60 * 1000;
+
+function speichereUiState() {
+  try {
+    localStorage.setItem('uiState', JSON.stringify({
+      screen: !screens.detail.hidden ? 'detail' : !screens.ride.hidden ? 'ride' : 'home',
+      detailId: aktuelleDetailId,
+      scrollHome: screens.home.hidden ? 0 : Math.round(scrollY),
+      savedAt: Date.now(),
+    }));
+  } catch { /* localStorage optional */ }
+}
+// Empfehlung aus der Recherche: visibilitychange+pagehide, NIE beforeunload
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') speichereUiState();
+});
+addEventListener('pagehide', speichereUiState);
+
+async function restoreUiState() {
+  try {
+    const s = JSON.parse(localStorage.getItem('uiState') ?? 'null');
+    if (!s || Date.now() - s.savedAt > UISTATE_GUELTIG_MS) return false;
+    if (s.screen === 'detail' && s.detailId) {
+      const meta = await getSession(s.detailId);
+      if (meta) { await openDetail(meta); return true; }
+    }
+    // 'ride' wird bewusst nie restauriert (BLE-Session ist tot) → Home
+    if (s.scrollHome) requestAnimationFrame(() => scrollTo(0, s.scrollHome));
+  } catch { /* defekter State → frisch starten */ }
+  return false;
+}
+
+// --- Zurück-Taste (M6): History-Einträge je Screen, double-back in der Fahrt ---
+let backArmiertBis = 0;
+
+addEventListener('popstate', () => {
+  // Realen UI-Zustand prüfen statt event.state (robust gegen tote Einträge)
+  for (const id of ['#dlg-graph', '#dlg-settings', '#dlg-start']) {
+    const dlg = $(id);
+    if (dlg?.open) { dlg.close(); return; }
+  }
+  if (!screens.detail.hidden) { goHome(); return; }
+  if (!screens.ride.hidden) {
+    if (Date.now() < backArmiertBis) {
+      $('#btn-end').click();                 // sauber beenden + speichern
+    } else {
+      backArmiertBis = Date.now() + 2500;
+      toast('Nochmal „Zurück" beendet die Fahrt');
+      history.pushState({ screen: 'ride' }, '');   // re-armieren
+    }
+  }
+  // home: nichts — Systemverhalten (App in den Hintergrund)
+});
 
 async function goHome() {
   if (reloadAusstehend) { location.reload(); return; }
   detailCleanup?.();
   detailCleanup = null;
+  aktuelleDetailId = null;
   show('home');
+  speichereUiState();
   await renderList($('#session-list'), openDetail);
   aktualisiereStatuszeile();
 }
@@ -407,6 +470,9 @@ async function aktualisiereStatuszeile() {
 
 async function openDetail(sessionMeta) {
   show('detail');
+  aktuelleDetailId = sessionMeta.id;
+  history.pushState({ screen: 'detail' }, '');
+  speichereUiState();
   detailCleanup = await renderDetail(screens.detail, sessionMeta, goHome);
 }
 
@@ -508,7 +574,7 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
 const demoParam = new URLSearchParams(location.search).get('demo');
 const dlgParam = new URLSearchParams(location.search).get('dlg');
 if (demoParam !== null) startDemo(demoParam);
-else goHome();
+else goHome().then(() => { if (!dlgParam) restoreUiState(); });
 // ?dlg=<id> — Startdialog für UI-Arbeit/Screenshots direkt öffnen
 if (dlgParam) {
   const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === dlgParam);

@@ -7,6 +7,7 @@ import { kennwerte } from './metrics.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
 const RAMP_MS = 2000;         // Zielsprünge als Rampe, nicht als Sprung
+const RESUME_RAMP_MS = 10000; // Wiedereinstieg nach Stopp: sanft hochfahren
 const AUTOSAVE_MS = 5000;
 
 export class Session extends EventTarget {
@@ -46,20 +47,42 @@ export class Session extends EventTarget {
     hrClient.addEventListener('disconnected', () => { this.#hrExternal = false; });
   }
 
-  setTarget(watt, { instant = false } = {}) {
+  setTarget(watt, { instant = false, rampMs = RAMP_MS } = {}) {
     const w = Math.min(Math.max(0, Math.round(watt)), this.settings.maxWatt);
     if (instant) { this.#ramp = null; this.target = w; }
-    else { this.#ramp = { from: this.#currentRampValue(), to: w, t0: performance.now() }; this.target = w; }
+    else { this.#ramp = { from: this.#currentRampValue(), to: w, t0: performance.now(), ms: rampMs }; this.target = w; }
     this.dispatchEvent(new Event('target'));
   }
 
-  adjust(delta) { this.setTarget(this.target + delta); }
+  adjust(delta) {
+    this.gestoppt = false;                  // ±-Tap = bewusstes Weiterfahren
+    this.setTarget(this.target + delta);
+  }
 
-  emergencyStop() { this.setTarget(0, { instant: true }); }
+  // Not-Stopp: Ziel sofort 0, vorheriges Ziel für „WEITER" merken.
+  // Idempotent — wiederholte Aufrufe überschreiben zielVorStopp nicht.
+  emergencyStop() {
+    if (!this.gestoppt) this.zielVorStopp = this.target;
+    this.gestoppt = true;
+    this.setTarget(0, { instant: true });
+  }
+
+  // Weiterfahren nach Not-Stopp: Wiedereinstieg bei ~50 % des Ziels, dann
+  // sanfte Rampe auf 100 % — verhindert den harten ERG-Einstieg (und damit
+  // die "Spiral of Death" direkt nach dem Resume).
+  weiterZu(ziel) {
+    this.gestoppt = false;
+    if (ziel > 0) {
+      this.setTarget(Math.round(ziel * 0.5), { instant: true });
+      this.setTarget(ziel, { rampMs: RESUME_RAMP_MS });
+    }
+  }
+
+  weiter() { this.weiterZu(this.zielVorStopp ?? 0); }
 
   #currentRampValue() {
     if (!this.#ramp) return this.target;
-    const p = Math.min(1, (performance.now() - this.#ramp.t0) / RAMP_MS);
+    const p = Math.min(1, (performance.now() - this.#ramp.t0) / (this.#ramp.ms ?? RAMP_MS));
     if (p >= 1) { this.#ramp = null; return this.target; }
     return Math.round(this.#ramp.from + (this.#ramp.to - this.#ramp.from) * p);
   }
