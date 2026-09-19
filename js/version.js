@@ -1,5 +1,5 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v25';
+export const APP_VERSION = 'v26';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
@@ -25,12 +25,26 @@ export function starteUpdateWatchdog(statusEl) {
       btn.onclick = async () => {
         btn.disabled = true;
         btn.textContent = 'aktualisiere …';
-        (await navigator.serviceWorker?.getRegistration())?.update();
+        const { logInfo, logError } = await import('./logger.js');
+        try {
+          const reg = await navigator.serviceWorker?.getRegistration();
+          logInfo('update', `Update angestoßen (${APP_VERSION} → ${live})`,
+            reg ? `scope=${reg.scope} waiting=${!!reg.waiting} installing=${!!reg.installing}` : 'keine Registration!');
+          // Hängt ein fertig installierter Worker im waiting, direkt aktivieren
+          reg?.waiting?.postMessage('skipWaiting');
+          await reg?.update();
+          reg?.waiting?.postMessage('skipWaiting');
+        } catch (err) {
+          logError('update', 'reg.update() fehlgeschlagen', err.message);
+        }
         // Normalfall: neuer Worker übernimmt → controllerchange lädt neu.
-        // Rückfall, falls das ausbleibt — aber NIE mitten in einer Fahrt:
+        // Rückfall nach 8 s — aber NIE mitten in einer Fahrt:
         setTimeout(() => {
-          if (document.querySelector('#screen-ride')?.hidden) location.reload();
-        }, 5000);
+          if (document.querySelector('#screen-ride')?.hidden) {
+            logInfo('update', 'controllerchange blieb aus — erzwinge Reload');
+            location.reload();
+          }
+        }, 8000);
       };
       statusEl.append(btn);
     } catch {
