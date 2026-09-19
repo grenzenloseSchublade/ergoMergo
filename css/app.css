@@ -167,12 +167,12 @@ dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
 body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .ride-grid {
   height: 100dvh; display: grid; gap: 0;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: 1fr auto auto auto;
 }
 .metrics {
   display: grid; align-content: center; justify-items: center;
   grid-template-columns: 1fr 1fr;
-  grid-template-areas: "power power" "target time" "sec sec" "act act";
+  grid-template-areas: "power power" "target time" "sec sec";
   padding: .5rem 1rem 0;
 }
 .metric { display: grid; justify-items: center; gap: 0; font-variant-numeric: tabular-nums; }
@@ -216,8 +216,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .row-secondary .status[hidden] { display: none; }
 /* Aktions-Chips in eigener Zeile, fahrtauglich groß */
 .row-actions {
-  grid-area: act; display: flex; flex-wrap: wrap; justify-content: center;
-  gap: .5rem; margin-top: .5rem;
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: .5rem; margin: .5rem .5rem 0;
 }
 .row-actions .chip {
   min-height: 46px; min-width: 46px; padding: .4rem .9rem; font-size: .9rem;
@@ -246,8 +246,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom));
 }
 /* Not-Stopp und Beenden räumlich von den Dauer-Buttons ± absetzen */
-.controls .ctl-stop { margin-left: .9rem; }
-.controls .ctl-end { margin-left: .4rem; }
+.controls #btn-stop { margin-left: .9rem; }
+.controls #btn-end { margin-left: .4rem; }
 .ctl {
   min-height: 64px; min-width: 0; width: 100%; border-radius: 14px;
   font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -281,21 +281,34 @@ button:disabled { cursor: default; }
 .ride-grid.large .metric-power .value { font-size: clamp(6rem, 34vmin, 14rem); }
 .ride-grid.large .metric:not(.metric-power) .value { font-size: clamp(2.6rem, 12vmin, 5rem); }
 
-/* Querformat: Werte links, Bedienung rechts, Kurve unten */
+/* Querformat: Werte links, Chart groß in der Mitte (volle Resthöhe),
+   Chips als schmale Leiste darunter, Bedienung rechts */
 @media (orientation: landscape) and (max-height: 500px) {
-  .ride-grid { grid-template-rows: minmax(0, 1fr) auto; grid-template-columns: 1fr auto; grid-template-areas: "metrics controls" "chart chart"; }
+  .ride-grid {
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr) auto;
+    grid-template-areas: "metrics chart controls" "metrics chips controls";
+  }
   .metrics {
     grid-area: metrics; min-height: 0; overflow: auto; scrollbar-width: none;
     align-content: safe center;      /* Überlauf nie oben unerreichbar abschneiden */
+    padding: .4rem .6rem;
   }
   .metrics::-webkit-scrollbar { display: none; }
-  .metric-power .value { font-size: clamp(3.4rem, 19vmin, 7rem); }
-  .controls .ctl-stop { margin-left: 0; margin-top: .9rem; }
-  .controls .ctl-end { margin-left: 0; margin-top: .4rem; }
-  .ride-grid.chartmax #live-chart { height: min(46vh, 420px); }
-  #live-chart { grid-area: chart; height: clamp(70px, 24vh, 130px); }
+  .metric-power .value { font-size: clamp(3rem, 16vmin, 6rem); }
+  .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 6.5vmin, 2.4rem); }
+  .row-secondary { gap: .2rem .9rem; font-size: .8rem; }
+  #live-chart { grid-area: chart; height: 100%; min-height: 0; }
+  .ride-grid.chartmax #live-chart { height: 100%; }
+  .row-actions { grid-area: chips; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: safe center; margin: .3rem .3rem calc(.4rem + env(safe-area-inset-bottom)); }
+  .row-actions::-webkit-scrollbar { display: none; }
+  .row-actions .chip { flex: 0 0 auto; min-height: 40px; }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
+  .controls #btn-stop { margin-left: 0; margin-top: .9rem; }
+  .controls #btn-end { margin-left: 0; margin-top: .4rem; }
   .ctl { min-width: 96px; }
+  /* Large Print quer: nur Werte + Bedienung */
+  .ride-grid.large { grid-template-columns: 1fr auto; grid-template-areas: "metrics controls"; }
 }
 
 /* ---------- Detail ---------- */
@@ -348,3 +361,20 @@ button:disabled { cursor: default; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Controller-Tastendruck: Zielwert blitzt kurz in Akzentfarbe */
+.metric-target b.blitz, #m-target.blitz { animation: zielblitz .3s ease-out; }
+@keyframes zielblitz {
+  0% { color: var(--accent); text-shadow: 0 0 12px var(--accent); }
+  100% { color: inherit; text-shadow: none; }
+}
+
+/* Icon-Chips (Ton/Ansagen/PiP): aus = gedimmt, an = Akzentrahmen */
+.chip-icon { min-width: 2.6rem; opacity: .45; }
+.chip-icon.on { opacity: 1; border-color: var(--accent); color: var(--accent); }
+
+/* Kadenz-Vorgabe dezent neben der rpm-Zahl */
+.rpm-range { font-style: normal; color: var(--ink3); font-size: .78em; }
+
+/* Statischer Intro-Absatz: nur für Crawler/Erstbesuch relevant, dezent */
+.seo-intro { color: var(--ink3); font-size: .8rem; margin: -.2rem 0 .8rem; max-width: 44rem; }

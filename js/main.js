@@ -19,7 +19,9 @@ import { getLogs, clearLogs } from './storage.js';
 import { download } from './export.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
-import { initAudio } from './signals.js';
+import { initAudio, tick } from './signals.js';
+import { ZwiftController } from './ble/zwift-controller.js';
+import { starteMessung } from './energie.js';
 
 const $ = s => document.querySelector(s);
 const screens = { home: $('#screen-home'), ride: $('#screen-ride'), detail: $('#screen-detail') };
@@ -94,6 +96,7 @@ async function startRideInner(programm) {
   requestPersistence();
   logInfo('app', `Session-Start: ${programm?.name ?? 'Freies Fahren'}`);
   const session = new Session(ftms, settings, programm);
+  starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
   show('ride');
@@ -251,6 +254,20 @@ async function openSettings() {
     }
   };
   zeichneGeraete(s.geraete);
+
+  // Tastenbelegung des Controllers: Anzeige + Lern-Modus
+  const MAP_AKTIONEN = [
+    ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
+    ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
+  ];
+  const zeigeMap = map => {
+    const belegt = MAP_AKTIONEN.filter(([k]) => map?.[k] !== undefined && map[k] !== null);
+    $('#ctrl-map-anzeige').textContent = belegt.length
+      ? 'Belegung: ' + belegt.map(([k, l]) => `${l} = Taste ${map[k]}`).join(' · ')
+      : 'Keine Tasten zugeordnet.';
+  };
+  zeigeMap(s.controllerMap);
+  $('#btn-map-lernen').onclick = () => lerneTasten(zeigeMap);
   history.pushState({ dialog: 'settings' }, '');
   dlg.addEventListener('close', () => {
     if (history.state?.dialog === 'settings') history.back();
@@ -261,8 +278,6 @@ async function openSettings() {
   $('#set-start').value = s.startWatt;
   $('#set-sprache').checked = s.sprachansagen;
   $('#set-icukey').value = s.icuApiKey;
-  $('#set-plusbit').value = s.controllerPlusBit;
-  $('#set-minusbit').value = s.controllerMinusBit;
 
   // Sicherung: Export/Import der kompletten Datenbank
   $('#btn-backup').onclick = async () => {
@@ -289,12 +304,79 @@ async function openSettings() {
     await setSetting('startWatt', Math.max(20, Number($('#set-start').value) || 100));
     await setSetting('sprachansagen', $('#set-sprache').checked);
     await setSetting('icuApiKey', $('#set-icukey').value.trim());
-    await setSetting('controllerPlusBit', Math.min(31, Math.max(0, Number($('#set-plusbit').value) || 0)));
-    await setSetting('controllerMinusBit', Math.min(31, Math.max(0, Number($('#set-minusbit').value) || 0)));
     renderProgrammTiles();      // Zonenfarben/Profile an neue FTP anpassen
     toastOk('Einstellungen gespeichert');
   };
   dlg.showModal();
+}
+
+// Tasten-Lern-Modus: verbindet den Controller und fragt Aktion für Aktion
+// eine Taste ab — ersetzt die alte Bit-Raterei über den Diagnose-Log.
+async function lerneTasten(zeigeMap) {
+  const dlg = $('#dlg-mapping');
+  const schritte = [
+    ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
+    ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
+  ];
+  const map = {};
+  let i = 0;
+  let fertig = false;
+  initAudio();                                   // Klick kam per Geste — Audio freischalten
+  const zeigeSchritt = () => {
+    $('#map-schritt').textContent = `Drücke die Taste für: ${schritte[i][1]}`;
+  };
+  const ctrl = new ZwiftController({ plus: null, minus: null });   // beim Lernen keine Aktionen
+  const ende = () => {
+    fertig = true;
+    try { ctrl.disconnect(); } catch { /* nie verbunden */ }
+    dlg.close();
+  };
+  $('#btn-map-abbruch').onclick = ende;
+  dlg.oncancel = ende;                           // ESC/Back schließt sauber
+  const weiter = async () => {
+    i++;
+    if (i >= schritte.length) {
+      await setSetting('controllerMap', map);
+      zeigeMap(map);
+      toastOk('Tastenbelegung gespeichert');
+      ende();
+      return;
+    }
+    zeigeSchritt();
+  };
+  $('#btn-map-skip').onclick = () => {
+    if (fertig || i >= schritte.length) return;
+    map[schritte[i][0]] = null;
+    weiter();
+  };
+  ctrl.addEventListener('button', e => {
+    // i kann während des await in weiter() schon hinter dem letzten Schritt
+    // stehen (zwei Bits in einer Notification) — hart abfangen
+    if (fertig || i >= schritte.length) return;
+    const bit = e.detail;
+    if (Object.values(map).includes(bit)) {
+      $('#map-status').textContent = `Taste ${bit} ist schon belegt — andere Taste drücken.`;
+      return;
+    }
+    map[schritte[i][0]] = bit;
+    tick();
+    $('#map-status').textContent = `Taste ${bit} zugeordnet.`;
+    weiter();
+  });
+  dlg.showModal();
+  zeigeSchritt();
+  try {
+    const device = await schnellverbinde('controller');
+    await ctrl.connect(device);                  // ohne gemerktes Gerät: Chooser
+    // Abbruch während des Verbindungsaufbaus: Verbindung nicht offen lassen
+    if (fertig) { ctrl.disconnect(); return; }
+    merkeGeraet('controller', ctrl.device);
+    $('#map-status').textContent =
+      `Verbunden: ${ctrl.deviceName ?? 'Controller'} — jetzt drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für Ride nötig.)`;
+  } catch (err) {
+    if (err.name !== 'NotFoundError') toastErr('Controller-Verbindung fehlgeschlagen: ' + err.message);
+    ende();
+  }
 }
 
 let tilesKette = Promise.resolve();
@@ -437,7 +519,7 @@ let backArmiertBis = 0;
 
 addEventListener('popstate', () => {
   // Realen UI-Zustand prüfen statt event.state (robust gegen tote Einträge)
-  for (const id of ['#dlg-graph', '#dlg-settings', '#dlg-start']) {
+  for (const id of ['#dlg-mapping', '#dlg-graph', '#dlg-settings', '#dlg-start']) {
     const dlg = $(id);
     if (dlg?.open) { dlg.close(); return; }
   }
@@ -492,6 +574,9 @@ $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => { if (!rideScreen) startDemo('vo2max'); });
 $('#btn-settings').addEventListener('click', openSettings);
 $('#btn-back').addEventListener('click', goHome);
+// Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —
+// sobald die App läuft, weg damit
+$('#seo-intro').hidden = true;
 renderProgrammTiles();
 starteUpdateWatchdog($('#version-status'));
 heileVersionsDrift();

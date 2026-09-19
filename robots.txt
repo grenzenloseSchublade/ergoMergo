@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://grenzenloseschublade.github.io/ergoMergo/sitemap.xml

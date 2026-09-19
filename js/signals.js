@@ -3,6 +3,9 @@
 
 let ctx = null;
 
+// Geteilter Context für ansagen.js (Bausteine über dieselbe Audio-Uhr)
+export function audioCtx() { return ctx; }
+
 // Muss aus einer User-Geste heraus aufgerufen werden (Autoplay-Policy).
 export function initAudio() {
   try {
@@ -29,6 +32,12 @@ export function blockwechsel(hart) {
   const t = ctx.currentTime;
   if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.3); }
   else { tone(587, t, 0.25); }
+}
+
+// Kurzer Bestätigungs-Tick für Controller-Tastendrücke
+export function tick() {
+  if (!ctx) return;
+  tone(1350, ctx.currentTime, 0.035, 0.18);
 }
 
 export function countdown() {

@@ -162,6 +162,7 @@ export class Session extends EventTarget {
       geraet: this.ftms.deviceName ?? null,
       fw: this.ftms.firmware ?? null,
       ftp: this.settings.ftp || null,
+      akkuProStunde: this.akkuProStunde ?? null,
       final, ...this.stats(),
     });
   }

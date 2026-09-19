@@ -115,19 +115,44 @@ export class ProgramRun extends EventTarget {
     // Offset-Historie: [{ab (Aufzeichnungssekunde), offset}] — damit der Graph
     // jeden Samplepunkt an seiner DAMALIGEN Programmzeit zeichnen kann
     this.offsetLog = [{ ab: 0, offset: 0 }];
+    // Not-Stopp-Pausen: [{von, bis, frozen}] in Aufzeichnungssekunden —
+    // die Programmuhr steht währenddessen bei `frozen`
+    this.pauseLog = [];
     this.index = -1;
     session.addEventListener('tick', () => this.#tick());
     this.#tick();
   }
 
-  // Aufzeichnungszeit → Programmzeit (stückweise konstante Offsets)
+  // Aufzeichnungszeit → Programmzeit (stückweise konstante Offsets).
+  // Samples in einer Not-Stopp-Pause liegen an der eingefrorenen Stelle.
   programmZeit(sampleT) {
+    for (const p of this.pauseLog) {
+      if (sampleT >= p.von && (p.bis === null || sampleT < p.bis)) return p.frozen;
+    }
     let offset = 0;
     for (const e of this.offsetLog) {
       if (e.ab > sampleT) break;
       offset = e.offset;
     }
     return Math.max(0, sampleT + offset);
+  }
+
+  // Lag das Sample in einer Not-Stopp-Pause? (Chart lässt dort eine Lücke)
+  istPause(sampleT) {
+    return this.pauseLog.some(p => sampleT > p.von && (p.bis === null || sampleT < p.bis));
+  }
+
+  // Offene Not-Stopp-Pause abschließen und die Uhr um die Pausendauer
+  // zurücksetzen — auch Skip/Zurück/Verlängern während des Stopps brauchen
+  // erst eine korrekte Programmzeit
+  #schliessePause() {
+    const offen = this.pauseLog.at(-1);
+    if (!offen || offen.bis !== null) return;
+    const el = this.session.elapsed;
+    offen.bis = el;
+    this.zeitOffset -= el - offen.von;
+    this.offsetLog.push({ ab: el, offset: this.zeitOffset });
+    this.dispatchEvent(new Event('zeitsprung'));
   }
 
   #setzeZeitOffset(neu) {
@@ -146,12 +171,14 @@ export class ProgramRun extends EventTarget {
   // Aktuellen Block überspringen (Programmuhr ans Blockende springen)
   skip() {
     if (this.index < 0 || !this.restImBlock) return;
+    this.#schliessePause();
     this.#setzeZeitOffset(this.zeitOffset + this.restImBlock);
   }
 
   // Player-Logik: erst an den Blockanfang, kurz nach Blockanfang (<3 s
   // gefahren) zum vorherigen Block. Liefert 'anfang' | 'vorheriger' | null.
   zurueck() {
+    this.#schliessePause();
     const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
     if (!cur) return null;
@@ -171,6 +198,7 @@ export class ProgramRun extends EventTarget {
   // Dauerdrücken frühere Blöcke.
   verlaengern(sek) {
     if (this.index === -2) return;             // nach Programmende nicht zurückspulen
+    this.#schliessePause();
     const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
     const blockStart = cur ? cur.ende - cur.block.dauer : 0;
@@ -195,6 +223,28 @@ export class ProgramRun extends EventTarget {
   }
 
   #tick() {
+    const el = this.session.elapsed;
+    // Not-Stopp friert die Programmuhr ein (Countdown steht, WEITER setzt
+    // exakt an der Stoppstelle fort); die Aufzeichnung läuft ehrlich weiter.
+    if (this.session.gestoppt && this.index !== -2) {
+      let offen = this.pauseLog.at(-1);
+      if (!offen || offen.bis !== null) {
+        offen = { von: el, bis: null, frozen: Math.max(0, el + this.zeitOffset) };
+        this.pauseLog.push(offen);
+      }
+      // Anzeige an der eingefrorenen Stelle nachführen: Skip/Zurück während
+      // der Pause müssen index/Countdown sichtbar ändern (sonst wirkt der
+      // Druck folgenlos und provoziert Doppel-Skips mit stalem restImBlock);
+      // #apply und Blockwechsel-Events bleiben im Stopp unterdrückt.
+      const cur = this.blockAt(offen.frozen);
+      if (cur) {
+        this.index = cur.i;
+        this.restImBlock = cur.ende - offen.frozen;
+        this.restGesamt = this.total - offen.frozen;
+      }
+      return;
+    }
+    this.#schliessePause();
     const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
     if (!cur) {

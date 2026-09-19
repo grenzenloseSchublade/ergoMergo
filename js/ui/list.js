@@ -60,7 +60,8 @@ export function wochenbilanz(sessions) {
   vorwochenstart.setDate(vorwochenstart.getDate() - 7);
   const summe = list => list.reduce((a, s) => ({
     n: a.n + 1, sek: a.sek + s.dauer, kJ: a.kJ + s.kJ, tss: a.tss + (s.tss ?? 0),
-  }), { n: 0, sek: 0, kJ: 0, tss: 0 });
+    akku: a.akku + (s.akkuProStunde ?? 0), akkuN: a.akkuN + (s.akkuProStunde ? 1 : 0),
+  }), { n: 0, sek: 0, kJ: 0, tss: 0, akku: 0, akkuN: 0 });
   return {
     woche: summe(sessions.filter(s => s.start >= wochenstart.getTime())),
     vorwoche: summe(sessions.filter(s => s.start >= vorwochenstart.getTime() && s.start < wochenstart.getTime())),
@@ -75,7 +76,7 @@ export async function renderList(ul, onOpen) {
   if (bilanzEl) {
     if (sessions.length) {
       const { woche, vorwoche } = wochenbilanz(sessions);
-      const fmt = b => `${b.n} ${b.n === 1 ? 'Fahrt' : 'Fahrten'} · ${fmtTime(b.sek)} · ${Math.round(b.kJ)} kJ${b.tss ? ` · ${b.tss} TSS` : ''}`;
+      const fmt = b => `${b.n} ${b.n === 1 ? 'Fahrt' : 'Fahrten'} · ${fmtTime(b.sek)} · ${Math.round(b.kJ)} kJ${b.tss ? ` · ${b.tss} TSS` : ''}${b.akkuN ? ` · ≈ ${Math.round(b.akku / b.akkuN * 10) / 10} %/h Akku` : ''}`;
       bilanzEl.innerHTML = `<b>Diese Woche:</b> ${fmt(woche)}<br><span>Vorwoche: ${fmt(vorwoche)}</span>`;
       bilanzEl.hidden = false;
     } else {
@@ -120,6 +121,7 @@ export async function renderDetail(root, session, onClose) {
   if (session.np) stats.push(['NP', `${session.np} W`]);
   if (session.if) stats.push(['IF', session.if], ['TSS', session.tss]);
   if (session.hrAvg) stats.push(['Ø HF', `${session.hrAvg} bpm`], ['max HF', `${session.hrMax} bpm`]);
+  if (session.akkuProStunde) stats.push(['Akku', `≈ ${session.akkuProStunde} %/h`]);
   root.querySelector('#d-stats').innerHTML =
     stats.map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('')
     + zonenBalken(session.zonenSek, 8);

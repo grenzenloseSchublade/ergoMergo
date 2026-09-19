@@ -57,10 +57,17 @@ export async function getSettings() {
   const rows = await tx('settings', 'readonly', st => st.getAll());
   const defaults = {
     ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100, theme: 'dark',
-    controllerPlusBit: 4, controllerMinusBit: 0,   // Ride-Tastenbits, per Diagnose-Log ermittelbar
-    sprachansagen: true, icuApiKey: '',
+    controllerMap: { plus: 4, minus: 0 },   // Ride-Tasten, per Lern-Modus belegbar
+    sprachansagen: true, tonAn: true, icuApiKey: '',
   };
-  return Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));
+  const s = Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));
+  // Migration v27→v28: individuell ermittelte Ride-Tastenbits in die
+  // controllerMap übernehmen, wenn der Lern-Modus noch nie lief
+  if (!rows.some(r => r.key === 'controllerMap') &&
+      (s.controllerPlusBit !== undefined || s.controllerMinusBit !== undefined)) {
+    s.controllerMap = { plus: s.controllerPlusBit ?? 4, minus: s.controllerMinusBit ?? 0 };
+  }
+  return s;
 }
 export const setSetting = (key, value) => tx('settings', 'readwrite', st => st.put({ key, value }));
 

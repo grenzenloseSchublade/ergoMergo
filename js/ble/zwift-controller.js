@@ -24,11 +24,10 @@ export class ZwiftController extends EventTarget {
   #clickState = { plus: false, minus: false };
   #rideBitmap = 0xffffffff;    // alle Bits 1 = nichts gedrückt
 
-  // plusBit/minusBit: Bit-Indizes der Ride-Tasten für ± (per Log ermittelbar)
-  constructor({ plusBit = 4, minusBit = 0 } = {}) {
+  // map: { plus, minus, skip, prev, stopp } → Bit-Indizes (per Lern-Modus belegt)
+  constructor(map = {}) {
     super();
-    this.plusBit = plusBit;
-    this.minusBit = minusBit;
+    this.map = { plus: 4, minus: 0, ...map };
   }
 
   get istRide() { return (this.#device?.name ?? '').includes('Ride'); }
@@ -94,6 +93,8 @@ export class ZwiftController extends EventTarget {
   }
 
   // Ride: Feld 1 = Bitmap, Bit 0 → gedrückt. Neu gedrückte Bits = 1→0-Flanken.
+  #letzteFlanke = new Map();   // bit → Zeitstempel (Entprellung)
+
   #rideTasten(felder) {
     if (felder[1] === undefined) return;
     const cur = felder[1] >>> 0;
@@ -102,10 +103,16 @@ export class ZwiftController extends EventTarget {
     if (!neu) return;
     for (let bit = 0; bit < 32; bit++) {
       if (!(neu >>> bit & 1)) continue;
+      // Entprellung nur gegen Prellen im Gerät: echte Schnellfeuer-Tipper
+      // (± gedrückt halten geht nicht am Ride) liegen über 50 ms Abstand
+      const jetzt = Date.now();
+      if (jetzt - (this.#letzteFlanke.get(bit) ?? 0) < 50) continue;
+      this.#letzteFlanke.set(bit, jetzt);
       logInfo('ctrl', `Ride-Taste Bit ${bit} gedrückt`);
       this.dispatchEvent(new CustomEvent('button', { detail: bit }));
-      if (bit === this.plusBit) this.dispatchEvent(new Event('plus'));
-      if (bit === this.minusBit) this.dispatchEvent(new Event('minus'));
+      for (const [aktion, b] of Object.entries(this.map)) {
+        if (b === bit) this.dispatchEvent(new Event(aktion));
+      }
     }
   }
 

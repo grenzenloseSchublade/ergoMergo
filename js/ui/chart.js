@@ -50,8 +50,11 @@ function scaleOf(h) {
 const axisFont = s => Math.min(13, Math.round(9 * Math.sqrt(s)) + (s > 1.4 ? 2 : 0));
 const labelFont = s => Math.min(14, Math.round(10 * Math.sqrt(s)) + (s > 1.4 ? 2 : 0));
 
-// Zeitachse am unteren Rand: Minuten-Ticks in sinnvollem Raster
-function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1) {
+// Zeitachse am unteren Rand. Ohne blocks: Minuten-Ticks in starrem Raster.
+// Mit blocks: Ticks sitzen an den Blockgrenzen (dort passiert etwas), das
+// Raster füllt nur lange grenzenlose Strecken; zu dichte Grenzen verlieren
+// ihr Label, behalten aber den Tick.
+function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null) {
   const y = h - fuss + 0.5;
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink3');
@@ -63,12 +66,39 @@ function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1) {
   ctx.moveTo(0, y);
   ctx.lineTo(w, y);
   const step = [60, 120, 300, 600, 900, 1200, 1800, 3600].find(x => x / total * w >= 34 * s) ?? 3600;
-  for (let t = step; t < total; t += step) {
+  const fmt = t => String(Math.round(t / 60));
+  let ticks;
+  if (blocks) {
+    ticks = [];
+    let t = 0;
+    for (const b of blocks.slice(0, -1)) {
+      t += b.dauer;
+      ticks.push(t);
+    }
+    // grenzenlose Lücken mit Rasterticks füllen (z. B. 45-min-Grundlage)
+    const alle = [0, ...ticks, total];
+    for (let i = 0; i < alle.length - 1; i++) {
+      for (let r = Math.ceil(alle[i] / step) * step + step; r < alle[i + 1] - step / 2; r += step) {
+        if (r - alle[i] >= step && alle[i + 1] - r >= step) ticks.push(r);
+      }
+    }
+    ticks.sort((a, b) => a - b);
+  } else {
+    ticks = [];
+    for (let t = step; t < total; t += step) ticks.push(t);
+  }
+  let letztesLabelX = -Infinity;
+  for (const t of ticks) {
     const x = t / total * w;
     if (x > w - 46 * s) break;               // Platz fürs Endlabel lassen
     ctx.moveTo(x, y);
     ctx.lineTo(x, y + 3 * s);
-    ctx.fillText(String(t / 60), x, y + 4 * s);
+    // zu dichte Grenzen oder krumme Zeiten: Tick ohne Label (fmt rundet
+    // auf Minuten — ein Label an einer 90-s-Grenze würde lügen)
+    if (x - letztesLabelX >= 30 * s && (!blocks || t % 60 === 0)) {
+      ctx.fillText(fmt(t), x, y + 4 * s);
+      letztesLabelX = x;
+    }
   }
   ctx.stroke();
   ctx.textAlign = 'right';
@@ -188,17 +218,35 @@ function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) 
   }
 }
 
-// Gefahrene Leistung als Linie über den Samples
+// Gefahrene Leistung als Linie über den Samples. xFn darf null liefern
+// (Sample ohne Position, z. B. Not-Stopp-Pause → Lücke); springt x rückwärts
+// (+30 s/Zurück), beginnt ein neues Segment — der ältere Durchlauf bleibt
+// halbtransparent stehen statt einer hässlichen Rückwärtskante.
 function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5) {
   ctx.strokeStyle = css('--power-line');
   ctx.lineWidth = breite;
   ctx.lineJoin = 'round';
+  const flush = alpha => {
+    ctx.globalAlpha = alpha;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+  };
   ctx.beginPath();
+  let prevX = -Infinity, offen = false;
   for (let k = 0; k < count; k++) {
-    const px = xFn(k), py = yFn(samples[k * FIELDS + 1]);
-    k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    const px = xFn(k);
+    if (px === null) {                        // Lücke: Segment normal beenden
+      if (offen) { flush(1); offen = false; prevX = -Infinity; }
+      continue;
+    }
+    if (px < prevX && offen) { flush(0.45); offen = false; }   // Rücksprung
+    const py = yFn(samples[k * FIELDS + 1]);
+    offen ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    offen = true;
+    prevX = px;
   }
-  ctx.stroke();
+  if (offen) flush(1);
 }
 
 // ---------- Darstellungen ----------
@@ -231,7 +279,7 @@ export function drawProfile(canvas, blocks, ftp) {
     zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
     zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s);
   }
-  if (fuss) zeichneZeitachse(ctx, css, w, h, fuss, total, s);
+  if (fuss) zeichneZeitachse(ctx, css, w, h, fuss, total, s, gross ? blocks : null);
   zeichneKlammern(ctx, css, w, gruppen, total, s);
 }
 
@@ -243,7 +291,7 @@ export class WorkoutChart {
   // zeitMap: Aufzeichnungszeit → Programmzeit (stückweise Offsets aus dem
   // ProgramRun) — Linie und Cursor liegen damit auch nach Zeitsprüngen exakt
   // auf der Programmachse. blink: Cursor nach einem Zeitsprung hervorheben.
-  draw(blocks, total, samples, count, offset, ftp, zeitMap = t => t, blink = false) {
+  draw(blocks, total, samples, count, offset, ftp, zeitMap = t => t, blink = false, istPause = null) {
     const { ctx, w, h, css } = prepCanvas(this.canvas);
     const gruppen = sammleGruppen(blocks);
     const kopf = gruppen.size ? 13 : 0;
@@ -265,9 +313,12 @@ export class WorkoutChart {
       t += b.dauer;
     }
     ctx.globalAlpha = 1;
-    zeichneZeitachse(ctx, css, w, h, fuss, total);
+    zeichneZeitachse(ctx, css, w, h, fuss, total, 1, blocks);
 
-    zeichneLeistungslinie(ctx, css, samples, count, k => x(zeitMap(samples[k * FIELDS])), y);
+    zeichneLeistungslinie(ctx, css, samples, count, k => {
+      const t = samples[k * FIELDS];
+      return istPause?.(t) ? null : x(zeitMap(t));
+    }, y);
 
     if (count) {
       const px = x(zeitMap(samples[(count - 1) * FIELDS]));
