@@ -43,6 +43,12 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .top-tiles:has(#start-last:not([hidden])) { grid-template-columns: 1fr 1fr; }
 .top-tiles .tile-title { font-size: 1.15rem; }
 
+.demo-link {
+  background: none; border: 1px dashed var(--line); border-radius: 10px;
+  color: var(--ink2); padding: .5rem .8rem; font-size: .82rem; text-align: left;
+}
+.demo-link:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Einklappbare Rubriken: Überschrift toggelt, Zustand wird gemerkt */
 details.rubrik { border: 0; }
 details.rubrik summary.listhead {
@@ -166,7 +172,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .metrics {
   display: grid; align-content: center; justify-items: center;
   grid-template-columns: 1fr 1fr 1fr;
-  grid-template-areas: "power power power" "target target time" "sec sec sec";
+  grid-template-areas: "power power power" "target target time" "sec sec sec" "act act act";
   padding: .5rem 1rem 0;
 }
 .metric { display: grid; justify-items: center; gap: 0; font-variant-numeric: tabular-nums; }
@@ -179,8 +185,22 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .metric:nth-child(3) { grid-area: time; }
 .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 8vmin, 3rem); }
 .row-secondary {
-  grid-area: sec; display: flex; gap: 1.6rem; margin-top: .4rem;
+  grid-area: sec; display: flex; flex-wrap: wrap; justify-content: center;
+  gap: .3rem 1.6rem; margin-top: .4rem;
   color: var(--ink3); font-size: .9rem; font-variant-numeric: tabular-nums;
+}
+.row-secondary .status {
+  max-width: 24rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row-secondary .status[hidden] { display: none; }
+/* Aktions-Chips in eigener Zeile, fahrtauglich groß */
+.row-actions {
+  grid-area: act; display: flex; flex-wrap: wrap; justify-content: center;
+  gap: .5rem; margin-top: .5rem;
+}
+.row-actions .chip {
+  min-height: 44px; min-width: 44px; padding: .4rem .9rem; font-size: .85rem;
+  display: inline-flex; align-items: center;
 }
 .row-secondary b { color: var(--ink2); font-weight: 600; }
 .chip {
@@ -213,14 +233,14 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .ride-grid.chartmax .metric:not(.metric-power) .value { font-size: clamp(1.3rem, 5vmin, 2rem); }
 
 /* Large Print (PM5-Muster): Tap auf die Wattzahl — nur die Kernwerte, riesig */
-.ride-grid.large #live-chart, .ride-grid.large .row-secondary { display: none; }
+.ride-grid.large #live-chart, .ride-grid.large .row-secondary, .ride-grid.large .row-actions { display: none; }
 .ride-grid.large .metric-power .value { font-size: clamp(6rem, 34vmin, 14rem); }
 .ride-grid.large .metric:not(.metric-power) .value { font-size: clamp(2.6rem, 12vmin, 5rem); }
 
 /* Querformat: Werte links, Bedienung rechts, Kurve unten */
 @media (orientation: landscape) and (max-height: 500px) {
   .ride-grid { grid-template-rows: minmax(0, 1fr) auto; grid-template-columns: 1fr auto; grid-template-areas: "metrics controls" "chart chart"; }
-  .metrics { grid-area: metrics; min-height: 0; overflow: hidden; }
+  .metrics { grid-area: metrics; min-height: 0; overflow: auto; }
   #live-chart { grid-area: chart; height: clamp(70px, 24vh, 130px); }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
   .ctl { min-width: 96px; }

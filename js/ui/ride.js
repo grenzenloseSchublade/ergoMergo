@@ -159,10 +159,19 @@ export class RideScreen {
   #keys = null;
   #watchdog = null;
 
+  #statusTimer = null;
+
+  // Erfolgsmeldungen verschwinden nach kurzer Zeit — dauerhaft sichtbar
+  // bleiben nur Fehler (weniger Rauschen in der Sekundärzeile)
   #status(text, cls = '') {
     const el = this.$('#m-status');
+    el.hidden = false;
     el.textContent = text;
     el.className = 'status ' + cls;
+    clearTimeout(this.#statusTimer);
+    if (cls === 'ok') {
+      this.#statusTimer = setTimeout(() => { el.hidden = true; }, 4000);
+    }
   }
 
   render() {

@@ -411,10 +411,20 @@ async function openDetail(sessionMeta) {
 }
 
 $('#start-free').addEventListener('click', () => startRide());
+$('#btn-demo').addEventListener('click', () => { if (!rideScreen) startDemo('vo2max'); });
 $('#btn-settings').addEventListener('click', openSettings);
 $('#btn-back').addEventListener('click', goHome);
 renderProgrammTiles();
 starteUpdateWatchdog($('#version-status'));
+
+// Speicherschutz früh anfragen (Chrome gewährt nach Heuristik, v. a. wenn
+// installiert) und nach einer App-Installation direkt erneut
+requestPersistence();
+addEventListener('appinstalled', async () => {
+  await navigator.storage?.persist?.();
+  aktualisiereStatuszeile();
+  toastOk('App installiert — Speicher geschützt');
+});
 
 // ?demo — Fahrbildschirm mit synthetischen Daten, ohne Trainer (UI-Arbeit, Screenshots).
 // ?demo=programm zeigt den Programm-Modus mit Workout-Graph.
@@ -462,7 +472,9 @@ async function startDemo(variante) {
     if (ping) fetch(`ping?t=${session.elapsed}&vis=${document.visibilityState}`).catch(() => {});
   }, 1000);
   show('ride');
-  rideScreen = new RideScreen(screens.ride, session, settings, async () => { location.search = ''; }, run);
+  // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde
+  rideScreen = new RideScreen(screens.ride, session, settings,
+    async () => { location.href = location.pathname; }, run);
   ftms.dispatchEvent(new Event('connected'));
   const st = document.querySelector('#m-status');
   st.textContent = 'DEMO — wird nicht gespeichert';
