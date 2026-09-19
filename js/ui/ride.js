@@ -5,6 +5,7 @@ import * as signal from '../signals.js';
 import { HeartRate } from '../ble/hr.js';
 import { ZwiftController } from '../ble/zwift-controller.js';
 import { schnellverbinde, merkeGeraet } from '../ble/geraete.js';
+import { toast, toastErr } from './toast.js';
 
 export class RideScreen {
   constructor(root, session, settings, onEnd, run = null) {
@@ -53,7 +54,7 @@ export class RideScreen {
     const adjust = d => this.run ? this.run.adjust(d) : this.session.adjust(d);
     this.adjust = adjust;
 
-    // Zusatzgeräte: Herzgurt und Zwift Click (experimentell).
+    // Zusatzgeräte: Herzgurt und Zwift-Controller (Click/Ride).
     // onclick statt addEventListener: die Buttons überleben die Session,
     // Zuweisung überschreibt den Handler der vorherigen Fahrt.
     const chip = (id, connectFn) => {
@@ -89,6 +90,7 @@ export class RideScreen {
 
     // Gemerkte Zusatzgeräte automatisch mitverbinden (best effort, ohne Chooser)
     const auto = async (rolle, id, fn) => {
+      if (this.session.ftms.istDemo) return;   // Demo verbindet keine echten Geräte
       const device = await schnellverbinde(rolle);
       if (!device) return;
       const btn = this.$(id);
@@ -100,8 +102,8 @@ export class RideScreen {
 
     // Intervallsteuerung nur im Programm-Modus
     this.$('#btn-skip').hidden = this.$('#btn-ext').hidden = !this.run;
-    this.$('#btn-skip').onclick = () => { this.run?.skip(); this.render(); };
-    this.$('#btn-ext').onclick = () => { this.run?.verlaengern(30); this.render(); };
+    this.$('#btn-skip').onclick = () => { this.run?.skip(); this.render(); toast('Block übersprungen'); };
+    this.$('#btn-ext').onclick = () => { this.run?.verlaengern(30); this.render(); toast('Block +30 s'); };
     // Alle Ride-Buttons per Handler-ZUWEISUNG statt addEventListener:
     // die DOM-Elemente überleben die Session — Zuweisung überschreibt die
     // Handler der vorherigen Fahrt, sonst feuert jeder Tap mehrfach.
@@ -146,8 +148,10 @@ export class RideScreen {
       if (!this.session.ftms.connected && this.session.status !== 'done')
         this.#status('Trainer getrennt — verbinde neu …', 'err');
       for (const g of this.#geraete) {
-        if (g.btn.classList.contains('on') && !g.client.device?.gatt.connected)
+        if (g.btn.classList.contains('on') && !g.client.device?.gatt.connected) {
           g.btn.classList.remove('on');
+          toastErr(`${g.client.deviceName ?? 'Zusatzgerät'} getrennt`);
+        }
       }
     }, 5000);
   }

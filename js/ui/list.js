@@ -2,6 +2,7 @@
 
 import { listSessions, getSamples, deleteSession, getSettings, FIELDS } from '../storage.js';
 import { logInfo, logError } from '../logger.js';
+import { toastOk, toastErr } from './toast.js';
 import { toTCX, download } from '../export.js';
 import { drawSessionChart } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
@@ -138,9 +139,12 @@ export async function renderDetail(root, session, onClose) {
   root.querySelector('#d-compliance').innerHTML =
     data ? complianceHtml(data.samples, data.count) : '';
 
-  root.querySelector('#btn-tcx').onclick = () =>
-    data && download(`ergomergo-${session.id.slice(0, 19).replaceAll(':', '-')}.tcx`,
+  root.querySelector('#btn-tcx').onclick = () => {
+    if (!data) return;
+    download(`ergomergo-${session.id.slice(0, 19).replaceAll(':', '-')}.tcx`,
       toTCX(session, data.samples, data.count));
+    toastOk('TCX heruntergeladen');
+  };
 
   // Upload zu intervals.icu (Basic Auth, CORS nur auf /api/v1/-Endpunkten)
   const { icuApiKey } = await getSettings();
@@ -161,9 +165,10 @@ export async function renderDetail(root, session, onClose) {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       logInfo('icu', 'Upload ok', session.id);
       icuBtn.textContent = '✓ hochgeladen';
+      toastOk('Bei intervals.icu hochgeladen');
     } catch (err) {
       logError('icu', 'Upload fehlgeschlagen', err.message);
-      alert('intervals.icu-Upload fehlgeschlagen: ' + err.message);
+      toastErr('intervals.icu-Upload fehlgeschlagen: ' + err.message);
       icuBtn.disabled = false;
     }
   };

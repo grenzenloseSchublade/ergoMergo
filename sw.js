@@ -2,14 +2,14 @@
 // offline startet. VERSION bei jedem Release hochzählen — alte Caches werden
 // beim Aktivieren entsorgt.
 
-const VERSION = 'v20';
+const VERSION = 'v21';
 const CACHE = `ergomergo-${VERSION}`;
 const SHELL = [
   '.', 'index.html', 'css/app.css', 'manifest.webmanifest',
   'js/main.js', 'js/version.js', 'js/state.js', 'js/storage.js', 'js/export.js', 'js/logger.js', 'js/metrics.js',
   'js/ble/geraete.js', 'js/backup.js', 'js/zwo.js',
   'js/program.js', 'js/workouts.js', 'js/signals.js', 'js/ble/ftms.js', 'js/ble/hr.js', 'js/ble/zwift-controller.js',
-  'js/ui/ride.js', 'js/ui/overlay.js', 'js/ui/chart.js', 'js/ui/list.js',
+  'js/ui/ride.js', 'js/ui/overlay.js', 'js/ui/toast.js', 'js/ui/chart.js', 'js/ui/list.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
@@ -27,6 +27,9 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // sw.js selbst nie aus dem Cache beantworten oder hineinlegen —
+  // sonst friert die Update-Erkennung des Watchdogs auf einem alten Stand ein
+  if (new URL(e.request.url).pathname.endsWith('/sw.js')) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit =>
       hit ?? fetch(e.request).then(resp => {

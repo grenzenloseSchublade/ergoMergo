@@ -19,7 +19,8 @@ export async function findeGemerktesGeraet(id) {
 
 // Verbindet ein bereits autorisiertes Gerät: erst direkt, sonst auf
 // Advertisement warten (Gerät muss wach sein), dann verbinden.
-export async function verbindeBekanntes(device, timeoutMs = 8000) {
+// Kurzes Fenster: ein schlafendes Gerät darf den Kaltstart nicht lange bremsen
+export async function verbindeBekanntes(device, timeoutMs = 4000) {
   try {
     await device.gatt.connect();
     return device;

@@ -10,6 +10,7 @@ import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError, formatLog } from './logger.js';
 import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
 import { starteUpdateWatchdog } from './version.js';
+import { toast, toastOk, toastErr } from './ui/toast.js';
 import { exportiereAlles, importiereAlles } from './backup.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
@@ -68,7 +69,7 @@ async function startRideInner(programm) {
   }
   // Vorabcheck: ist der Bluetooth-Adapter überhaupt verfügbar/an?
   if (await navigator.bluetooth.getAvailability?.() === false) {
-    alert('Bluetooth ist ausgeschaltet. Bitte einschalten und erneut versuchen.');
+    toastErr('Bluetooth ist ausgeschaltet — bitte einschalten.');
     return;
   }
   const ftms = new FTMS();
@@ -83,7 +84,7 @@ async function startRideInner(programm) {
       // Chooser abgebrochen ODER keine Berechtigung/kein Gerät — nicht still schlucken
       $('#bt-support').textContent = 'Kein Gerät gewählt. Trainer wach? Chrome-Berechtigung „Geräte in der Nähe" erteilt?';
     } else {
-      alert('Verbindung fehlgeschlagen: ' + err.message);
+      toastErr('Verbindung fehlgeschlagen: ' + err.message);
     }
     return;
   }
@@ -100,6 +101,7 @@ async function startRideInner(programm) {
     rideScreen = null;
     ftms.disconnect();
     keepAwake(false);
+    if (session.count > 0) toastOk('Fahrt gespeichert');
     // FTP-Rampentest: 0,75 × beste 60-s-Leistung als neuen FTP anbieten
     if (programm?.id === 'rampentest' && session.count >= 90) {
       const best = besteDauerleistung(session.samples, session.count);
@@ -205,7 +207,7 @@ async function openSettings() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'Entfernen';
-      btn.onclick = async () => { await vergissGeraet(rolle); li.remove(); };
+      btn.onclick = async () => { await vergissGeraet(rolle); li.remove(); toast(`${label} vergessen`); };
       li.append(btn);
     }
     liste.append(li);
@@ -220,9 +222,11 @@ async function openSettings() {
   $('#set-minusbit').value = s.controllerMinusBit;
 
   // Sicherung: Export/Import der kompletten Datenbank
-  $('#btn-backup').onclick = async () =>
+  $('#btn-backup').onclick = async () => {
     download(`ergomergo-backup-${new Date().toISOString().slice(0, 10)}.json`,
       await exportiereAlles(), 'application/json');
+    toastOk('Sicherung heruntergeladen');
+  };
   $('#btn-restore').onclick = () => $('#backup-file').click();
   $('#backup-file').onchange = async e => {
     const file = e.target.files[0];
@@ -230,9 +234,9 @@ async function openSettings() {
     if (!file) return;
     try {
       const n = await importiereAlles(await file.text());
-      alert(`Wiederhergestellt: ${n} Fahrten.`);
-      location.reload();
-    } catch (err) { alert('Import fehlgeschlagen: ' + err.message); }
+      toastOk(`Wiederhergestellt: ${n} Fahrten — lade neu …`);
+      setTimeout(() => location.reload(), 1200);
+    } catch (err) { toastErr('Import fehlgeschlagen: ' + err.message); }
   };
   dlg.onclose = async () => {
     if (dlg.returnValue !== 'ok') return;
@@ -245,11 +249,18 @@ async function openSettings() {
     await setSetting('controllerPlusBit', Math.min(31, Math.max(0, Number($('#set-plusbit').value) || 0)));
     await setSetting('controllerMinusBit', Math.min(31, Math.max(0, Number($('#set-minusbit').value) || 0)));
     renderProgrammTiles();      // Zonenfarben/Profile an neue FTP anpassen
+    toastOk('Einstellungen gespeichert');
   };
   dlg.showModal();
 }
 
-async function renderProgrammTiles() {
+let tilesKette = Promise.resolve();
+function renderProgrammTiles() {
+  tilesKette = tilesKette.then(renderProgrammTilesInner).catch(() => {});
+  return tilesKette;
+}
+
+async function renderProgrammTilesInner() {
   const settings = await getSettings();
   const effFtp = settings.ftp || EFF_FTP_DEFAULT;
   const fill = (sel, list) => {
@@ -330,8 +341,9 @@ $('#zwo-file').addEventListener('change', async e => {
     await saveProgramm({ id: `zwo-${Date.now()}`, name, bloecke });
     await renderProgrammTiles();
     logInfo('app', `.zwo importiert: ${name} (${bloecke.length} Blöcke)`);
+    toastOk(`„${name}" importiert (${bloecke.length} Blöcke)`);
   } catch (err) {
-    alert('Import fehlgeschlagen: ' + err.message);
+    toastErr('Import fehlgeschlagen: ' + err.message);
   }
 });
 
@@ -358,7 +370,7 @@ async function aktualisiereStatuszeile() {
       `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'} · Speicher ${persistent ? 'geschützt' : 'ungeschützt'}`;
     const mark = rolle => s.geraete?.[rolle] ? '✓' : '–';
     $('#geraete-status').textContent =
-      `Trainer ${mark('trainer')} · HF ${mark('hr')} · Ctrl ${mark('controller')}`;
+      `Trainer ${mark('trainer')} · Herzgurt ${mark('hr')} · Controller ${mark('controller')}`;
   } catch { /* Statuszeile ist nie kritisch */ }
 }
 
@@ -381,6 +393,7 @@ async function startDemo(variante) {
   Object.assign(ftms, { connected: true, busy: false, setTargetPower: async () => {}, disconnect: () => {} });
   const session = new Session(ftms, settings);
   session.save = async () => {};   // Demo-Fahrten nicht in die echte Historie schreiben
+  ftms.istDemo = true;             // u. a.: kein Auto-Connect echter Geräte im Demo
   let run = null;
   const prefill = (secs, zielAt) => {
     const F = 6;
@@ -420,6 +433,9 @@ async function startDemo(variante) {
   show('ride');
   rideScreen = new RideScreen(screens.ride, session, settings, async () => { location.search = ''; }, run);
   ftms.dispatchEvent(new Event('connected'));
+  const st = document.querySelector('#m-status');
+  st.textContent = 'DEMO — wird nicht gespeichert';
+  st.className = 'status';
 }
 
 

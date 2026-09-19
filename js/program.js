@@ -130,9 +130,14 @@ export class ProgramRun extends EventTarget {
     this.#tick();
   }
 
-  // Aktuellen Block um Sekunden verlängern
+  // Aktuellen Block um Sekunden verlängern. Clamp: die Programmuhr darf
+  // nicht vor den Beginn des aktuellen Blocks zurückfallen, sonst wiederholt
+  // Dauerdrücken frühere Blöcke.
   verlaengern(sek) {
-    this.zeitOffset -= sek;
+    const t = Math.max(0, this.session.elapsed + this.zeitOffset);
+    const cur = this.blockAt(t);
+    const blockStart = cur ? cur.ende - cur.block.dauer : 0;
+    this.zeitOffset = Math.max(this.zeitOffset - sek, blockStart - this.session.elapsed);
     this.#tick();
   }
 

@@ -1,5 +1,5 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v20';
+export const APP_VERSION = 'v21';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
@@ -27,8 +27,10 @@ export function starteUpdateWatchdog(statusEl) {
         btn.textContent = 'aktualisiere …';
         (await navigator.serviceWorker?.getRegistration())?.update();
         // Normalfall: neuer Worker übernimmt → controllerchange lädt neu.
-        // Rückfall, falls das ausbleibt:
-        setTimeout(() => location.reload(), 5000);
+        // Rückfall, falls das ausbleibt — aber NIE mitten in einer Fahrt:
+        setTimeout(() => {
+          if (document.querySelector('#screen-ride')?.hidden) location.reload();
+        }, 5000);
       };
       statusEl.append(btn);
     } catch {
