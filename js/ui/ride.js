@@ -23,9 +23,17 @@ export class RideScreen {
       run.addEventListener('block', e => {
         if (prevWatt !== null) signal.blockwechsel(e.detail.watt > prevWatt);
         prevWatt = e.detail.watt;
+        if (settings.sprachansagen) {
+          const b = run.blocks[e.detail.index];
+          const min = Math.round(b.dauer / 60 * 10) / 10;
+          signal.sage(`${min >= 1 ? `${min} Minuten, ` : ''}${b.watt + run.offset} Watt`);
+        }
       });
       run.addEventListener('countdown', () => signal.countdown());
-      run.addEventListener('done', () => signal.fertig());
+      run.addEventListener('done', () => {
+        signal.fertig();
+        if (settings.sprachansagen) signal.sage('Programm beendet, gut gemacht');
+      });
     }
     this.#bind();
     session.addEventListener('tick', () => this.render());
@@ -89,6 +97,11 @@ export class RideScreen {
     };
     auto('hr', '#btn-hr', verbindeHR);
     auto('controller', '#btn-click', verbindeCtrl);
+
+    // Intervallsteuerung nur im Programm-Modus
+    this.$('#btn-skip').hidden = this.$('#btn-ext').hidden = !this.run;
+    this.$('#btn-skip').onclick = () => { this.run?.skip(); this.render(); };
+    this.$('#btn-ext').onclick = () => { this.run?.verlaengern(30); this.render(); };
     // Alle Ride-Buttons per Handler-ZUWEISUNG statt addEventListener:
     // die DOM-Elemente überleben die Session — Zuweisung überschreibt die
     // Handler der vorherigen Fahrt, sonst feuert jeder Tap mehrfach.
@@ -164,7 +177,7 @@ export class RideScreen {
     this.$('#m-rpm').textContent = s.live.rpm ? Math.round(s.live.rpm) : '–';
     this.$('#m-hr').textContent = s.live.hr || '–';
     this.$('#m-kj').textContent = Math.round(s.kj);
-    if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, this.settings.ftp);
+    if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, this.settings.ftp, this.run.zeitOffset);
     else this.chart.draw(s.samples, s.count, s.target);
   }
 

@@ -1,6 +1,7 @@
 // Trainingsliste (Start) und Detailansicht mit Export/Löschen.
 
-import { listSessions, getSamples, deleteSession } from '../storage.js';
+import { listSessions, getSamples, deleteSession, getSettings, FIELDS } from '../storage.js';
+import { logInfo, logError } from '../logger.js';
 import { toTCX, download } from '../export.js';
 import { drawSessionChart } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
@@ -14,6 +15,38 @@ function zonenBalken(zonenSek, hoehe = 6) {
   const teile = zonenSek.map((s, z) => s > 0
     ? `<i style="flex:${s / total};background:var(--z${z + 1})"></i>` : '').join('');
   return `<span class="zonen" style="height:${hoehe}px">${teile}</span>`;
+}
+
+// Compliance-Report: Blöcke aus den Ziel-Samples ableiten (Lauflängen der
+// Zielleistung) und je Block Ziel gegen gefahrenen Schnitt stellen.
+function complianceReport(samples, count) {
+  const bloecke = [];
+  let start = 0;
+  for (let k = 1; k <= count; k++) {
+    if (k === count || samples[k * FIELDS + 2] !== samples[start * FIELDS + 2]) {
+      const dauer = k - start;
+      if (dauer >= 30) {                     // Rampen-/Übergangsstückchen ignorieren
+        let sum = 0;
+        for (let i = start; i < k; i++) sum += samples[i * FIELDS + 1];
+        bloecke.push({ dauer, ziel: samples[start * FIELDS + 2], ist: Math.round(sum / dauer) });
+      }
+      start = k;
+    }
+  }
+  return bloecke;
+}
+
+function complianceHtml(samples, count) {
+  const bloecke = complianceReport(samples, count);
+  if (bloecke.length < 2) return '';
+  const zeilen = bloecke.map((b, i) => {
+    const diff = b.ziel ? Math.round((b.ist / b.ziel - 1) * 100) : 0;
+    const cls = Math.abs(diff) <= 5 ? 'ok' : diff < 0 ? 'unter' : 'ueber';
+    return `<tr><td>${i + 1}</td><td>${fmtTime(b.dauer)}</td><td>${b.ziel} W</td><td>${b.ist} W</td><td class="${cls}">${diff > 0 ? '+' : ''}${diff} %</td></tr>`;
+  }).join('');
+  return `<details class="compliance"><summary>Intervall-Report (${bloecke.length} Blöcke)</summary>
+    <table><thead><tr><th>#</th><th>Dauer</th><th>Ziel</th><th>Ø Ist</th><th>Δ</th></tr></thead>
+    <tbody>${zeilen}</tbody></table></details>`;
 }
 
 // Wochenbilanz: aktuelle Woche (ab Montag) gegen Vorwoche
@@ -102,9 +135,40 @@ export async function renderDetail(root, session, onClose) {
     cleanup = () => removeEventListener('resize', redraw);
   }
 
+  root.querySelector('#d-compliance').innerHTML =
+    data ? complianceHtml(data.samples, data.count) : '';
+
   root.querySelector('#btn-tcx').onclick = () =>
     data && download(`ergomergo-${session.id.slice(0, 19).replaceAll(':', '-')}.tcx`,
       toTCX(session, data.samples, data.count));
+
+  // Upload zu intervals.icu (Basic Auth, CORS nur auf /api/v1/-Endpunkten)
+  const { icuApiKey } = await getSettings();
+  const icuBtn = root.querySelector('#btn-icu');
+  icuBtn.hidden = !icuApiKey || !data;
+  icuBtn.onclick = async () => {
+    icuBtn.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append('file', new Blob([toTCX(session, data.samples, data.count)], { type: 'application/xml' }),
+        `ergomergo-${session.id.slice(0, 19).replaceAll(':', '-')}.tcx`);
+      fd.append('name', `ergoMergo: ${session.programm}`);
+      const resp = await fetch('https://intervals.icu/api/v1/athlete/0/activities', {
+        method: 'POST',
+        headers: { Authorization: 'Basic ' + btoa('API_KEY:' + icuApiKey) },
+        body: fd,
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      logInfo('icu', 'Upload ok', session.id);
+      icuBtn.textContent = '✓ hochgeladen';
+    } catch (err) {
+      logError('icu', 'Upload fehlgeschlagen', err.message);
+      alert('intervals.icu-Upload fehlgeschlagen: ' + err.message);
+      icuBtn.disabled = false;
+    }
+  };
+  icuBtn.disabled = false;
+  icuBtn.textContent = '→ intervals.icu';
   root.querySelector('#btn-delete').onclick = async () => {
     if (confirm('Fahrt endgültig löschen?')) { await deleteSession(session.id); onClose(); }
   };

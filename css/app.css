@@ -52,6 +52,13 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .tiles-programme .tile { padding: .8rem 1rem; }
 .tiles-programme .tile-title { font-size: 1.1rem; }
 .tile-profile { width: 100%; height: 36px; margin-top: .45rem; display: block; }
+.tile { position: relative; }
+.tile-x {
+  position: absolute; top: .35rem; right: .5rem; color: var(--ink3);
+  font-size: .8rem; padding: .2rem .4rem; cursor: pointer;
+}
+.tile-x:hover { color: var(--danger); }
+.listhead .chip { margin-left: .6rem; vertical-align: middle; }
 #dlg-preview { width: 100%; height: 76px; display: block; margin: .2rem 0 .8rem; background: var(--surface2); border-radius: 8px; }
 
 dialog {
@@ -191,6 +198,16 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .d-stats span { color: var(--ink2); font-size: .9rem; }
 .d-stats b { color: var(--ink); font-size: 1.1rem; }
 #detail-chart { width: 100%; height: 180px; background: var(--surface); border-radius: 10px; }
+.compliance { margin-top: .8rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.compliance summary { padding: .55rem .8rem; cursor: pointer; font-size: .85rem; }
+.compliance table { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.compliance th, .compliance td { text-align: right; padding: .3rem .8rem; border-top: 1px solid var(--line); }
+.compliance th:first-child, .compliance td:first-child { text-align: left; }
+.compliance th { color: var(--ink3); font-weight: 500; font-size: .72rem; }
+.compliance .ok { color: var(--ok); }
+.compliance .unter { color: var(--z2); }
+.compliance .ueber { color: var(--z5); }
+
 .d-actions { display: flex; gap: .6rem; margin-top: 1rem; }
 .d-actions button {
   background: var(--surface2); border: 1px solid var(--line); border-radius: 10px;
@@ -198,7 +215,13 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 }
 .d-actions .danger { color: var(--danger); }
 
-.fuss { margin-top: 2rem; text-align: center; font-size: .72rem; color: var(--ink3); font-variant-numeric: tabular-nums; }
+/* Statuszeile oben: Aktualität · Datenbestand/Speicherschutz · Geräte */
+.statuszeile {
+  display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; align-items: center;
+  margin: -.3rem 0 .8rem; font-size: .74rem; color: var(--ink3);
+  font-variant-numeric: tabular-nums;
+}
+.statuszeile span:not(:last-child)::after { content: '·'; margin-left: 1.1rem; opacity: .5; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

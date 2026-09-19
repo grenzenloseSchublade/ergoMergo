@@ -14,6 +14,18 @@ export function zoneIndex(watt, ftp) {
   return 5;
 }
 
+// Beste durchgehende n-Sekunden-Durchschnittsleistung (für den Rampentest: n=60)
+export function besteDauerleistung(samples, count, fenster = 60) {
+  if (count < fenster) return 0;
+  let sum = 0, best = 0;
+  for (let k = 0; k < count; k++) {
+    sum += samples[k * FIELDS + 1];
+    if (k >= fenster) sum -= samples[(k - fenster) * FIELDS + 1];
+    if (k >= fenster - 1 && sum > best) best = sum;
+  }
+  return Math.round(best / fenster);
+}
+
 // NP nach dem Standardverfahren: 30-s-gleitender Mittelwert der Leistung,
 // vierte Potenz, Mittel, vierte Wurzel. IF = NP/FTP, TSS = h·IF²·100.
 export function kennwerte(samples, count, ftp = 0) {

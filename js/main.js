@@ -2,7 +2,7 @@
 
 import { FTMS } from './ble/ftms.js';
 import { Session } from './state.js';
-import { getSettings, setSetting, requestPersistence } from './storage.js';
+import { getSettings, setSetting, requestPersistence, listSessions } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
@@ -10,6 +10,10 @@ import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError, formatLog } from './logger.js';
 import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
 import { starteUpdateWatchdog } from './version.js';
+import { exportiereAlles, importiereAlles } from './backup.js';
+import { parseZwo, zwoProgramm } from './zwo.js';
+import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
+import { besteDauerleistung } from './metrics.js';
 import { getLogs, clearLogs } from './storage.js';
 import { download } from './export.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
@@ -96,6 +100,15 @@ async function startRideInner(programm) {
     rideScreen = null;
     ftms.disconnect();
     keepAwake(false);
+    // FTP-Rampentest: 0,75 × beste 60-s-Leistung als neuen FTP anbieten
+    if (programm?.id === 'rampentest' && session.count >= 90) {
+      const best = besteDauerleistung(session.samples, session.count);
+      const ftpNeu = Math.round(best * 0.75);
+      if (ftpNeu >= 50 && confirm(`Rampentest: beste Minute ${best} W → FTP ${ftpNeu} W übernehmen?`)) {
+        await setSetting('ftp', ftpNeu);
+        renderProgrammTiles();
+      }
+    }
     await goHome();
   }, run);
 }
@@ -201,12 +214,36 @@ async function openSettings() {
   $('#set-schritt').value = s.wattSchritt;
   $('#set-max').value = s.maxWatt;
   $('#set-start').value = s.startWatt;
+  $('#set-sprache').checked = s.sprachansagen;
+  $('#set-icukey').value = s.icuApiKey;
+  $('#set-plusbit').value = s.controllerPlusBit;
+  $('#set-minusbit').value = s.controllerMinusBit;
+
+  // Sicherung: Export/Import der kompletten Datenbank
+  $('#btn-backup').onclick = async () =>
+    download(`ergomergo-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      await exportiereAlles(), 'application/json');
+  $('#btn-restore').onclick = () => $('#backup-file').click();
+  $('#backup-file').onchange = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const n = await importiereAlles(await file.text());
+      alert(`Wiederhergestellt: ${n} Fahrten.`);
+      location.reload();
+    } catch (err) { alert('Import fehlgeschlagen: ' + err.message); }
+  };
   dlg.onclose = async () => {
     if (dlg.returnValue !== 'ok') return;
     await setSetting('ftp', Number($('#set-ftp').value) || 0);
     await setSetting('wattSchritt', Math.max(1, Number($('#set-schritt').value) || 10));
     await setSetting('maxWatt', Math.max(100, Number($('#set-max').value) || 400));
     await setSetting('startWatt', Math.max(20, Number($('#set-start').value) || 100));
+    await setSetting('sprachansagen', $('#set-sprache').checked);
+    await setSetting('icuApiKey', $('#set-icukey').value.trim());
+    await setSetting('controllerPlusBit', Math.min(31, Math.max(0, Number($('#set-plusbit').value) || 0)));
+    await setSetting('controllerMinusBit', Math.min(31, Math.max(0, Number($('#set-minusbit').value) || 0)));
     renderProgrammTiles();      // Zonenfarben/Profile an neue FTP anpassen
   };
   dlg.showModal();
@@ -234,7 +271,38 @@ async function renderProgrammTiles() {
   };
   fill('#workout-tiles', WORKOUTS);
   fill('#programm-tiles', PROGRAMME);
+
+  // Importierte .zwo-Workouts als eigene Kacheln mit Löschknopf
+  const customs = (await listProgramme()).map(p => zwoProgramm(p, EFF_FTP_DEFAULT));
+  fill('#custom-tiles', customs);
+  const wrap = $('#custom-tiles');
+  [...wrap.children].forEach((btn, i) => {
+    const x = document.createElement('span');
+    x.className = 'tile-x';
+    x.textContent = '✕';
+    x.onclick = async e => {
+      e.stopPropagation();
+      if (confirm(`„${customs[i].name}" löschen?`)) { await deleteProgramm(customs[i].id); renderProgrammTiles(); }
+    };
+    btn.append(x);
+  });
 }
+
+// .zwo-Import: Datei wählen → parsen → als eigenes Programm speichern
+$('#btn-zwo').addEventListener('click', () => $('#zwo-file').click());
+$('#zwo-file').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const { name, bloecke } = parseZwo(await file.text());
+    await saveProgramm({ id: `zwo-${Date.now()}`, name, bloecke });
+    await renderProgrammTiles();
+    logInfo('app', `.zwo importiert: ${name} (${bloecke.length} Blöcke)`);
+  } catch (err) {
+    alert('Import fehlgeschlagen: ' + err.message);
+  }
+});
 
 let detailCleanup = null;
 let reloadAusstehend = false;   // SW-Update kam während einer Fahrt an
@@ -245,6 +313,22 @@ async function goHome() {
   detailCleanup = null;
   show('home');
   await renderList($('#session-list'), openDetail);
+  aktualisiereStatuszeile();
+}
+
+// Statuszeile im Footer: Datenbestand + Speicherschutz, gemerkte Geräte.
+// (Die App-Aktualität daneben pflegt der Update-Watchdog aus version.js.)
+async function aktualisiereStatuszeile() {
+  try {
+    const [sessions, s, persistent] = await Promise.all([
+      listSessions(), getSettings(), navigator.storage?.persisted?.() ?? false,
+    ]);
+    $('#db-status').textContent =
+      `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'} · Speicher ${persistent ? 'geschützt' : 'ungeschützt'}`;
+    const mark = rolle => s.geraete?.[rolle] ? '✓' : '–';
+    $('#geraete-status').textContent =
+      `Trainer ${mark('trainer')} · HF ${mark('hr')} · Ctrl ${mark('controller')}`;
+  } catch { /* Statuszeile ist nie kritisch */ }
 }
 
 async function openDetail(sessionMeta) {

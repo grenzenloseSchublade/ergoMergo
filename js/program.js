@@ -5,6 +5,19 @@
 
 export const PROGRAMME = [
   {
+    id: 'rampentest',
+    name: 'FTP-Rampentest',
+    sub: '+20 W/min bis zur Erschöpfung — einfach Beenden drücken',
+    optionen: { start: { label: 'Startwatt', min: 50, max: 200, default: 100 } },
+    // Standardprotokoll (TrainerRoad/Zwift): kurze Einrollphase, dann +20 W
+    // je Minute. Testende = Beenden-Taste; FTP = 0,75 × beste 60-s-Leistung.
+    // Hinweis: die Watt-Obergrenze in den Einstellungen muss hoch genug sein.
+    bauen: o => [
+      { min: 5, watt: Math.round(o.start * 0.7 / 5) * 5 },
+      ...Array.from({ length: 40 }, (_, i) => ({ min: 1, watt: o.start + i * 20 })),
+    ],
+  },
+  {
     id: 'grundlage',
     name: 'Grundlage',
     sub: 'Konstante Last, Dauer wählbar',
@@ -97,7 +110,8 @@ export class ProgramRun extends EventTarget {
     this.name = name;
     this.blocks = blocks;
     this.total = blocks.reduce((a, b) => a + b.dauer, 0);
-    this.offset = 0;                       // ± verschiebt den gesamten Ablauf
+    this.offset = 0;                       // ± verschiebt den gesamten Ablauf (Watt)
+    this.zeitOffset = 0;                   // Skip/Verlängern verschiebt die Programmuhr
     this.index = -1;
     session.addEventListener('tick', () => this.#tick());
     this.#tick();
@@ -107,6 +121,19 @@ export class ProgramRun extends EventTarget {
   adjust(delta) {
     this.offset += delta;
     this.#apply();
+  }
+
+  // Aktuellen Block überspringen (Programmuhr ans Blockende springen)
+  skip() {
+    if (this.index < 0 || !this.restImBlock) return;
+    this.zeitOffset += this.restImBlock;
+    this.#tick();
+  }
+
+  // Aktuellen Block um Sekunden verlängern
+  verlaengern(sek) {
+    this.zeitOffset -= sek;
+    this.#tick();
   }
 
   blockAt(t) {
@@ -119,7 +146,7 @@ export class ProgramRun extends EventTarget {
   }
 
   #tick() {
-    const t = this.session.elapsed;
+    const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
     if (!cur) {
       this.restImBlock = 0;
