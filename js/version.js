@@ -1,5 +1,5 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v19';
+export const APP_VERSION = 'v20';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
@@ -15,10 +15,22 @@ export function starteUpdateWatchdog(statusEl) {
       if (!live) return;
       if (live === APP_VERSION) {
         statusEl.textContent = `${APP_VERSION} · aktuell`;
-      } else {
-        statusEl.textContent = `${APP_VERSION} → ${live} verfügbar, aktualisiere …`;
-        (await navigator.serviceWorker?.getRegistration())?.update();
+        return;
       }
+      // Neue Version deployt: anbieten, nicht erzwingen — ein Tap lädt neu
+      statusEl.replaceChildren();
+      const btn = document.createElement('button');
+      btn.className = 'chip update';
+      btn.textContent = `${live} verfügbar — jetzt aktualisieren`;
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'aktualisiere …';
+        (await navigator.serviceWorker?.getRegistration())?.update();
+        // Normalfall: neuer Worker übernimmt → controllerchange lädt neu.
+        // Rückfall, falls das ausbleibt:
+        setTimeout(() => location.reload(), 5000);
+      };
+      statusEl.append(btn);
     } catch {
       statusEl.textContent = `${APP_VERSION} · offline`;
     }

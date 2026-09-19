@@ -25,17 +25,30 @@
     <span id="geraete-status"></span>
   </p>
   <div class="tiles">
-    <button class="tile tile-primary" id="start-free">
-      <span class="tile-kicker">Sofort los</span>
-      <span class="tile-title">Freies Fahren</span>
-      <span class="tile-sub">ERG · ± am Daumen</span>
-    </button>
-    <h2 class="listhead">Nach Zeit &amp; Typ</h2>
-    <div class="tiles-programme" id="workout-tiles"></div>
-    <h2 class="listhead">Klassische Programme</h2>
-    <div class="tiles-programme" id="programm-tiles"></div>
-    <h2 class="listhead">Eigene Workouts <button type="button" class="chip" id="btn-zwo">+ .zwo importieren</button></h2>
-    <div class="tiles-programme" id="custom-tiles"></div>
+    <div class="top-tiles">
+      <button class="tile tile-primary" id="start-free">
+        <span class="tile-kicker">Sofort los</span>
+        <span class="tile-title">Freies Fahren</span>
+        <span class="tile-sub">ERG · ± am Daumen</span>
+      </button>
+      <button class="tile tile-primary" id="start-last" hidden>
+        <span class="tile-kicker">Zuletzt gefahren</span>
+        <span class="tile-title" id="last-title"></span>
+        <span class="tile-sub" id="last-sub"></span>
+      </button>
+    </div>
+    <details class="rubrik" id="rubrik-workouts" open>
+      <summary class="listhead">Nach Zeit &amp; Typ</summary>
+      <div class="tiles-programme" id="workout-tiles"></div>
+    </details>
+    <details class="rubrik" id="rubrik-klassik" open>
+      <summary class="listhead">Klassische Programme</summary>
+      <div class="tiles-programme" id="programm-tiles"></div>
+    </details>
+    <details class="rubrik" id="rubrik-custom" open>
+      <summary class="listhead">Eigene Workouts <button type="button" class="chip" id="btn-zwo">+ .zwo importieren</button></summary>
+      <div class="tiles-programme" id="custom-tiles"></div>
+    </details>
     <input type="file" id="zwo-file" accept=".zwo,.xml" hidden>
   </div>
   <h2 class="listhead">Letzte Fahrten</h2>

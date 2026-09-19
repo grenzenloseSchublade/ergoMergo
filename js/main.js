@@ -286,10 +286,41 @@ async function renderProgrammTiles() {
     };
     btn.append(x);
   });
+
+  // „Zuletzt gefahren"-Kachel: letztes Programm mit einem Tap wieder starten
+  const letzte = (await listSessions()).find(x => x.programmId);
+  const alle = [...WORKOUTS, ...PROGRAMME, ...customs];
+  const letztesProgramm = letzte && alle.find(p => p.id === letzte.programmId);
+  const lastBtn = $('#start-last');
+  if (letztesProgramm) {
+    $('#last-title').textContent = letztesProgramm.name;
+    $('#last-sub').textContent = new Date(letzte.start)
+      .toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    lastBtn.hidden = false;
+    lastBtn.onclick = () => startRide(letztesProgramm);
+  } else {
+    lastBtn.hidden = true;
+  }
 }
 
-// .zwo-Import: Datei wählen → parsen → als eigenes Programm speichern
-$('#btn-zwo').addEventListener('click', () => $('#zwo-file').click());
+// Rubriken: Auf-/Zu-Zustand über Reloads merken
+for (const det of document.querySelectorAll('details.rubrik')) {
+  try {
+    const merk = localStorage.getItem(`rubrik-${det.id}`);
+    if (merk !== null) det.open = merk === '1';
+  } catch { /* localStorage optional */ }
+  det.addEventListener('toggle', () => {
+    try { localStorage.setItem(`rubrik-${det.id}`, det.open ? '1' : '0'); } catch { /* egal */ }
+  });
+}
+
+// .zwo-Import: Datei wählen → parsen → als eigenes Programm speichern.
+// stopPropagation: der Button sitzt in der Rubrik-Summary und darf sie nicht toggeln.
+$('#btn-zwo').addEventListener('click', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  $('#zwo-file').click();
+});
 $('#zwo-file').addEventListener('change', async e => {
   const file = e.target.files[0];
   e.target.value = '';
