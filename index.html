@@ -114,9 +114,16 @@
       <button class="chip chip-fahrt" id="btn-ext" hidden aria-label="Block um 30 Sekunden verlängern">⏱ +30 s</button>
       <button class="chip chip-verbinde" id="btn-hr">+ Herzgurt</button>
       <button class="chip chip-verbinde" id="btn-click">+ Controller</button>
-      <button class="chip chip-icon" id="btn-ton" aria-label="Signaltöne an/aus" title="Signaltöne">🔊</button>
-      <button class="chip chip-icon" id="btn-sprich" aria-label="Sprachansagen an/aus" title="Sprachansagen">🗣</button>
-      <button class="chip chip-icon" id="btn-pip" hidden aria-label="Bild-in-Bild-Fenster" title="Bild-in-Bild (Experiment)">◱ PiP</button>
+      <!-- Icons: Lucide (lucide.dev, MIT) — inline, kein CDN -->
+      <button class="chip chip-icon" id="btn-ton" aria-label="Signaltöne an/aus" title="Signaltöne">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </button>
+      <button class="chip chip-icon" id="btn-sprich" aria-label="Sprachansagen an/aus" title="Sprachansagen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+      </button>
+      <button class="chip chip-icon" id="btn-pip" hidden aria-label="Bild-in-Bild-Fenster" title="Bild-in-Bild (Experiment)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/></svg>
+      </button>
     </div>
     <canvas id="live-chart"></canvas>
     <div class="controls">
