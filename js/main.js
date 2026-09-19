@@ -9,7 +9,7 @@ import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError, formatLog } from './logger.js';
 import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
-import { starteUpdateWatchdog } from './version.js';
+import { starteUpdateWatchdog, heileVersionsDrift } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
 import { exportiereAlles, importiereAlles } from './backup.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
@@ -40,7 +40,9 @@ async function keepAwake(on) {
   } catch { /* Wake Lock optional */ }
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && !screens.ride.hidden) keepAwake(true);
+  if (document.visibilityState !== 'visible') return;
+  if (!screens.ride.hidden) { keepAwake(true); return; }
+  if (reloadAusstehend) location.reload();      // verpasstes Update nachholen
 });
 
 let rideScreen = null;
@@ -492,6 +494,7 @@ $('#btn-settings').addEventListener('click', openSettings);
 $('#btn-back').addEventListener('click', goHome);
 renderProgrammTiles();
 starteUpdateWatchdog($('#version-status'));
+heileVersionsDrift();
 
 // Speicherschutz früh anfragen (Chrome gewährt nach Heuristik, v. a. wenn
 // installiert) und nach einer App-Installation direkt erneut

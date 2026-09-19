@@ -1,10 +1,25 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v26';
+export const APP_VERSION = 'v27';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
 // angestoßen — das vorhandene Auto-Update (controllerchange → reload)
 // übernimmt den Rest. Läuft beim Start, beim Sichtbarwerden und alle 10 min.
+// Selbstheilung: Läuft der Service Worker bereits auf einer neueren Version
+// (Cache-Name) als die geladene Seite, wurde nur der Reload verpasst —
+// einmalig still neu laden (Schleifen-Guard über sessionStorage).
+export async function heileVersionsDrift() {
+  try {
+    if (!('caches' in window) || location.hostname === 'localhost') return;
+    const keys = await caches.keys();
+    const cacheVersion = keys.map(k => k.match(/^ergomergo-(v\d+)$/)?.[1]).find(Boolean);
+    if (!cacheVersion || cacheVersion === APP_VERSION) return;
+    if (sessionStorage.getItem('driftReload') === cacheVersion) return;   // schon versucht
+    sessionStorage.setItem('driftReload', cacheVersion);
+    location.reload();
+  } catch { /* nie kritisch */ }
+}
+
 export function starteUpdateWatchdog(statusEl) {
   if (location.hostname === 'localhost') { statusEl.textContent = `${APP_VERSION} · dev (localhost)`; return; }
 
@@ -37,14 +52,12 @@ export function starteUpdateWatchdog(statusEl) {
         } catch (err) {
           logError('update', 'reg.update() fehlgeschlagen', err.message);
         }
-        // Normalfall: neuer Worker übernimmt → controllerchange lädt neu.
-        // Rückfall nach 8 s — aber NIE mitten in einer Fahrt:
+        // Ist der neue Worker längst aktiv (häufigster Fall), gibt es keinen
+        // controllerchange mehr — die Seite selbst ist alt. Reload lädt die
+        // Shell aus dem neuen Cache. Bedingungslos, außer mitten in der Fahrt.
         setTimeout(() => {
-          if (document.querySelector('#screen-ride')?.hidden) {
-            logInfo('update', 'controllerchange blieb aus — erzwinge Reload');
-            location.reload();
-          }
-        }, 8000);
+          if (document.querySelector('#screen-ride')?.hidden) location.reload();
+        }, 1500);
       };
       statusEl.append(btn);
     } catch {
