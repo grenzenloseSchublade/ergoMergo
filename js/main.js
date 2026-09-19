@@ -172,6 +172,9 @@ function startDialog(programm, settings = {}) {
 
   return new Promise(resolve => {
     dlg.onclose = () => {
+      // History-Eintrag des Dialogs abräumen, wenn per OK/Abbrechen/Esc
+      // geschlossen wurde (bei Zurück-Taste ist er schon gepoppt)
+      if (history.state?.dialog === 'start') history.back();
       resolve(dlg.returnValue === 'ok' ? leseOpts() : null);
     };
     history.pushState({ dialog: 'start' }, '');
@@ -247,6 +250,9 @@ async function openSettings() {
   };
   zeichneGeraete(s.geraete);
   history.pushState({ dialog: 'settings' }, '');
+  dlg.addEventListener('close', () => {
+    if (history.state?.dialog === 'settings') history.back();
+  }, { once: true });
   $('#set-ftp').value = s.ftp;
   $('#set-schritt').value = s.wattSchritt;
   $('#set-max').value = s.maxWatt;
@@ -412,7 +418,11 @@ async function restoreUiState() {
     if (!s || Date.now() - s.savedAt > UISTATE_GUELTIG_MS) return false;
     if (s.screen === 'detail' && s.detailId) {
       const meta = await getSession(s.detailId);
-      if (meta) { await openDetail(meta); return true; }
+      if (meta) {
+        history.pushState({ screen: 'detail' }, '');   // genau EIN Eintrag über Home
+        await openDetail(meta, { push: false });
+        return true;
+      }
     }
     // 'ride' wird bewusst nie restauriert (BLE-Session ist tot) → Home
     if (s.scrollHome) requestAnimationFrame(() => scrollTo(0, s.scrollHome));
@@ -468,10 +478,10 @@ async function aktualisiereStatuszeile() {
   } catch { /* Statuszeile ist nie kritisch */ }
 }
 
-async function openDetail(sessionMeta) {
+async function openDetail(sessionMeta, { push = true } = {}) {
   show('detail');
   aktuelleDetailId = sessionMeta.id;
-  history.pushState({ screen: 'detail' }, '');
+  if (push) history.pushState({ screen: 'detail' }, '');
   speichereUiState();
   detailCleanup = await renderDetail(screens.detail, sessionMeta, goHome);
 }
@@ -538,13 +548,12 @@ async function startDemo(variante) {
     if (ping) fetch(`ping?t=${session.elapsed}&vis=${document.visibilityState}`).catch(() => {});
   }, 1000);
   show('ride');
+  history.pushState({ screen: 'ride' }, '');   // double-back-Schutz auch in der Demo
   // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde
   rideScreen = new RideScreen(screens.ride, session, settings,
-    async () => { location.href = location.pathname; }, run);
+    async () => { $('#m-demo').hidden = true; location.href = location.pathname; }, run);
   ftms.dispatchEvent(new Event('connected'));
-  const st = document.querySelector('#m-status');
-  st.textContent = 'DEMO — wird nicht gespeichert';
-  st.className = 'status';
+  $('#m-demo').hidden = false;                 // persistenter Badge, unabhängig vom Status
 }
 
 

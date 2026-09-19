@@ -170,14 +170,17 @@ export class ProgramRun extends EventTarget {
   // nicht vor den Beginn des aktuellen Blocks zurückfallen, sonst wiederholt
   // Dauerdrücken frühere Blöcke.
   verlaengern(sek) {
+    if (this.index === -2) return;             // nach Programmende nicht zurückspulen
     const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
     const blockStart = cur ? cur.ende - cur.block.dauer : 0;
     this.#setzeZeitOffset(Math.max(this.zeitOffset - sek, blockStart - this.session.elapsed));
   }
 
-  // Aktuelles Blockziel inkl. Watt-Offset (für Resume nach Not-Stopp)
+  // Aktuelles Blockziel inkl. Watt-Offset (für Resume nach Not-Stopp).
+  // Nach Programmende (done) gilt das zuletzt gesetzte Session-Ziel.
   aktuellesZiel() {
+    if (this.index === -2) return this.session.zielVorStopp ?? this.session.target;
     const b = this.blocks[Math.max(0, this.index)];
     return b ? b.watt + this.offset : 0;
   }
@@ -212,6 +215,10 @@ export class ProgramRun extends EventTarget {
   }
 
   #apply() {
+    // Not-Stopp respektieren: ein Blockwechsel darf den Widerstand nicht
+    // wieder einschalten — WEITER/± sind die einzige Rückkehr
+    if (this.session.gestoppt) return;
+    if (this.index === -2) return;            // nach Programmende kein Blockziel mehr
     const b = this.blocks[Math.max(0, this.index)];
     if (b) this.session.setTarget(b.watt + this.offset);
   }

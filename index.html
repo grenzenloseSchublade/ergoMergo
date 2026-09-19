@@ -61,17 +61,18 @@
 <section id="screen-ride" class="screen" hidden>
   <div class="ride-grid">
     <div class="metrics">
+      <span class="demo-badge" id="m-demo" hidden>DEMO — wird nicht gespeichert</span>
       <div class="metric metric-power">
         <span class="label">Leistung</span>
         <span class="value" id="m-watt">0</span>
         <span class="unit">Watt</span>
       </div>
-      <div class="metric">
+      <div class="metric metric-target">
         <span class="label">Ziel</span>
         <span class="value" id="m-target">0</span>
         <span class="unit">Watt</span>
       </div>
-      <div class="metric">
+      <div class="metric metric-time">
         <span class="label" id="m-time-label">Zeit</span>
         <span class="value value-time" id="m-time">0:00</span>
         <span class="restbalken" id="m-restbalken" hidden><i></i></span>
@@ -84,18 +85,18 @@
         <span id="m-status" class="status" aria-live="polite">verbinde …</span>
       </div>
       <div class="row-actions">
-        <button class="chip" id="btn-hr">+ Herzgurt</button>
-        <button class="chip" id="btn-click">+ Controller</button>
-        <button class="chip" id="btn-prev" hidden>⏮ Block</button>
-        <button class="chip" id="btn-skip" hidden>Block ⏭</button>
-        <button class="chip" id="btn-ext" hidden>+30 s</button>
+        <button class="chip chip-fahrt" id="btn-prev" hidden aria-label="Block zurück">⏮ Block</button>
+        <button class="chip chip-fahrt" id="btn-skip" hidden aria-label="Block überspringen">Block ⏭</button>
+        <button class="chip chip-fahrt" id="btn-ext" hidden aria-label="Block um 30 Sekunden verlängern">⏱ +30 s</button>
+        <button class="chip chip-verbinde" id="btn-hr">+ Herzgurt</button>
+        <button class="chip chip-verbinde" id="btn-click">+ Controller</button>
       </div>
     </div>
     <canvas id="live-chart"></canvas>
     <div class="controls">
       <button class="ctl ctl-minus" id="btn-minus">−10</button>
-      <button class="ctl ctl-stop" id="btn-stop">STOPP</button>
       <button class="ctl ctl-plus" id="btn-plus">+10</button>
+      <button class="ctl ctl-stop" id="btn-stop" aria-live="polite">STOPP</button>
       <button class="ctl ctl-end" id="btn-end">Beenden</button>
     </div>
   </div>

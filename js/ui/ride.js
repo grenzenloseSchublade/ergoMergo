@@ -54,7 +54,10 @@ export class RideScreen {
 
   #bind() {
     const step = this.settings.wattSchritt;
-    const adjust = d => this.run ? this.run.adjust(d) : this.session.adjust(d);
+    const adjust = d => {
+      this.session.gestoppt = false;          // ± = bewusstes Weiterfahren, auch im Programm
+      this.run ? this.run.adjust(d) : this.session.adjust(d);
+    };
     this.adjust = adjust;
 
     // Zusatzgeräte: Herzgurt und Zwift-Controller (Click/Ride).
@@ -131,7 +134,12 @@ export class RideScreen {
     this.$('#m-watt').onclick = () =>
       this.root.querySelector('.ride-grid').classList.toggle('large');
     // Tap auf den Graphen: vergrößerte Darstellung (Details wie Klammern/Achse)
-    this.$('#live-chart').onclick = () => {
+    this.$('#live-chart').onclick = e => {
+      // Totzonen: oberer Rand (knapp verfehlte Chips) und äußerste Ränder
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (e.clientY - rect.top < 18) return;
+      const relX = (e.clientX - rect.left) / rect.width;
+      if (relX < 0.05 || relX > 0.95) return;
       this.root.querySelector('.ride-grid').classList.toggle('chartmax');
       this.render();
     };
@@ -151,7 +159,7 @@ export class RideScreen {
         // ERG-Wiedereinstieg ist die häufigste Beschwerde bei Resume)
         if (this.run) this.session.weiterZu(this.run.aktuellesZiel());
         else this.session.weiter();
-        this.#status('weiter', 'ok');
+        this.#status(`weiter — Ziel ${this.run ? this.run.aktuellesZiel() : this.session.zielVorStopp} W`, 'ok');
         zeigeStop();
         return;
       }
@@ -171,8 +179,28 @@ export class RideScreen {
     this.session.addEventListener('target', () => {
       if (!this.session.gestoppt && stopBtn.classList.contains('ctl-weiter')) zeigeStop();
     });
-    this.$('#btn-end').onclick = async () => {
-      this.$('#btn-end').onclick = null;      // Doppel-Tap = doppeltes finish verhindern
+    // Beenden zweistufig: erster Tap armiert ("Wirklich beenden?", 3 s),
+    // erst der zweite beendet — ein verrutschter Daumen killt keine Fahrt.
+    const endBtn = this.$('#btn-end');
+    endBtn.textContent = 'Beenden';
+    endBtn.onclick = async () => {
+      if (endBtn.dataset.armiert !== '1') {
+        endBtn.dataset.armiert = '1';
+        endBtn.textContent = 'Wirklich beenden?';
+        endBtn.classList.add('armiert');
+        clearTimeout(this.#endArm);
+        this.#endArm = setTimeout(() => {
+          endBtn.dataset.armiert = '';
+          endBtn.textContent = 'Beenden';
+          endBtn.classList.remove('armiert');
+        }, 3000);
+        return;
+      }
+      clearTimeout(this.#endArm);
+      endBtn.onclick = null;                  // doppeltes finish verhindern
+      endBtn.dataset.armiert = '';
+      endBtn.textContent = 'Beenden';
+      endBtn.classList.remove('armiert');
       await this.session.finish();
       this.onEnd(this.session);
     };
@@ -201,6 +229,7 @@ export class RideScreen {
   #keys = null;
   #watchdog = null;
   #stopSperre = null;
+  #endArm = null;
   #cursorBlinkBis = 0;
 
   #statusTimer = null;
@@ -250,6 +279,9 @@ export class RideScreen {
   destroy() {
     removeEventListener('keydown', this.#keys);
     clearInterval(this.#watchdog);
+    clearTimeout(this.#stopSperre);
+    clearTimeout(this.#statusTimer);
+    clearTimeout(this.#endArm);
     for (const g of this.#geraete) g.client.disconnect();
     this.#geraete = [];
     this.root.querySelector('.ride-grid').classList.remove('large', 'chartmax');
