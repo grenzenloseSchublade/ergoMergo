@@ -1,5 +1,5 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v35';
+export const APP_VERSION = 'v36';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
@@ -21,7 +21,9 @@ export async function heileVersionsDrift() {
 }
 
 export function starteUpdateWatchdog(statusEl) {
-  if (location.hostname === 'localhost') { statusEl.textContent = `${APP_VERSION} · dev (localhost)`; return; }
+  // Die Versionsnummer selbst steht klein im Header — die Statuszeile
+  // trägt nur noch Update-Angebot bzw. Ausnahmezustände
+  if (location.hostname === 'localhost') { statusEl.textContent = 'dev (localhost)'; return; }
 
   const pruefe = async () => {
     try {
@@ -29,7 +31,7 @@ export function starteUpdateWatchdog(statusEl) {
       const live = text.match(/VERSION = '([^']+)'/)?.[1];
       if (!live) return;
       if (live === APP_VERSION) {
-        statusEl.textContent = `${APP_VERSION} · aktuell`;
+        statusEl.textContent = '';
         return;
       }
       // Neue Version deployt: anbieten, nicht erzwingen — ein Tap lädt neu
@@ -111,7 +113,7 @@ export function starteUpdateWatchdog(statusEl) {
       };
       statusEl.append(btn);
     } catch {
-      statusEl.textContent = `${APP_VERSION} · offline`;
+      statusEl.textContent = 'offline';
     }
   };
 

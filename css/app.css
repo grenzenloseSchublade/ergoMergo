@@ -43,10 +43,16 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .top-tiles:has(#start-last:not([hidden])) { grid-template-columns: 1fr 1fr; }
 .top-tiles .tile-title { font-size: 1.15rem; }
 
-.demo-link {
-  background: none; border: 1px dashed var(--line); border-radius: 10px;
-  color: var(--ink2); padding: .5rem .8rem; font-size: .82rem; text-align: left;
+.version-tag {
+  font-size: .62rem; font-weight: 500; color: var(--ink3);
+  margin-left: .45rem; vertical-align: .35em; letter-spacing: .03em;
 }
+.demo-link {
+  background: none; border: none; color: var(--ink3);
+  font-size: .82rem; padding: .35rem .5rem; margin: .1rem auto .2rem;
+  display: block; text-align: center; cursor: pointer;
+}
+.demo-link span { color: var(--ink3); opacity: .75; }
 .demo-link:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Einklappbare Rubriken: Überschrift toggelt, Zustand wird gemerkt */
@@ -350,7 +356,8 @@ button:disabled { cursor: default; }
   margin: -.3rem 0 .8rem; font-size: .74rem; color: var(--ink3);
   font-variant-numeric: tabular-nums;
 }
-.statuszeile span:not(:last-child)::after { content: '·'; margin-left: 1.1rem; opacity: .5; }
+.statuszeile span:empty { display: none; }   /* leeres Versions-Segment ohne Waisen-Punkt */
+.statuszeile span:not(:last-child):not(:empty)::after { content: '·'; margin-left: 1.1rem; opacity: .5; }
 .chip.update { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* Toasts: unten mittig, über allem, kurz sichtbar */

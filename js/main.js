@@ -9,7 +9,7 @@ import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError, formatLog } from './logger.js';
 import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
-import { starteUpdateWatchdog, heileVersionsDrift } from './version.js';
+import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
 import { exportiereAlles, importiereAlles } from './backup.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
@@ -578,6 +578,7 @@ $('#btn-back').addEventListener('click', goHome);
 // sobald die App läuft, weg damit
 $('#seo-intro').hidden = true;
 renderProgrammTiles();
+$('#app-version').textContent = APP_VERSION;
 starteUpdateWatchdog($('#version-status'));
 heileVersionsDrift();
 
