@@ -419,3 +419,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gl button.verbunden .dot { background: var(--ok); }
 .gl button.verbindet .dot { background: var(--z4); }
 .gl .zusatz { font-size: .78rem; padding: .3rem .6rem; min-height: 34px; }
+
+/* Herz vor der Herzfrequenz — gleiche Farbe wie im PiP-Fenster */
+.hf-herz { font-style: normal; color: #ef6b5e; }
