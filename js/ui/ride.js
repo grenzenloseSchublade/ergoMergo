@@ -160,6 +160,8 @@ export class RideScreen {
             watt: this.session.smoothWatt,
             ziel: this.session.target,
             rest: this.run ? fmtTime(Math.max(0, this.run.restImBlock ?? 0)) : fmtTime(this.session.elapsed),
+            rpm: Math.round(this.session.live.rpm || 0),
+            hr: this.session.live.hr || 0,
             farbe: getComputedStyle(this.root).getPropertyValue(
               zoneColor(this.session.smoothWatt, this.settings.ftp).slice(4, -1)).trim() || '#e8f1f2',
           }));
