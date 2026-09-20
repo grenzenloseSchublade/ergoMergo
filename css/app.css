@@ -404,3 +404,18 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Statischer Intro-Absatz: nur für Crawler/Erstbesuch relevant, dezent */
 .seo-intro { color: var(--ink3); font-size: .8rem; margin: -.2rem 0 .8rem; max-width: 44rem; }
+
+/* Geräte-Leiste auf dem Home: ein Chip je Rolle, Zustand am Punkt */
+.gl { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin: .2rem 0 1rem; }
+.gl button {
+  display: inline-flex; align-items: center; gap: .45rem;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink2);
+  border-radius: 999px; padding: .45rem .85rem; font-size: .84rem; min-height: 42px;
+}
+.gl button.fehlt { border-style: dashed; color: var(--ink3); }
+.gl button.verbunden { border-color: var(--ok); color: var(--ink); }
+.gl button.verbindet { opacity: .6; }
+.gl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink3); flex: 0 0 auto; }
+.gl button.verbunden .dot { background: var(--ok); }
+.gl button.verbindet .dot { background: var(--z4); }
+.gl .zusatz { font-size: .78rem; padding: .3rem .6rem; min-height: 34px; }

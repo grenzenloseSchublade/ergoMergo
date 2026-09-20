@@ -6,6 +6,9 @@
 
 import { getSettings, setSetting } from '../storage.js';
 import { logInfo, logWarn } from '../logger.js';
+import { FTMS } from './ftms.js';
+import { HeartRate } from './hr.js';
+import { ZwiftController } from './zwift-controller.js';
 
 export const kannMerken = () => !!navigator.bluetooth?.getDevices;
 
@@ -43,11 +46,24 @@ export async function verbindeBekanntes(device, timeoutMs = 4000) {
   return device;
 }
 
-// Rolle: 'trainer' | 'hr' | 'controller'
+// Rolle: 'trainer' | 'hr' | 'controller'.
+// controller hält bis zu ZWEI Geräte (Zwift-Lenker = linkes + rechtes Pad).
+export function eintraegeVon(geraete, rolle) {
+  const e = geraete?.[rolle];
+  if (!e) return [];
+  return Array.isArray(e) ? e : [e];          // Migration: Alt-Objekt → Liste
+}
+
 export async function merkeGeraet(rolle, device, extra = {}) {
   const s = await getSettings();
   const geraete = { ...(s.geraete ?? {}) };
-  geraete[rolle] = { id: device.id, name: device.name ?? null, ...extra };
+  const neu = { id: device.id, name: device.name ?? null, ...extra };
+  if (rolle === 'controller') {
+    const liste = eintraegeVon(geraete, rolle).filter(e => e.id !== device.id);
+    geraete[rolle] = [...liste, neu].slice(-2);   // maximal zwei Pads
+  } else {
+    geraete[rolle] = neu;
+  }
   await setSetting('geraete', geraete);
   logInfo('geraete', `${rolle} gemerkt: ${device.name}`);
 }
@@ -72,3 +88,126 @@ export async function schnellverbinde(rolle) {
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// GeraeteManager: EINE Fassade für Koppeln/Verbinden/Status — Home-Leiste,
+// Einstellungen und Fahrbildschirm sind nur noch Renderer darüber.
+// Verbindungen leben im Pool über Fahrten hinweg, bis der Nutzer trennt.
+
+const CHOOSER_FILTER = {
+  trainer: { filters: [{ namePrefix: 'KICKR' }, { services: [0x1826] }], optionalServices: [0x1826, 0x180a] },
+  hr: { filters: [{ services: [0x180d] }] },
+  controller: { filters: [{ namePrefix: 'Zwift' }], optionalServices: ['00000001-19ca-4651-86e5-fa29dcdd09d1', 0xfc82] },
+};
+
+class GeraeteManager extends EventTarget {
+  #clients = { trainer: [], hr: [], controller: [] };   // gehaltene Clients je Rolle
+  #verbindet = new Set();
+  #watchdog = null;
+  #snapshot = '';
+
+  #change() {
+    this.dispatchEvent(new Event('change'));
+    this.#pruefeWatchdog();
+  }
+
+  // Watchdog entfernt NICHTS (der FTMS-Client reconnectet selbst) — er
+  // erkennt nur Live-Statuswechsel und stößt die Renderer an
+  #pruefeWatchdog() {
+    const aktiv = Object.values(this.#clients).some(l => l.length);
+    if (aktiv && !this.#watchdog) {
+      this.#watchdog = setInterval(() => {
+        const snap = ['trainer', 'hr', 'controller']
+          .map(r => this.clients(r).length).join(',');
+        if (snap !== this.#snapshot) { this.#snapshot = snap; this.#change(); }
+      }, 5000);
+    } else if (!aktiv && this.#watchdog) {
+      clearInterval(this.#watchdog);
+      this.#watchdog = null;
+    }
+  }
+
+  clients(rolle) { return this.#clients[rolle].filter(c => c.device?.gatt.connected); }
+  client(rolle) { return this.clients(rolle)[0] ?? null; }
+
+  async gemerkte(rolle) {
+    return eintraegeVon((await getSettings()).geraete, rolle);
+  }
+
+  // 'fehlt' | 'gemerkt' | 'verbindet' | 'verbunden'
+  async status(rolle) {
+    if (this.clients(rolle).length) return 'verbunden';
+    if (this.#verbindet.has(rolle)) return 'verbindet';
+    return (await this.gemerkte(rolle)).length ? 'gemerkt' : 'fehlt';
+  }
+
+  #neuerClient(rolle, settings) {
+    if (rolle === 'trainer') return new FTMS();
+    if (rolle === 'hr') return new HeartRate();
+    return new ZwiftController(settings.controllerMap);
+  }
+
+  // Chooser öffnen (braucht User-Geste), Gerät merken und direkt verbinden.
+  async koppel(rolle) {
+    const device = await navigator.bluetooth.requestDevice(CHOOSER_FILTER[rolle]);
+    const client = await this.#verbindeClient(rolle, device);
+    await merkeGeraet(rolle, device, rolle === 'trainer' && client.firmware ? { fw: client.firmware } : {});
+    this.#change();
+    return client;
+  }
+
+  async #verbindeClient(rolle, device) {
+    const settings = await getSettings();
+    const client = this.#neuerClient(rolle, settings);
+    await client.connect(device);
+    // Trennung nur melden — nicht entfernen: FTMS reconnectet selbstständig,
+    // und clients() filtert ohnehin live auf gatt.connected
+    client.addEventListener('disconnected', () => this.#change());
+    // toten Vorgänger desselben Geräts ersetzen
+    this.#clients[rolle] = this.#clients[rolle]
+      .filter(c => c.device?.id !== device.id)
+      .concat(client);
+    return client;
+  }
+
+  // Alle gemerkten Geräte der Rolle verbinden (best effort, ohne Chooser).
+  // Liefert die Zahl der jetzt verbundenen Clients.
+  async verbinde(rolle) {
+    if (this.#verbindet.has(rolle)) return this.clients(rolle).length;
+    this.#verbindet.add(rolle);
+    this.#change();
+    try {
+      const verbundeneIds = new Set(this.clients(rolle).map(c => c.device?.id));
+      for (const eintrag of await this.gemerkte(rolle)) {
+        if (verbundeneIds.has(eintrag.id)) continue;
+        try {
+          const device = await findeGemerktesGeraet(eintrag.id);
+          if (!device) continue;
+          await verbindeBekanntes(device);
+          await this.#verbindeClient(rolle, device);
+        } catch (err) {
+          logWarn('geraete', `${rolle} verbinden fehlgeschlagen (${eintrag.name ?? eintrag.id})`, err.message);
+        }
+      }
+      return this.clients(rolle).length;
+    } finally {
+      this.#verbindet.delete(rolle);
+      this.#change();
+    }
+  }
+
+  trenne(rolle) {
+    for (const c of this.#clients[rolle]) c.disconnect();
+    this.#clients[rolle] = [];
+    this.#change();
+  }
+
+  async vergiss(rolle) {
+    this.trenne(rolle);
+    await vergissGeraet(rolle);
+    this.#change();
+  }
+}
+
+export const geraeteManager = new GeraeteManager();
+export { CHOOSER_FILTER };

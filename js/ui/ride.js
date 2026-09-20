@@ -2,9 +2,7 @@
 
 import { LiveChart, WorkoutChart, zoneColor } from './chart.js';
 import * as signal from '../signals.js';
-import { HeartRate } from '../ble/hr.js';
-import { ZwiftController } from '../ble/zwift-controller.js';
-import { schnellverbinde, merkeGeraet } from '../ble/geraete.js';
+import { geraeteManager } from '../ble/geraete.js';
 import { initAnsagen, ansageBlock, ansageFertig } from '../ansagen.js';
 import { PiP } from './pip.js';
 import { setSetting } from '../storage.js';
@@ -62,19 +60,26 @@ export class RideScreen {
       });
     }
     this.#bind();
+    // session stirbt mit der Fahrt (Abos dort unkritisch); ftms lebt im Pool
+    // weiter — dessen Listener MÜSSEN in destroy() wieder abgebaut werden
     session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('target', () => this.render());
-    session.ftms.addEventListener('connected', () => this.#status('verbunden', 'ok'));
-    session.ftms.addEventListener('disconnected', () => this.#status('getrennt — verbinde neu …', 'err'));
-    session.ftms.addEventListener('reconnected', () => this.#status('wieder verbunden', 'ok'));
     session.addEventListener('error', e => this.#status(e.detail, 'err'));
+    this.#abo(session.ftms, 'connected', () => this.#status('verbunden', 'ok'));
+    this.#abo(session.ftms, 'disconnected', () => this.#status('getrennt — verbinde neu …', 'err'));
+    this.#abo(session.ftms, 'reconnected', () => this.#status('wieder verbunden', 'ok'));
     this.render();
   }
 
   #repeat = null;
   #pip = null;                // Bild-in-Bild-Instanz (lazy)
-  #geraete = [];              // verbundene Zusatzgeräte, beim Beenden trennen
-  #verbindet = new Set();     // Rollen mit laufendem Verbindungsaufbau
+  #abos = [];                 // [target, typ, fn] — Listener auf langlebigen Pool-Clients
+  #uebernommen = new Set();   // Client-Objekte, die diese Fahrt schon verdrahtet hat
+
+  #abo(target, typ, fn) {
+    target.addEventListener(typ, fn);
+    this.#abos.push([target, typ, fn]);
+  }
 
   #bind() {
     const step = this.settings.wattSchritt;
@@ -84,116 +89,78 @@ export class RideScreen {
     };
     this.adjust = adjust;
 
-    // Zusatzgeräte: Herzgurt und Zwift-Controller (Click/Ride).
-    // onclick statt addEventListener: die Buttons überleben die Session,
-    // Zuweisung überschreibt den Handler der vorherigen Fahrt.
-    const chip = (id, rolle, connectFn) => {
+    // Zusatzgeräte laufen über den GeraeteManager: Verbindungen leben im
+    // Pool über Fahrten hinweg; hier wird nur verdrahtet (Abos je Fahrt).
+    const uebernehmeHR = () => {
+      for (const hr of geraeteManager.clients('hr')) {
+        if (this.#uebernommen.has(hr)) continue;
+        this.#uebernommen.add(hr);
+        this.session.attachHR(hr);
+      }
+      const on = geraeteManager.clients('hr').length > 0;
+      this.$('#btn-hr').classList.toggle('on', on);
+      return on;
+    };
+    const uebernehmeCtrl = () => {
+      for (const ctrl of geraeteManager.clients('controller')) {
+        if (this.#uebernommen.has(ctrl)) continue;
+        this.#uebernommen.add(ctrl);
+        // Fühlbares Feedback für jeden erkannten Druck: kurzer Tick + der
+        // Zielwert blitzt auf — auch wenn die Taste (noch) keine Aktion hat
+        this.#abo(ctrl, 'button', () => {
+          if (this.tonAn) signal.tick();
+          const ziel = this.$('#m-target');
+          ziel.classList.remove('blitz');
+          void ziel.offsetWidth;                 // Animation neu starten
+          ziel.classList.add('blitz');
+        });
+        this.#abo(ctrl, 'plus', () => adjust(step));
+        this.#abo(ctrl, 'minus', () => adjust(-step));
+        this.#abo(ctrl, 'skip', () => this.$('#btn-skip').hidden || this.$('#btn-skip').click());
+        this.#abo(ctrl, 'prev', () => this.$('#btn-prev').hidden || this.$('#btn-prev').click());
+        this.#abo(ctrl, 'stopp', () => {
+          const b = this.$('#btn-stop');
+          if (!b.disabled) b.click();            // GESTOPPT-Sperre gilt auch hier
+        });
+      }
+      const on = geraeteManager.clients('controller').length > 0;
+      this.$('#btn-click').classList.toggle('on', on);
+      return on;
+    };
+    const uebernehme = { hr: uebernehmeHR, controller: uebernehmeCtrl };
+
+    // Manager-Änderungen (Trennung, Neu-Verbindung) in Chips spiegeln
+    this.#abo(geraeteManager, 'change', () => {
+      this.$('#btn-hr').classList.toggle('on', geraeteManager.clients('hr').length > 0);
+      this.$('#btn-click').classList.toggle('on', geraeteManager.clients('controller').length > 0);
+      uebernehmeHR(); uebernehmeCtrl();          // frisch verbundene direkt verdrahten
+    });
+
+    // Chip-Tap: verbinden (gemerkt) oder koppeln (Chooser), dann übernehmen
+    const chip = (id, rolle) => {
       const btn = this.$(id);
       btn.classList.remove('on');
       btn.onclick = async () => {
-        // Läuft schon ein Aufbau (Auto-Connect braucht Sekunden), nicht
-        // parallel einen zweiten starten — das war die Wurzel der
-        // Doppel-Events aus dem Diagnose-Log
-        if (this.#verbindet.has(rolle)) { this.#status('verbindet …'); return; }
-        // Bestehende Verbindung derselben Rolle erst trennen
-        const alt = this.#geraete.find(g => g.rolle === rolle);
-        if (alt) { alt.client.disconnect(); this.#geraete = this.#geraete.filter(g => g !== alt); }
-        this.#verbindet.add(rolle);
-        try { await connectFn(btn); btn.classList.add('on'); }
-        catch (err) { if (err.name !== 'NotFoundError') this.#status(err.message, 'err'); }
-        finally { this.#verbindet.delete(rolle); }
-      };
-    };
-    const verbindeHR = async (btn, device = null) => {
-      const hr = new HeartRate();
-      await hr.connect(device);
-      this.#geraete.push({ client: hr, btn, rolle: 'hr' });
-      this.session.attachHR(hr);
-      merkeGeraet('hr', hr.device);
-      hr.addEventListener('disconnected', () => btn.classList.remove('on'));
-    };
-    const verbindeCtrl = async (btn, device = null) => {
-      const ctrl = new ZwiftController(this.settings.controllerMap);
-      await ctrl.connect(device);
-      this.#geraete.push({ client: ctrl, btn, rolle: 'controller' });
-      // Fühlbares Feedback für jeden erkannten Druck: kurzer Tick + der
-      // Zielwert blitzt auf — auch wenn die Taste (noch) keine Aktion hat
-      ctrl.addEventListener('button', () => {
-        if (this.tonAn) signal.tick();
-        const ziel = this.$('#m-target');
-        ziel.classList.remove('blitz');
-        void ziel.offsetWidth;                 // Animation neu starten
-        ziel.classList.add('blitz');
-      });
-      ctrl.addEventListener('plus', () => adjust(step));
-      ctrl.addEventListener('minus', () => adjust(-step));
-      ctrl.addEventListener('skip', () => this.$('#btn-skip').hidden || this.$('#btn-skip').click());
-      ctrl.addEventListener('prev', () => this.$('#btn-prev').hidden || this.$('#btn-prev').click());
-      ctrl.addEventListener('stopp', () => {
-        const b = this.$('#btn-stop');
-        if (!b.disabled) b.click();            // GESTOPPT-Sperre gilt auch hier
-      });
-      merkeGeraet('controller', ctrl.device);
-      ctrl.addEventListener('disconnected', () => btn.classList.remove('on'));
-    };
-    chip('#btn-hr', 'hr', verbindeHR);
-    chip('#btn-click', 'controller', verbindeCtrl);
-
-    // Icon-Chips: Signaltöne und Sprachansagen direkt im Fahrbildschirm
-    // umschalten (Zustand wandert in die Einstellungen zurück)
-    const toggleChip = (id, key, get, set) => {
-      const btn = this.$(id);
-      btn.classList.toggle('on', get());
-      btn.onclick = () => {
-        set(!get());
-        btn.classList.toggle('on', get());
-        setSetting(key, get());
-      };
-    };
-    toggleChip('#btn-ton', 'tonAn', () => this.tonAn, v => { this.tonAn = v; });
-    toggleChip('#btn-sprich', 'sprachansagen', () => this.ansagenAn, v => { this.ansagenAn = v; });
-
-    // Bild-in-Bild (Experiment): nur anbieten, wenn der Browser es kann
-    const pipBtn = this.$('#btn-pip');
-    pipBtn.hidden = !PiP.verfuegbar();
-    pipBtn.classList.remove('on');
-    if (!pipBtn.hidden) {
-      this.#pip ??= new PiP();
-      this.#pip.onEnde = () => pipBtn.classList.remove('on');
-      pipBtn.onclick = async () => {
         try {
-          const an = await this.#pip.toggle(() => ({
-            watt: this.session.smoothWatt,
-            ziel: this.session.target,
-            rest: this.run ? fmtTime(Math.max(0, this.run.restImBlock ?? 0)) : fmtTime(this.session.elapsed),
-            rpm: Math.round(this.session.live.rpm || 0),
-            hr: this.session.live.hr || 0,
-            farbe: getComputedStyle(this.root).getPropertyValue(
-              zoneColor(this.session.smoothWatt, this.settings.ftp).slice(4, -1)).trim() || '#e8f1f2',
-          }));
-          pipBtn.classList.toggle('on', an);
-        } catch (err) { toastErr('PiP nicht möglich: ' + err.message); }
+          const n = await geraeteManager.verbinde(rolle);
+          if (!n) await geraeteManager.koppel(rolle);
+          uebernehme[rolle]();
+        } catch (err) {
+          if (err.name !== 'NotFoundError') this.#status(err.message, 'err');
+        }
       };
-    }
-
-    // Gemerkte Zusatzgeräte automatisch mitverbinden (best effort, ohne Chooser)
-    const auto = async (rolle, id, fn) => {
-      if (this.session.ftms.istDemo) return;   // Demo verbindet keine echten Geräte
-      if (this.#verbindet.has(rolle)) return;
-      this.#verbindet.add(rolle);
-      try {
-        const device = await schnellverbinde(rolle);
-        // Guard nach JEDEM await: hat der Nutzer inzwischen manuell
-        // verbunden, nicht doppeln
-        if (!device || this.#geraete.some(g => g.rolle === rolle)) return;
-        const btn = this.$(id);
-        await fn(btn, device);
-        btn.classList.add('on');
-      } catch { /* Gerät nicht bereit — manueller Chip-Weg bleibt */ }
-      finally { this.#verbindet.delete(rolle); }
     };
-    auto('hr', '#btn-hr', verbindeHR);
-    auto('controller', '#btn-click', verbindeCtrl);
+    chip('#btn-hr', 'hr');
+    chip('#btn-click', 'controller');
+
+    // Auto: schon verbundene Pool-Geräte sofort übernehmen; gemerkte
+    // best effort nachverbinden (nicht in der Demo)
+    uebernehmeHR();
+    uebernehmeCtrl();
+    if (!this.session.ftms.istDemo) {
+      geraeteManager.verbinde('hr').then(uebernehmeHR).catch(() => {});
+      geraeteManager.verbinde('controller').then(uebernehmeCtrl).catch(() => {});
+    }
 
     // Intervallsteuerung nur im Programm-Modus
     this.$('#btn-skip').hidden = this.$('#btn-ext').hidden = this.$('#btn-prev').hidden = !this.run;
@@ -307,12 +274,6 @@ export class RideScreen {
     this.#watchdog = setInterval(() => {
       if (!this.session.ftms.connected && this.session.status !== 'done')
         this.#status('Trainer getrennt — verbinde neu …', 'err');
-      for (const g of this.#geraete) {
-        if (g.btn.classList.contains('on') && !g.client.device?.gatt.connected) {
-          g.btn.classList.remove('on');
-          toastErr(`${g.client.deviceName ?? 'Zusatzgerät'} getrennt`);
-        }
-      }
     }, 5000);
   }
 
@@ -410,8 +371,11 @@ export class RideScreen {
     clearTimeout(this.#stopSperre);
     clearTimeout(this.#statusTimer);
     clearTimeout(this.#endArm);
-    for (const g of this.#geraete) g.client.disconnect();
-    this.#geraete = [];
+    // Nur die Verdrahtung dieser Fahrt lösen — die Verbindungen leben im
+    // Pool weiter (Trennen macht der Nutzer über die Geräte-Leiste)
+    for (const [t, typ, fn] of this.#abos) t.removeEventListener(typ, fn);
+    this.#abos = [];
+    this.#uebernommen.clear();
     this.root.querySelector('.ride-grid').classList.remove('large', 'chartmax');
   }
 }

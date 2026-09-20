@@ -41,10 +41,20 @@ export class Session extends EventTarget {
     Object.assign(this.live, d);
   };
 
+  #hrAbos = [];   // [client, typ, fn] — Pool-Clients leben über Sessions hinaus
+
   attachHR(hrClient) {
     this.#hrExternal = true;
-    hrClient.addEventListener('hr', e => { this.live.hr = e.detail; });
-    hrClient.addEventListener('disconnected', () => { this.#hrExternal = false; });
+    const onHr = e => { this.live.hr = e.detail; };
+    const onWeg = () => { this.#hrExternal = false; };
+    hrClient.addEventListener('hr', onHr);
+    hrClient.addEventListener('disconnected', onWeg);
+    this.#hrAbos.push([hrClient, 'hr', onHr], [hrClient, 'disconnected', onWeg]);
+  }
+
+  detachHR() {
+    for (const [c, typ, fn] of this.#hrAbos) c.removeEventListener(typ, fn);
+    this.#hrAbos = [];
   }
 
   setTarget(watt, { instant = false, rampMs = RAMP_MS } = {}) {
@@ -175,6 +185,7 @@ export class Session extends EventTarget {
     clearInterval(this.#autosaveTimer);
     this.ftms.removeEventListener('data', this.#onData);
     this.ftms.removeEventListener('reconnected', this.#onReconnect);
+    this.detachHR();
     try { if (this.ftms.connected) await this.ftms.setTargetPower(0); } catch { /* Trainer ggf. weg */ }
     await this.save(true);
   }

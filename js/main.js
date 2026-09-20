@@ -1,6 +1,5 @@
 // Bootstrap und Screen-Routing.
 
-import { FTMS } from './ble/ftms.js';
 import { Session } from './state.js';
 import { getSettings, setSetting, requestPersistence, listSessions, getSession } from './storage.js';
 import { RideScreen } from './ui/ride.js';
@@ -8,7 +7,7 @@ import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError, formatLog } from './logger.js';
-import { schnellverbinde, merkeGeraet, vergissGeraet, kannMerken } from './ble/geraete.js';
+import { geraeteManager, kannMerken, eintraegeVon } from './ble/geraete.js';
 import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
 import { exportiereAlles, importiereAlles } from './backup.js';
@@ -20,7 +19,6 @@ import { download } from './export.js';
 import { PROGRAMME, expand, ProgramRun } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
 import { initAudio, tick } from './signals.js';
-import { ZwiftController } from './ble/zwift-controller.js';
 import { starteMessung } from './energie.js';
 
 const $ = s => document.querySelector(s);
@@ -76,12 +74,17 @@ async function startRideInner(programm) {
     toastErr('Bluetooth ist ausgeschaltet — bitte einschalten.');
     return;
   }
-  const ftms = new FTMS();
+  // Trainer: verbundenen Pool-Client übernehmen; sonst Schnellverbindung
+  // über die Fassade; letzter Weg: Chooser
+  let ftms = geraeteManager.client('trainer');
   try {
-    // Schnellverbindung: gemerkter Trainer ohne Chooser (wenn getDevices verfügbar)
-    const bekannt = await schnellverbinde('trainer');
-    await ftms.connect(bekannt);
-    merkeGeraet('trainer', ftms.device, ftms.firmware ? { fw: ftms.firmware } : {});
+    if (!ftms) {
+      await geraeteManager.verbinde('trainer');
+      ftms = geraeteManager.client('trainer');
+    }
+    if (!ftms) {
+      ftms = await geraeteManager.koppel('trainer');
+    }
   } catch (err) {
     logError('app', 'Verbindung fehlgeschlagen', `${err.name}: ${err.message}`);
     if (err.name === 'NotFoundError') {
@@ -106,7 +109,7 @@ async function startRideInner(programm) {
   rideScreen = new RideScreen(screens.ride, session, settings, async () => {
     rideScreen.destroy();
     rideScreen = null;
-    ftms.disconnect();
+    // Verbindung lebt im Pool weiter — getrennt wird über die Geräte-Leiste
     keepAwake(false);
     if (session.count > 0) toastOk('Fahrt gespeichert');
     // FTP-Rampentest: 0,75 × beste 60-s-Leistung als neuen FTP anbieten
@@ -205,55 +208,68 @@ async function openSettings() {
     $('#log-view').textContent = 'Geleert.';
   };
 
-  // Geräte-Bereich: Karten je Rolle mit Koppeln/Entfernen
+  // Geräte-Bereich: Karten je Rolle — reiner Renderer über den GeraeteManager
   $('#geraete-hint').hidden = kannMerken();
-  const chooserFilter = {
-    trainer: { filters: [{ namePrefix: 'KICKR' }, { services: [0x1826] }], optionalServices: [0x1826, 0x180a] },
-    hr: { filters: [{ services: [0x180d] }] },
-    controller: { filters: [{ namePrefix: 'Zwift' }], optionalServices: ['00000001-19ca-4651-86e5-fa29dcdd09d1', 0xfc82] },
-  };
-  const rollen = [['trainer', 'Trainer', '⚙'], ['hr', 'Herzgurt', '♥'], ['controller', 'Controller', '±']];
-  const zeichneGeraete = geraete => {
+  const rollen = [['trainer', 'Trainer', '⚙'], ['hr', 'Herzgurt', '♥'], ['controller', 'Lenker/Controller', '±']];
+  const zeichneGeraete = async () => {
+    const geraete = (await getSettings()).geraete;
     const liste = $('#geraete-liste');
     liste.replaceChildren();
     for (const [rolle, label, icon] of rollen) {
-      const e = geraete?.[rolle];
+      const eintraege = eintraegeVon(geraete, rolle);
       const li = document.createElement('li');
+      const namen = eintraege.map(e => `${e.name ?? e.id}${e.fw ? ` <span class="g-fw">FW ${e.fw}</span>` : ''}`).join(' + ');
       li.innerHTML = `
         <span class="g-icon">${icon}</span>
         <span class="g-info">
           <span class="g-rolle">${label}</span>
-          <span class="g-name">${e ? `<i class="dot on"></i>${e.name ?? e.id}` : '<i class="dot"></i>nicht gemerkt'}${e?.fw ? ` <span class="g-fw">FW ${e.fw}</span>` : ''}</span>
+          <span class="g-name">${eintraege.length ? `<i class="dot on"></i>${namen}` : '<i class="dot"></i>nicht gemerkt'}</span>
         </span>`;
       const aktion = document.createElement('button');
       aktion.type = 'button';
-      if (e) {
+      if (eintraege.length) {
         aktion.textContent = 'Entfernen';
         aktion.className = 'ghost';
         aktion.onclick = async () => {
-          await vergissGeraet(rolle);
+          await geraeteManager.vergiss(rolle);
           toast(`${label} vergessen`);
-          zeichneGeraete((await getSettings()).geraete);
+          zeichneGeraete();
         };
       } else {
         aktion.textContent = 'Koppeln';
         aktion.onclick = async () => {
           try {
-            const device = await navigator.bluetooth.requestDevice(chooserFilter[rolle]);
-            await merkeGeraet(rolle, device);
-            toastOk(`${label} gekoppelt: ${device.name ?? device.id}`);
-            zeichneGeraete((await getSettings()).geraete);
-            aktualisiereStatuszeile();
+            await geraeteManager.koppel(rolle);
+            toastOk(`${label} gekoppelt`);
+            zeichneGeraete();
           } catch (err) {
             if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
           }
         };
       }
       li.append(aktion);
+      // Lenker: zweites Pad nachkoppeln (linke + rechte Seite sind eigene Geräte)
+      if (rolle === 'controller' && eintraege.length === 1) {
+        const pad2 = document.createElement('button');
+        pad2.type = 'button';
+        pad2.className = 'ghost';
+        pad2.textContent = '+ 2. Pad';
+        pad2.title = 'Zweite Lenkerseite koppeln (eigenes BLE-Gerät)';
+        pad2.onclick = async () => {
+          try {
+            await geraeteManager.koppel('controller');
+            toastOk('Zweites Pad gekoppelt');
+            zeichneGeraete();
+          } catch (err) {
+            if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
+          }
+        };
+        li.append(pad2);
+      }
       liste.append(li);
     }
   };
-  zeichneGeraete(s.geraete);
+  zeichneGeraete();
 
   // Tastenbelegung des Controllers: Anzeige + Lern-Modus
   const MAP_AKTIONEN = [
@@ -325,11 +341,12 @@ async function lerneTasten(zeigeMap) {
   const zeigeSchritt = () => {
     $('#map-schritt').textContent = `Drücke die Taste für: ${schritte[i][1]}`;
   };
-  const ctrl = new ZwiftController({ plus: null, minus: null });   // beim Lernen keine Aktionen
+  let lauscher = [];                             // [client, fn] — beim Ende abbauen
   const ende = () => {
     fertig = true;
-    try { ctrl.disconnect(); } catch { /* nie verbunden */ }
-    dlg.close();
+    for (const [c, fn] of lauscher) c.removeEventListener('button', fn);
+    lauscher = [];
+    dlg.close();                                 // Verbindungen bleiben im Pool
   };
   $('#btn-map-abbruch').onclick = ende;
   dlg.oncancel = ende;                           // ESC/Back schließt sauber
@@ -349,7 +366,7 @@ async function lerneTasten(zeigeMap) {
     map[schritte[i][0]] = null;
     weiter();
   };
-  ctrl.addEventListener('button', e => {
+  const onButton = e => {
     // i kann während des await in weiter() schon hinter dem letzten Schritt
     // stehen (zwei Bits in einer Notification) — hart abfangen
     if (fertig || i >= schritte.length) return;
@@ -362,22 +379,88 @@ async function lerneTasten(zeigeMap) {
     tick();
     $('#map-status').textContent = `Taste ${bit} zugeordnet.`;
     weiter();
-  });
+  };
   dlg.showModal();
   zeigeSchritt();
   try {
-    const device = await schnellverbinde('controller');
-    await ctrl.connect(device);                  // ohne gemerktes Gerät: Chooser
-    // Abbruch während des Verbindungsaufbaus: Verbindung nicht offen lassen
-    if (fertig) { ctrl.disconnect(); return; }
-    merkeGeraet('controller', ctrl.device);
+    await geraeteManager.verbinde('controller');
+    if (!geraeteManager.clients('controller').length) await geraeteManager.koppel('controller');
+    if (fertig) return;                          // Abbruch — Pool behält die Verbindung
+    const clients = geraeteManager.clients('controller');
+    for (const c of clients) { c.addEventListener('button', onButton); lauscher.push([c, onButton]); }
+    const namen = clients.map(c => c.deviceName ?? 'Controller').join(' + ');
     $('#map-status').textContent =
-      `Verbunden: ${ctrl.deviceName ?? 'Controller'} — jetzt drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für Ride nötig.)`;
+      `Verbunden: ${namen} — jetzt drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für Ride nötig.)`;
   } catch (err) {
     if (err.name !== 'NotFoundError') toastErr('Controller-Verbindung fehlgeschlagen: ' + err.message);
     ende();
   }
 }
+
+// Geräte-Leiste auf dem Home: Status je Rolle, Tap = koppeln/verbinden/trennen
+const GL_ROLLEN = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Lenker']];
+
+let glKette = Promise.resolve();
+function zeichneGeraeteLeiste() {
+  // Serialisiert + atomar (Fragment): parallele Aufrufe (Boot, goHome,
+  // change-Events) dürfen die Leiste nicht doppelt befüllen
+  glKette = glKette.then(zeichneGeraeteLeisteInner).catch(() => {});
+  return glKette;
+}
+
+async function zeichneGeraeteLeisteInner() {
+  const wrap = $('#geraete-leiste');
+  if (!wrap) return;
+  const geraete = (await getSettings()).geraete;
+  const frag = document.createDocumentFragment();
+  for (const [rolle, label] of GL_ROLLEN) {
+    const eintraege = eintraegeVon(geraete, rolle);
+    const status = await geraeteManager.status(rolle);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = status;
+    const name = eintraege.length === 1 ? (eintraege[0].name ?? label)
+      : eintraege.length === 2 ? `${label} (2 Pads)` : label;
+    const anz = geraeteManager.clients(rolle).length;
+    btn.innerHTML = `<i class="dot"></i>${status === 'fehlt' ? `+ ${label}` : name}${eintraege.length === 2 && status === 'verbunden' && anz < 2 ? ' · 1/2' : ''}`;
+    btn.title = { fehlt: `${label} koppeln`, gemerkt: `${name} verbinden`, verbindet: 'verbindet …', verbunden: `${name} trennen` }[status];
+    btn.onclick = async () => {
+      try {
+        if (status === 'verbunden') { geraeteManager.trenne(rolle); return; }
+        if (status === 'verbindet') return;
+        if (status === 'fehlt') {
+          await geraeteManager.koppel(rolle);
+          toastOk(`${label} gekoppelt & verbunden`);
+          if (rolle === 'controller') toast('Tipp: linkes und rechtes Pad sind eigene Geräte — zweites Pad per erneutem Tap koppeln');
+        } else {
+          const n = await geraeteManager.verbinde(rolle);
+          if (!n) toastErr(`${label} nicht erreichbar — Gerät wach?`);
+        }
+      } catch (err) {
+        if (err.name !== 'NotFoundError') toastErr(`${label}: ${err.message}`);
+      }
+    };
+    frag.append(btn);
+    // Lenker mit nur einem gemerkten Pad: zweites direkt anbieten
+    if (rolle === 'controller' && eintraege.length === 1 && status !== 'verbindet') {
+      const pad2 = document.createElement('button');
+      pad2.type = 'button';
+      pad2.className = 'zusatz fehlt';
+      pad2.textContent = '+ 2. Pad';
+      pad2.onclick = async () => {
+        try {
+          await geraeteManager.koppel('controller');
+          toastOk('Zweites Pad gekoppelt & verbunden');
+        } catch (err) {
+          if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
+        }
+      };
+      frag.append(pad2);
+    }
+  }
+  wrap.replaceChildren(frag);
+}
+geraeteManager.addEventListener('change', zeichneGeraeteLeiste);
 
 let tilesKette = Promise.resolve();
 function renderProgrammTiles() {
@@ -539,6 +622,7 @@ addEventListener('popstate', () => {
 async function goHome() {
   if (reloadAusstehend) { location.reload(); return; }
   renderProgrammTiles();          // „Zuletzt gefahren" sofort nachführen
+  zeichneGeraeteLeiste();
   detailCleanup?.();
   detailCleanup = null;
   aktuelleDetailId = null;
@@ -557,9 +641,6 @@ async function aktualisiereStatuszeile() {
     ]);
     $('#db-status').textContent =
       `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'} · Speicher ${persistent ? 'geschützt' : 'ungeschützt'}`;
-    const mark = rolle => s.geraete?.[rolle] ? '✓' : '–';
-    $('#geraete-status').textContent =
-      `Trainer ${mark('trainer')} · Herzgurt ${mark('hr')} · Controller ${mark('controller')}`;
   } catch { /* Statuszeile ist nie kritisch */ }
 }
 
@@ -580,6 +661,7 @@ $('#btn-back').addEventListener('click', goHome);
 $('#seo-intro').hidden = true;
 renderProgrammTiles();
 $('#app-version').textContent = APP_VERSION;
+zeichneGeraeteLeiste();
 starteUpdateWatchdog($('#version-status'));
 heileVersionsDrift();
 

@@ -19,6 +19,13 @@ const CH_SYNC_TX = '00000004-19ca-4651-86e5-fa29dcdd09d1'; // Indications (Antwo
 
 const RIDE_ON = new TextEncoder().encode('RideOn');
 
+// Flanken-Entprellung ÜBER alle Instanzen geteilt: sind beide Lenker-Pads
+// verbunden und das rechte relayed die linken Tasten zusätzlich, kommt
+// dieselbe Taste doppelt an — einmal pro Verbindung. bit → {t, quelle}.
+const letzteFlanke = new Map();
+const PRELL_GLEICHE_QUELLE_MS = 50;    // Geräte-Prellen
+const PRELL_ANDERE_QUELLE_MS = 150;    // Relay-Doppel des zweiten Pads
+
 export class ZwiftController extends EventTarget {
   #device = null;
   #clickState = { plus: false, minus: false };
@@ -98,8 +105,6 @@ export class ZwiftController extends EventTarget {
   }
 
   // Ride: Feld 1 = Bitmap, Bit 0 → gedrückt. Neu gedrückte Bits = 1→0-Flanken.
-  #letzteFlanke = new Map();   // bit → Zeitstempel (Entprellung)
-
   #rideTasten(felder) {
     if (felder[1] === undefined) return;
     const cur = felder[1] >>> 0;
@@ -108,11 +113,11 @@ export class ZwiftController extends EventTarget {
     if (!neu) return;
     for (let bit = 0; bit < 32; bit++) {
       if (!(neu >>> bit & 1)) continue;
-      // Entprellung nur gegen Prellen im Gerät: echte Schnellfeuer-Tipper
-      // (± gedrückt halten geht nicht am Ride) liegen über 50 ms Abstand
       const jetzt = Date.now();
-      if (jetzt - (this.#letzteFlanke.get(bit) ?? 0) < 50) continue;
-      this.#letzteFlanke.set(bit, jetzt);
+      const vorher = letzteFlanke.get(bit);
+      const fenster = vorher?.quelle === this ? PRELL_GLEICHE_QUELLE_MS : PRELL_ANDERE_QUELLE_MS;
+      if (vorher && jetzt - vorher.t < fenster) continue;
+      letzteFlanke.set(bit, { t: jetzt, quelle: this });
       logInfo('ctrl', `Ride-Taste Bit ${bit} gedrückt`);
       this.dispatchEvent(new CustomEvent('button', { detail: bit }));
       for (const [aktion, b] of Object.entries(this.map)) {

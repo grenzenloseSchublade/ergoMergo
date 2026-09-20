@@ -45,7 +45,6 @@
   <p class="statuszeile" aria-live="polite">
     <span id="version-status">…</span>
     <span id="db-status"></span>
-    <span id="geraete-status"></span>
   </p>
   <div class="tiles">
     <div class="top-tiles">
@@ -61,6 +60,9 @@
       </button>
     </div>
     <button type="button" class="demo-link" id="btn-demo">▶ Demo ansehen <span>· Fahrbildschirm ohne Trainer</span></button>
+    <!-- Geräte-Leiste: koppeln/verbinden VOR der Fahrt, Verbindungen bleiben
+         über Fahrten bestehen (Fassade: js/ble/geraete.js GeraeteManager) -->
+    <div class="gl" id="geraete-leiste" aria-label="Geräte"></div>
     <details class="rubrik" id="rubrik-workouts" open>
       <summary class="listhead">Nach Zeit &amp; Typ</summary>
       <div class="tiles-programme" id="workout-tiles"></div>
@@ -199,6 +201,7 @@
     <details class="diagnose">
       <summary>Geräte</summary>
       <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht chrome://flags/#enable-web-bluetooth-new-permissions-backend — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
+      <p class="hint">Zwift-Lenker: linkes und rechtes Pad sind eigene Geräte — beim Koppeln den Eintrag „Zwift Ride" wählen (kryptische Namen sind Nebenkanäle), danach „+ 2. Pad" für die andere Seite.</p>
       <ul id="geraete-liste" class="geraete"></ul>
       <p class="hint" id="ctrl-map-anzeige"></p>
       <div class="dlg-actions" style="margin-top:.5rem">
