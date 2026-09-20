@@ -1,5 +1,5 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v39';
+export const APP_VERSION = 'v40';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung

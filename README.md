@@ -9,6 +9,15 @@ Programm oder Wattzahl wählen, fahren.
 
 ![PWA](https://img.shields.io/badge/PWA-offline--f%C3%A4hig-45c7d4) ![Lizenz](https://img.shields.io/badge/Lizenz-MIT-green) ![Backend](https://img.shields.io/badge/Backend-keins-lightgrey)
 
+## Datenschutz
+
+**Alle Daten bleiben auf dem Gerät.** Fahrten, Einstellungen und Programme
+liegen ausschließlich in der lokalen IndexedDB des Browsers — es gibt keinen
+Server, kein Konto, keine Cloud, keine Telemetrie, keine Cookies und keine
+Drittanbieter-Anfragen. Die App ist eine rein statische Seite; nach dem ersten
+Laden funktioniert sie komplett offline. Export (Backup/TCX) passiert nur auf
+ausdrücklichen Tap und landet als Datei auf dem eigenen Gerät.
+
 ## Warum
 
 Wer nur strukturiert Watt treten will, braucht keine 3D-Welt, kein Monatsabo und

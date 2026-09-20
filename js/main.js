@@ -215,17 +215,17 @@ async function openSettings() {
 
   // Geräte-Bereich: Karten je Rolle — reiner Renderer über den GeraeteManager
   $('#geraete-hint').hidden = kannMerken();
-  const rollen = [['trainer', 'Trainer', '⚙'], ['hr', 'Herzgurt', '♥'], ['controller', 'Lenker/Controller', '±']];
+  const rollen = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Lenker/Controller']];
   const zeichneGeraete = async () => {
     const geraete = (await getSettings()).geraete;
     const liste = $('#geraete-liste');
     liste.replaceChildren();
-    for (const [rolle, label, icon] of rollen) {
+    for (const [rolle, label] of rollen) {
       const eintraege = eintraegeVon(geraete, rolle);
       const li = document.createElement('li');
       const namen = eintraege.map(e => `${e.name ?? e.id}${e.fw ? ` <span class="g-fw">FW ${e.fw}</span>` : ''}`).join(' + ');
       li.innerHTML = `
-        <span class="g-icon">${icon}</span>
+        <span class="g-icon">${GL_ICONS[rolle]}</span>
         <span class="g-info">
           <span class="g-rolle">${label}</span>
           <span class="g-name">${eintraege.length ? `<i class="dot on"></i>${namen}` : '<i class="dot"></i>nicht gemerkt'}</span>
@@ -410,14 +410,20 @@ async function lerneTasten(zeigeMap) {
   }
 }
 
-// Geräte-Leiste auf dem Home: Status je Rolle, Tap = koppeln/verbinden/trennen
+// Geräte-Leiste auf dem Home: Status je Rolle, Tap = koppeln/verbinden/trennen.
+// Icons: Lucide (lucide.dev, MIT) — inline, kein CDN
+const GL_ICONS = {
+  trainer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>',
+  hr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>',
+  controller: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg>',
+};
 const GL_ROLLEN = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Lenker']];
 
 let glKette = Promise.resolve();
 function zeichneGeraeteLeiste() {
   // Serialisiert + atomar (Fragment): parallele Aufrufe (Boot, goHome,
   // change-Events) dürfen die Leiste nicht doppelt befüllen
-  glKette = glKette.then(zeichneGeraeteLeisteInner).catch(() => {});
+  glKette = glKette.then(zeichneGeraeteLeisteInner).catch(err => logError('app', 'Geräteleiste', err.message));
   return glKette;
 }
 
@@ -435,7 +441,7 @@ async function zeichneGeraeteLeisteInner() {
     const name = eintraege.length === 1 ? (eintraege[0].name ?? label)
       : eintraege.length === 2 ? `${label} (2 Pads)` : label;
     const anz = geraeteManager.clients(rolle).length;
-    btn.innerHTML = `<i class="dot"></i>${status === 'fehlt' ? `+ ${label}` : name}${eintraege.length === 2 && status === 'verbunden' && anz < 2 ? ' · 1/2' : ''}`;
+    btn.innerHTML = `${GL_ICONS[rolle]}<i class="dot"></i>${status === 'fehlt' ? `+ ${label}` : name}${eintraege.length === 2 && status === 'verbunden' && anz < 2 ? ' · 1/2' : ''}`;
     btn.title = { fehlt: `${label} koppeln`, gemerkt: `${name} verbinden`, verbindet: 'verbindet …', verbunden: `${name} trennen` }[status];
     btn.onclick = async () => {
       try {

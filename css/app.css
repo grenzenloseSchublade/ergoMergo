@@ -38,7 +38,12 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .hint { font-size: .75rem; color: var(--ink3); }
 .back { background: none; color: var(--ink2); font-size: 1rem; padding: .3rem .6rem .3rem 0; }
 
-.tiles { display: grid; gap: .7rem; }
+.tiles {
+  display: grid; gap: .7rem;
+  /* explizite minmax(0,1fr)-Spur: die implizite auto-Spur würde sich an
+     max-content breiter Kinder (Geräte-Leiste) über den Viewport dehnen */
+  grid-template-columns: minmax(0, 1fr);
+}
 .top-tiles { display: grid; gap: .55rem; grid-template-columns: 1fr; }
 .top-tiles:has(#start-last:not([hidden])) { grid-template-columns: 1fr 1fr; }
 .top-tiles .tile-title { font-size: 1.15rem; }
@@ -406,11 +411,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .seo-intro { color: var(--ink3); font-size: .8rem; margin: -.2rem 0 .8rem; max-width: 44rem; }
 
 /* Geräte-Leiste auf dem Home: ein Chip je Rolle, Zustand am Punkt */
-.gl { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin: .2rem 0 1rem; }
+.gl {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: .45rem;
+  margin: .2rem 0 1rem;
+  min-width: 0;    /* als Grid-Kind sonst min-width:auto → Overflow statt Umbruch */
+}
 .gl button {
-  display: inline-flex; align-items: center; gap: .45rem;
+  display: inline-flex; align-items: center; gap: .4rem;
   background: var(--surface); border: 1px solid var(--line); color: var(--ink2);
-  border-radius: 999px; padding: .45rem .85rem; font-size: .84rem; min-height: 42px;
+  border-radius: 999px; padding: .4rem .7rem; font-size: .8rem; min-height: 40px;
 }
 .gl button.fehlt { border-style: dashed; color: var(--ink3); }
 .gl button.verbunden { border-color: var(--ok); color: var(--ink); }
@@ -422,3 +431,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Herz vor der Herzfrequenz — gleiche Farbe wie im PiP-Fenster */
 .hf-herz { font-style: normal; color: #ef6b5e; }
+
+/* Lucide-Icons in Geräte-Leiste, Geräteliste und Zahnrad */
+.gl button svg { width: 17px; height: 17px; flex: 0 0 auto; opacity: .8; }
+.geraete .g-icon svg { width: 20px; height: 20px; display: block; }
+.gear svg { width: 21px; height: 21px; display: block; }
