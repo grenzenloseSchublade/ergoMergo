@@ -2,7 +2,7 @@
 // offline startet. VERSION bei jedem Release hochzählen — alte Caches werden
 // beim Aktivieren entsorgt.
 
-const VERSION = 'v34';
+const VERSION = 'v35';
 const CACHE = `ergomergo-${VERSION}`;
 const SHELL = [
   '.', 'index.html', 'css/app.css', 'manifest.webmanifest',
@@ -17,7 +17,24 @@ const SHELL = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    // Cache-Buster pro Release: das Pages-CDN (Fastly, max-age 600) liefert
+    // unter den normalen URLs bis zu 10 min alte Dateien — die landeten im
+    // NEUEN Cache und das Update wirkte kaputt (neue Version, alte Shell).
+    // ?v=VERSION erzwingt einen frischen Origin-Stand; der fetch-Handler
+    // matcht mit ignoreSearch und findet die Einträge trotzdem.
+    await c.addAll(SHELL.map(u =>
+      new Request(`${u}?v=${VERSION}`, { cache: 'no-cache' })));
+    // Konsistenz-Beweis: gecachte version.js muss zu DIESEM Worker passen,
+    // sonst kontrolliert scheitern (alter Worker bleibt, Neuversuch später)
+    const vjs = await c.match('js/version.js', { ignoreSearch: true });
+    if (!vjs || !(await vjs.text()).includes(`'${VERSION}'`)) {
+      await caches.delete(CACHE);
+      throw new Error('Deploy-Stand unvollständig — Installation abgebrochen');
+    }
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('message', e => {

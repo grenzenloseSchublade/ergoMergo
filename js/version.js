@@ -1,5 +1,5 @@
 // App-Version — bei jedem Release zusammen mit VERSION in sw.js hochzählen.
-export const APP_VERSION = 'v34';
+export const APP_VERSION = 'v35';
 
 // Update-Watchdog: prüft das deployte sw.js auf GitHub Pages gegen die
 // laufende Version. Bei Abweichung wird die Service-Worker-Registrierung
@@ -45,7 +45,7 @@ export function starteUpdateWatchdog(statusEl) {
       // controllerchange genau einmal neu laden.
       btn.onclick = async () => {
         btn.disabled = true;
-        btn.textContent = 'aktualisiere …';
+        btn.textContent = 'prüfe …';
         const { logInfo, logError } = await import('./logger.js');
         let fertig = false;
         const neuLaden = quelle => {
@@ -66,10 +66,24 @@ export function starteUpdateWatchdog(statusEl) {
             () => neuLaden('controllerchange'), { once: true });
           const beobachte = w => {
             if (!w) return;
+            btn.textContent = 'lade Dateien …';
             w.addEventListener('statechange', () => {
               logInfo('update', `Worker-Zustand: ${w.state}`);
-              if (w.state === 'installed') reg.waiting?.postMessage('skipWaiting');
-              if (w.state === 'activated') neuLaden('activated');
+              if (w.state === 'installed') {
+                btn.textContent = 'aktiviere …';
+                reg.waiting?.postMessage('skipWaiting');
+              }
+              if (w.state === 'activated') {
+                btn.textContent = 'starte neu …';
+                neuLaden('activated');
+              }
+              if (w.state === 'redundant' && !fertig) {
+                // Installation kontrolliert gescheitert (z. B. Deploy noch
+                // nicht vollständig am CDN) — klar sagen statt still hängen
+                btn.disabled = false;
+                btn.textContent = `${live} verfügbar — gleich erneut versuchen`;
+                logError('update', 'Installation verworfen (redundant) — Deploy evtl. noch nicht vollständig');
+              }
             });
           };
           reg.addEventListener('updatefound', () => beobachte(reg.installing));
