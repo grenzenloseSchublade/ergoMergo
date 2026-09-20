@@ -5,7 +5,7 @@ import * as signal from '../signals.js';
 import { HeartRate } from '../ble/hr.js';
 import { ZwiftController } from '../ble/zwift-controller.js';
 import { schnellverbinde, merkeGeraet } from '../ble/geraete.js';
-import { initAnsagen, ansageBlock, ansageFertig, setzeMediaSession, loescheMediaSession } from '../ansagen.js';
+import { initAnsagen, ansageBlock, ansageFertig } from '../ansagen.js';
 import { PiP } from './pip.js';
 import { setSetting } from '../storage.js';
 import { beendeMessung } from '../energie.js';
@@ -26,7 +26,6 @@ export class RideScreen {
     this.tonAn = settings.tonAn !== false;
     this.ansagenAn = !!settings.sprachansagen;
     initAnsagen(signal.audioCtx());
-    setzeMediaSession(run ? run.name : 'Freies Fahren');
     if (run) {
       let prevWatt = null;
       run.addEventListener('block', e => {
@@ -395,7 +394,6 @@ export class RideScreen {
   }
 
   destroy() {
-    loescheMediaSession();
     this.#pip?.destroy();
     this.#pip = null;
     removeEventListener('keydown', this.#keys);

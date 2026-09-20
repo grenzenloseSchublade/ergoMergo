@@ -101,21 +101,3 @@ export function ansageBlock(dauerSek, watt) {
 export function ansageFertig() {
   return spiele(['fertig']);
 }
-
-// MediaSession-Metadaten: hält die Seite für Android „medienaktiv"
-// (Lockscreen-Anzeige, weniger aggressives Einfrieren)
-export function setzeMediaSession(titel) {
-  try {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: titel, artist: 'ergoMergo',
-    });
-    navigator.mediaSession.playbackState = 'playing';
-  } catch { /* nicht überall verfügbar */ }
-}
-
-export function loescheMediaSession() {
-  try {
-    navigator.mediaSession.metadata = null;
-    navigator.mediaSession.playbackState = 'none';
-  } catch { /* egal */ }
-}
