@@ -17,8 +17,42 @@ export class PiP {
     this.#canvas.height = 270;
     this.#video.muted = true;
     this.#video.playsInline = true;
+    // Signal an Chrome: dieses Video darf beim App-Verlassen automatisch
+    // in PiP wechseln (Best Effort — Chrome entscheidet nach Media-
+    // Engagement-Index und Nutzer-Setting)
+    this.#video.autoPictureInPicture = true;
     this.#video.style.display = 'none';
     document.body.append(this.#video);
+  }
+
+  // Fahrtstart: Stream scharf halten + Auto-PiP-Handler registrieren,
+  // damit browser-initiiertes PiP (ohne User-Geste) möglich wird
+  async arm(datenFn) {
+    this.#datenFn = datenFn;
+    if (!this.#track) {
+      const stream = this.#canvas.captureStream(0);
+      this.#track = stream.getVideoTracks()[0];
+      this.#video.srcObject = stream;
+    }
+    this.#zeichne();
+    try { await this.#video.play(); } catch { /* ohne Geste evtl. verweigert */ }
+    try {
+      navigator.mediaSession.setActionHandler('enterpictureinpicture', async () => {
+        try {
+          await this.#video.requestPictureInPicture();
+          this.aktiv = true;
+          this.#video.addEventListener('leavepictureinpicture', () => {
+            this.aktiv = false;
+            this.onEnde?.();
+          }, { once: true });
+          this.onAuto?.();
+        } catch { /* Chrome hat es sich anders überlegt */ }
+      });
+    } catch { /* Action in diesem Browser unbekannt */ }
+  }
+
+  disarm() {
+    try { navigator.mediaSession.setActionHandler('enterpictureinpicture', null); } catch { /* egal */ }
   }
 
   static verfuegbar() {
@@ -61,6 +95,7 @@ export class PiP {
   }
 
   destroy() {
+    this.disarm();
     if (this.aktiv) document.exitPictureInPicture().catch(() => {});
     this.aktiv = false;
     this.#video.remove();

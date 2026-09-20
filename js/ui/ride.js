@@ -153,6 +153,48 @@ export class RideScreen {
     chip('#btn-hr', 'hr');
     chip('#btn-click', 'controller');
 
+    // Icon-Chips: Signaltöne und Sprachansagen direkt im Fahrbildschirm
+    // umschalten (Zustand wandert in die Einstellungen zurück)
+    const toggleChip = (id, key, get, set) => {
+      const btn = this.$(id);
+      btn.classList.toggle('on', get());
+      btn.onclick = () => {
+        set(!get());
+        btn.classList.toggle('on', get());
+        setSetting(key, get());
+      };
+    };
+    toggleChip('#btn-ton', 'tonAn', () => this.tonAn, v => { this.tonAn = v; });
+    toggleChip('#btn-sprich', 'sprachansagen', () => this.ansagenAn, v => { this.ansagenAn = v; });
+
+    // Bild-in-Bild (Experiment): nur anbieten, wenn der Browser es kann.
+    // arm() hält den Stream scharf und registriert den Auto-PiP-Handler —
+    // Chrome kann das Fenster dann selbst öffnen, wenn die App verlassen wird
+    const pipBtn = this.$('#btn-pip');
+    pipBtn.hidden = !PiP.verfuegbar();
+    pipBtn.classList.remove('on');
+    if (!pipBtn.hidden) {
+      this.#pip ??= new PiP();
+      this.#pip.onEnde = () => pipBtn.classList.remove('on');
+      this.#pip.onAuto = () => pipBtn.classList.add('on');
+      const pipDaten = () => ({
+        watt: this.session.smoothWatt,
+        ziel: this.session.target,
+        rest: this.run ? fmtTime(Math.max(0, this.run.restImBlock ?? 0)) : fmtTime(this.session.elapsed),
+        rpm: Math.round(this.session.live.rpm || 0),
+        hr: this.session.live.hr || 0,
+        farbe: getComputedStyle(this.root).getPropertyValue(
+          zoneColor(this.session.smoothWatt, this.settings.ftp).slice(4, -1)).trim() || '#e8f1f2',
+      });
+      this.#pip.arm(pipDaten);
+      pipBtn.onclick = async () => {
+        try {
+          const an = await this.#pip.toggle(pipDaten);
+          pipBtn.classList.toggle('on', an);
+        } catch (err) { toastErr('PiP nicht möglich: ' + err.message); }
+      };
+    }
+
     // Auto: schon verbundene Pool-Geräte sofort übernehmen; gemerkte
     // best effort nachverbinden (nicht in der Demo)
     uebernehmeHR();

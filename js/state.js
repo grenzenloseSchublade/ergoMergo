@@ -3,6 +3,7 @@
 // höchstens alle 250 ms auf den Control Point.
 
 import { FIELDS, saveSamples, saveSession } from './storage.js';
+import { logInfo, logWarn } from './logger.js';
 import { kennwerte } from './metrics.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
@@ -62,6 +63,10 @@ export class Session extends EventTarget {
     if (instant) { this.#ramp = null; this.target = w; }
     else { this.#ramp = { from: this.#currentRampValue(), to: w, t0: performance.now(), ms: rampMs }; this.target = w; }
     this.dispatchEvent(new Event('target'));
+    // Sofort schreiben statt auf den 250-ms-Timer warten: im Hintergrund
+    // drosselt Chrome Timer massiv — der BLE-Tastendruck selbst liefert
+    // den Task, damit ± auch bei PiP/Bildschirm-aus sofort wirkt
+    this.#schreibeZiel();
   }
 
   adjust(delta) {
@@ -97,18 +102,36 @@ export class Session extends EventTarget {
     return Math.round(this.#ramp.from + (this.#ramp.to - this.#ramp.from) * p);
   }
 
+  #letzterWriteT = 0;
+  #nachzuegler = null;
+
+  // Zentraler Ziel-Writer: hält das 1-Write-pro-250-ms-Limit des Trainers
+  // ein, egal ob der Aufruf vom Timer oder event-getrieben kommt.
+  #schreibeZiel() {
+    if (this.status !== 'riding' || !this.ftms.connected || this.ftms.busy) return;
+    const jetzt = performance.now();
+    const abstand = jetzt - this.#letzterWriteT;
+    if (abstand < WRITE_INTERVAL) {
+      clearTimeout(this.#nachzuegler);
+      this.#nachzuegler = setTimeout(() => this.#schreibeZiel(), WRITE_INTERVAL - abstand + 10);
+      return;
+    }
+    // Hintergrund: Rampe überspringen (deren Timer ist gedrosselt) —
+    // direkt der Zielwert, plus Diagnosespur für den Livetest
+    const w = document.hidden ? this.target : this.#currentRampValue();
+    if (w === this.#lastWritten) return;
+    this.#letzterWriteT = jetzt;
+    this.#lastWritten = w;
+    if (document.hidden) logInfo('bg', `Ziel-Write im Hintergrund: ${w} W`);
+    this.ftms.setTargetPower(w).catch(err => {
+      this.#lastWritten = -1;               // erneut versuchen
+      if (document.hidden) logWarn('bg', 'Hintergrund-Write fehlgeschlagen', err.message);
+      this.dispatchEvent(new CustomEvent('error', { detail: err.message }));
+    });
+  }
+
   #startLoops() {
-    this.#writeTimer = setInterval(() => {
-      if (!this.ftms.connected || this.ftms.busy) return;
-      const w = this.#currentRampValue();
-      if (w !== this.#lastWritten) {
-        this.#lastWritten = w;
-        this.ftms.setTargetPower(w).catch(err => {
-          this.#lastWritten = -1;           // erneut versuchen
-          this.dispatchEvent(new CustomEvent('error', { detail: err.message }));
-        });
-      }
-    }, WRITE_INTERVAL);
+    this.#writeTimer = setInterval(() => this.#schreibeZiel(), WRITE_INTERVAL);
 
     // Nach Reconnect Ziel neu schreiben
     this.ftms.addEventListener('reconnected', this.#onReconnect);
@@ -183,6 +206,7 @@ export class Session extends EventTarget {
     clearInterval(this.#writeTimer);
     clearInterval(this.#tickTimer);
     clearInterval(this.#autosaveTimer);
+    clearTimeout(this.#nachzuegler);
     this.ftms.removeEventListener('data', this.#onData);
     this.ftms.removeEventListener('reconnected', this.#onReconnect);
     this.detachHR();
