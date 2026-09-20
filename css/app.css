@@ -44,8 +44,9 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .top-tiles .tile-title { font-size: 1.15rem; }
 
 .version-tag {
+  /* unten-bündig: sitzt auf derselben Schriftlinie wie der Markenname */
   font-size: .62rem; font-weight: 500; color: var(--ink3);
-  margin-left: .45rem; vertical-align: .35em; letter-spacing: .03em;
+  margin-left: .45rem; vertical-align: baseline; letter-spacing: .03em;
 }
 .demo-link {
   background: none; border: none; color: var(--ink3);
