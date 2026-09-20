@@ -21,6 +21,7 @@ export class FTMS extends EventTarget {
   #pending = null;        // { opcode, resolve, reject, timer } — genau ein ausstehender Write
   #wantConnection = false;
   #reconnectTimer = null;
+  #onGattWeg = null;
   connected = false;
   features = null;
   firmware = null;
@@ -34,7 +35,9 @@ export class FTMS extends EventTarget {
       filters: [{ namePrefix: 'KICKR' }, { services: [FTMS_SERVICE] }],
       optionalServices: [FTMS_SERVICE, DIS_SERVICE],
     });
-    this.#device.addEventListener('gattserverdisconnected', () => this.#onDisconnected());
+    this.#onGattWeg ??= () => this.#onDisconnected();
+    this.#device.removeEventListener('gattserverdisconnected', this.#onGattWeg);
+    this.#device.addEventListener('gattserverdisconnected', this.#onGattWeg);
     this.#wantConnection = true;
     try {
       await this.#setup();

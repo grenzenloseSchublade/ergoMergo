@@ -108,16 +108,22 @@ export class Session extends EventTarget {
   // Zentraler Ziel-Writer: hält das 1-Write-pro-250-ms-Limit des Trainers
   // ein, egal ob der Aufruf vom Timer oder event-getrieben kommt.
   #schreibeZiel() {
-    if (this.status !== 'riding' || !this.ftms.connected || this.ftms.busy) return;
+    if (this.status !== 'riding' || !this.ftms.connected) return;
     const jetzt = performance.now();
     const abstand = jetzt - this.#letzterWriteT;
-    if (abstand < WRITE_INTERVAL) {
+    // busy (Control-Point-Antwort steht aus) und Ratenlimit gleich
+    // behandeln: Nachzügler planen statt den Write zu verlieren — im
+    // Hintergrund käme der Interval-Timer sonst erst nach bis zu 60 s
+    if (this.ftms.busy || abstand < WRITE_INTERVAL) {
       clearTimeout(this.#nachzuegler);
-      this.#nachzuegler = setTimeout(() => this.#schreibeZiel(), WRITE_INTERVAL - abstand + 10);
+      this.#nachzuegler = setTimeout(() => this.#schreibeZiel(),
+        Math.max(WRITE_INTERVAL - abstand, 50) + 10);
       return;
     }
-    // Hintergrund: Rampe überspringen (deren Timer ist gedrosselt) —
-    // direkt der Zielwert, plus Diagnosespur für den Livetest
+    // Hintergrund: Rampe überspringen UND beenden (ihr Timer ist
+    // gedrosselt; stehen bleibend würde sie beim Sichtbarwerden einen
+    // niedrigeren Zwischenwert nachschreiben) — plus Diagnosespur
+    if (document.hidden) this.#ramp = null;
     const w = document.hidden ? this.target : this.#currentRampValue();
     if (w === this.#lastWritten) return;
     this.#letzterWriteT = jetzt;
@@ -210,7 +216,16 @@ export class Session extends EventTarget {
     this.ftms.removeEventListener('data', this.#onData);
     this.ftms.removeEventListener('reconnected', this.#onReconnect);
     this.detachHR();
-    try { if (this.ftms.connected) await this.ftms.setTargetPower(0); } catch { /* Trainer ggf. weg */ }
+    // Ziel 0 zuverlässig absetzen: busy/Ratenlimit kurz aussitzen (der
+    // Writer-Loop ist schon gestoppt, hier hilft niemand mehr nach)
+    for (let i = 0; i < 8; i++) {
+      if (!this.ftms.connected) break;
+      if (!this.ftms.busy) {
+        try { await this.ftms.setTargetPower(0); } catch { /* Trainer ggf. weg */ }
+        break;
+      }
+      await new Promise(r => setTimeout(r, 150));
+    }
     await this.save(true);
   }
 }

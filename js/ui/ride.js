@@ -75,6 +75,7 @@ export class RideScreen {
   #pip = null;                // Bild-in-Bild-Instanz (lazy)
   #abos = [];                 // [target, typ, fn] — Listener auf langlebigen Pool-Clients
   #uebernommen = new Set();   // Client-Objekte, die diese Fahrt schon verdrahtet hat
+  #tot = false;               // destroy() gelaufen — späte Auto-Connect-Promises ignorieren
 
   #abo(target, typ, fn) {
     target.addEventListener(typ, fn);
@@ -92,6 +93,7 @@ export class RideScreen {
     // Zusatzgeräte laufen über den GeraeteManager: Verbindungen leben im
     // Pool über Fahrten hinweg; hier wird nur verdrahtet (Abos je Fahrt).
     const uebernehmeHR = () => {
+      if (this.#tot) return false;             // Fahrt schon beendet
       for (const hr of geraeteManager.clients('hr')) {
         if (this.#uebernommen.has(hr)) continue;
         this.#uebernommen.add(hr);
@@ -102,6 +104,7 @@ export class RideScreen {
       return on;
     };
     const uebernehmeCtrl = () => {
+      if (this.#tot) return false;             // Fahrt schon beendet
       for (const ctrl of geraeteManager.clients('controller')) {
         if (this.#uebernommen.has(ctrl)) continue;
         this.#uebernommen.add(ctrl);
@@ -142,8 +145,17 @@ export class RideScreen {
       btn.classList.remove('on');
       btn.onclick = async () => {
         try {
-          const n = await geraeteManager.verbinde(rolle);
-          if (!n) await geraeteManager.koppel(rolle);
+          // Chooser nur mit frischer Geste (nichts gemerkt) — nach einem
+          // langen Verbindungsversuch wäre die Aktivierung verbraucht
+          if ((await geraeteManager.gemerkte(rolle)).length === 0) {
+            await geraeteManager.koppel(rolle);
+          } else {
+            const n = await geraeteManager.verbinde(rolle);
+            if (!n) {
+              this.#status(`${rolle === 'hr' ? 'Herzgurt' : 'Controller'} nicht erreichbar — Gerät wach?`, 'err');
+              return;
+            }
+          }
           uebernehme[rolle]();
         } catch (err) {
           if (err.name !== 'NotFoundError') this.#status(err.message, 'err');
@@ -406,6 +418,7 @@ export class RideScreen {
   }
 
   destroy() {
+    this.#tot = true;
     this.#pip?.destroy();
     this.#pip = null;
     removeEventListener('keydown', this.#keys);

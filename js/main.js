@@ -79,11 +79,16 @@ async function startRideInner(programm) {
   let ftms = geraeteManager.client('trainer');
   try {
     if (!ftms) {
-      await geraeteManager.verbinde('trainer');
-      ftms = geraeteManager.client('trainer');
-    }
-    if (!ftms) {
-      ftms = await geraeteManager.koppel('trainer');
+      // Chooser nur, wenn KEIN Trainer gemerkt ist — dann ist die User-Geste
+      // noch frisch. Nach einem langen (4-s-)Verbindungsversuch wäre die
+      // Geste verbraucht und requestDevice würde mit SecurityError platzen.
+      if ((await geraeteManager.gemerkte('trainer')).length === 0) {
+        ftms = await geraeteManager.koppel('trainer');
+      } else {
+        await geraeteManager.verbinde('trainer');
+        ftms = geraeteManager.client('trainer');
+        if (!ftms) throw Object.assign(new Error('Trainer nicht erreichbar — Gerät wach? Sonst in der Geräte-Leiste neu koppeln.'), { name: 'NichtErreichbar' });
+      }
     }
   } catch (err) {
     logError('app', 'Verbindung fehlgeschlagen', `${err.name}: ${err.message}`);
@@ -354,6 +359,7 @@ async function lerneTasten(zeigeMap) {
     i++;
     if (i >= schritte.length) {
       await setSetting('controllerMap', map);
+      geraeteManager.setzeControllerMap(map);   // verbundene Pads sofort umbelegen
       zeigeMap(map);
       toastOk('Tastenbelegung gespeichert');
       ende();
@@ -383,9 +389,16 @@ async function lerneTasten(zeigeMap) {
   dlg.showModal();
   zeigeSchritt();
   try {
-    await geraeteManager.verbinde('controller');
-    if (!geraeteManager.clients('controller').length) await geraeteManager.koppel('controller');
+    if ((await geraeteManager.gemerkte('controller')).length === 0) {
+      await geraeteManager.koppel('controller');   // frische Geste → Chooser ok
+    } else {
+      await geraeteManager.verbinde('controller');
+    }
     if (fertig) return;                          // Abbruch — Pool behält die Verbindung
+    if (!geraeteManager.clients('controller').length) {
+      $('#map-status').textContent = 'Controller nicht erreichbar — Gerät wecken und erneut öffnen.';
+      return;
+    }
     const clients = geraeteManager.clients('controller');
     for (const c of clients) { c.addEventListener('button', onButton); lauscher.push([c, onButton]); }
     const namen = clients.map(c => c.deviceName ?? 'Controller').join(' + ');
@@ -431,7 +444,7 @@ async function zeichneGeraeteLeisteInner() {
         if (status === 'fehlt') {
           await geraeteManager.koppel(rolle);
           toastOk(`${label} gekoppelt & verbunden`);
-          if (rolle === 'controller') toast('Tipp: linkes und rechtes Pad sind eigene Geräte — zweites Pad per erneutem Tap koppeln');
+          if (rolle === 'controller') toast('Tipp: linkes und rechtes Pad sind eigene Geräte — die andere Seite über „+ 2. Pad" koppeln');
         } else {
           const n = await geraeteManager.verbinde(rolle);
           if (!n) toastErr(`${label} nicht erreichbar — Gerät wach?`);

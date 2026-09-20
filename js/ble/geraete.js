@@ -102,7 +102,7 @@ const CHOOSER_FILTER = {
 
 class GeraeteManager extends EventTarget {
   #clients = { trainer: [], hr: [], controller: [] };   // gehaltene Clients je Rolle
-  #verbindet = new Set();
+  #verbindet = new Map();   // rolle → laufendes verbinde()-Promise (wird geteilt)
   #watchdog = null;
   #snapshot = '';
 
@@ -141,6 +141,12 @@ class GeraeteManager extends EventTarget {
     return (await this.gemerkte(rolle)).length ? 'gemerkt' : 'fehlt';
   }
 
+  // Gelernte Tastenbelegung sofort an verbundene Controller durchreichen —
+  // die Instanzen lesen ihre Map sonst nur beim Verbindungsaufbau
+  setzeControllerMap(map) {
+    for (const c of this.#clients.controller) c.map = { plus: 4, minus: 0, ...map };
+  }
+
   #neuerClient(rolle, settings) {
     if (rolle === 'trainer') return new FTMS();
     if (rolle === 'hr') return new HeartRate();
@@ -163,7 +169,13 @@ class GeraeteManager extends EventTarget {
     // Trennung nur melden — nicht entfernen: FTMS reconnectet selbstständig,
     // und clients() filtert ohnehin live auf gatt.connected
     client.addEventListener('disconnected', () => this.#change());
-    // toten Vorgänger desselben Geräts ersetzen
+    client.addEventListener('reconnected', () => this.#change());
+    // Vorgänger desselben Geräts ERSETZEN heißt: sauber abbauen — sonst
+    // lebt dessen Reconnect-Schleife/Listener als Zombie weiter und
+    // verbindet z. B. den Trainer nach bewusstem Trennen wieder
+    for (const alt of this.#clients[rolle]) {
+      if (alt.device?.id === device.id) alt.disconnect();
+    }
     this.#clients[rolle] = this.#clients[rolle]
       .filter(c => c.device?.id !== device.id)
       .concat(client);
@@ -171,29 +183,34 @@ class GeraeteManager extends EventTarget {
   }
 
   // Alle gemerkten Geräte der Rolle verbinden (best effort, ohne Chooser).
-  // Liefert die Zahl der jetzt verbundenen Clients.
-  async verbinde(rolle) {
-    if (this.#verbindet.has(rolle)) return this.clients(rolle).length;
-    this.#verbindet.add(rolle);
-    this.#change();
-    try {
-      const verbundeneIds = new Set(this.clients(rolle).map(c => c.device?.id));
-      for (const eintrag of await this.gemerkte(rolle)) {
-        if (verbundeneIds.has(eintrag.id)) continue;
-        try {
-          const device = await findeGemerktesGeraet(eintrag.id);
-          if (!device) continue;
-          await verbindeBekanntes(device);
-          await this.#verbindeClient(rolle, device);
-        } catch (err) {
-          logWarn('geraete', `${rolle} verbinden fehlgeschlagen (${eintrag.name ?? eintrag.id})`, err.message);
-        }
-      }
-      return this.clients(rolle).length;
-    } finally {
+  // Liefert die Zahl der jetzt verbundenen Clients. Läuft bereits ein
+  // Aufbau, wird DESSEN Ergebnis geteilt (kein irreführendes Sofort-0).
+  verbinde(rolle) {
+    const laufend = this.#verbindet.get(rolle);
+    if (laufend) return laufend;
+    const p = this.#verbindeInner(rolle).finally(() => {
       this.#verbindet.delete(rolle);
       this.#change();
+    });
+    this.#verbindet.set(rolle, p);
+    this.#change();
+    return p;
+  }
+
+  async #verbindeInner(rolle) {
+    const verbundeneIds = new Set(this.clients(rolle).map(c => c.device?.id));
+    for (const eintrag of await this.gemerkte(rolle)) {
+      if (verbundeneIds.has(eintrag.id)) continue;
+      try {
+        const device = await findeGemerktesGeraet(eintrag.id);
+        if (!device) continue;
+        await verbindeBekanntes(device);
+        await this.#verbindeClient(rolle, device);
+      } catch (err) {
+        logWarn('geraete', `${rolle} verbinden fehlgeschlagen (${eintrag.name ?? eintrag.id})`, err.message);
+      }
     }
+    return this.clients(rolle).length;
   }
 
   trenne(rolle) {

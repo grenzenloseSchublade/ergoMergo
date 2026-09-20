@@ -61,8 +61,9 @@ export class ZwiftController extends EventTarget {
     const txCh = byUuid(CH_SYNC_TX) ?? chars.find(c => c.properties.indicate);
     if (!asyncCh || !rxCh) throw new Error('Controller-Characteristics nicht gefunden');
 
-    asyncCh.addEventListener('characteristicvaluechanged',
-      e => this.#onNotify(new Uint8Array(e.target.value.buffer)));
+    this.#onNotifyFn = e => this.#onNotify(new Uint8Array(e.target.value.buffer));
+    this.#asyncCh = asyncCh;
+    asyncCh.addEventListener('characteristicvaluechanged', this.#onNotifyFn);
     await asyncCh.startNotifications();
 
     if (txCh) {
@@ -85,6 +86,8 @@ export class ZwiftController extends EventTarget {
   }
 
   #onDisconnect = null;
+  #onNotifyFn = null;
+  #asyncCh = null;
 
   #onNotify(b) {
     if (b[0] === 0x23) {
@@ -128,6 +131,9 @@ export class ZwiftController extends EventTarget {
 
   disconnect() {
     if (this.#onDisconnect) this.#device?.removeEventListener('gattserverdisconnected', this.#onDisconnect);
+    // Chrome liefert beim Reconnect dieselben Characteristic-Objekte —
+    // ohne Abbau würde eine ersetzte Instanz weiter Notifications empfangen
+    if (this.#onNotifyFn) this.#asyncCh?.removeEventListener('characteristicvaluechanged', this.#onNotifyFn);
     try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
   }
 }
