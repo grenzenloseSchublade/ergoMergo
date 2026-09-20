@@ -245,9 +245,10 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   display: grid; grid-template-columns: 1fr 1fr 7rem 7rem; gap: .5rem;
   padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom));
 }
-/* Not-Stopp und Beenden räumlich von den Dauer-Buttons ± absetzen */
+/* Not-Stopp von ± absetzen — und Beenden mindestens genauso weit von
+   STOPP: die gefährlichste Nachbarschaft braucht den größten Abstand */
 .controls #btn-stop { margin-left: .9rem; }
-.controls #btn-end { margin-left: .4rem; }
+.controls #btn-end { margin-left: .9rem; }
 .ctl {
   min-height: 64px; min-width: 0; width: 100%; border-radius: 14px;
   font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -305,7 +306,7 @@ button:disabled { cursor: default; }
   .row-actions .chip { flex: 0 0 auto; min-height: 40px; }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
   .controls #btn-stop { margin-left: 0; margin-top: .9rem; }
-  .controls #btn-end { margin-left: 0; margin-top: .4rem; }
+  .controls #btn-end { margin-left: 0; margin-top: .9rem; }
   .ctl { min-width: 96px; }
   /* Large Print quer: nur Werte + Bedienung */
   .ride-grid.large { grid-template-columns: 1fr auto; grid-template-areas: "metrics controls"; }

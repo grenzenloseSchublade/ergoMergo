@@ -98,24 +98,36 @@ export function zeichnePipBild(canvas, d) {
   c.fillStyle = '#45c7d4';
   c.fillText(`Ziel ${d.ziel} W`, w / 2, 176);
 
-  // Untere Zeile: Rest · rpm · ♥HF (HF nur mit Gurt)
-  const spalten = [];
-  if (d.rest) spalten.push({ wert: d.rest, einheit: '', farbe: '#e8f1f2' });
-  spalten.push({ wert: String(d.rpm || '–'), einheit: 'rpm', farbe: '#e8f1f2' });
-  if (d.hr) spalten.push({ wert: `♥ ${d.hr}`, einheit: '', farbe: '#ef6b5e' });
-  const teil = w / (spalten.length + 1);
-  spalten.forEach((s, i) => {
-    const x = teil * (i + 1);
+  // Untere Zeile: Rest · rpm · ♥HF (HF nur mit Gurt). Als EINE zentrierte
+  // Gruppe mit festen Lücken layoutet — ein Spaltenraster kollidiert bei
+  // 3-stelligen Werten (Einheit ragte ins Herz der HF).
+  const LUECKE = 44, WERT_F = '600 42px system-ui', EINH_F = '400 26px system-ui';
+  const segmente = [];
+  if (d.rest) segmente.push({ wert: d.rest, einheit: '', farbe: '#e8f1f2' });
+  segmente.push({ wert: String(d.rpm || '–'), einheit: 'rpm', farbe: '#e8f1f2' });
+  if (d.hr) segmente.push({ wert: `♥ ${d.hr}`, einheit: '', farbe: '#ef6b5e' });
+  c.textAlign = 'left';
+  for (const s of segmente) {
+    c.font = WERT_F;
+    s.wb = c.measureText(s.wert).width;
+    c.font = EINH_F;
+    s.eb = s.einheit ? c.measureText(s.einheit).width + 8 : 0;
+  }
+  const gesamt = segmente.reduce((a, s) => a + s.wb + s.eb, 0)
+    + LUECKE * (segmente.length - 1);
+  let x = (w - gesamt) / 2;
+  for (const s of segmente) {
     c.fillStyle = s.farbe;
-    c.font = '600 42px system-ui';
-    const wb = c.measureText(s.wert).width;
-    c.fillText(s.wert, s.einheit ? x - 20 : x, 246);
+    c.font = WERT_F;
+    c.fillText(s.wert, x, 246);
+    x += s.wb;
     if (s.einheit) {
       c.fillStyle = '#8fa3a6';
-      c.font = '400 26px system-ui';
-      c.textAlign = 'left';
-      c.fillText(s.einheit, x - 20 + wb / 2 + 8, 246);
-      c.textAlign = 'center';
+      c.font = EINH_F;
+      c.fillText(s.einheit, x + 8, 246);
+      x += s.eb;
     }
-  });
+    x += LUECKE;
+  }
+  c.textAlign = 'center';
 }
