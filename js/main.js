@@ -538,6 +538,7 @@ addEventListener('popstate', () => {
 
 async function goHome() {
   if (reloadAusstehend) { location.reload(); return; }
+  renderProgrammTiles();          // „Zuletzt gefahren" sofort nachführen
   detailCleanup?.();
   detailCleanup = null;
   aktuelleDetailId = null;

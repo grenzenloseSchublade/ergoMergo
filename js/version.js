@@ -57,7 +57,8 @@ export function starteUpdateWatchdog(statusEl) {
           // main.js hat reloadAusstehend gesetzt, goHome holt den Reload nach
           if (!document.querySelector('#screen-ride')?.hidden) return;
           logInfo('update', `Update fertig — lade neu (${quelle})`);
-          location.reload();
+          // Mini-Verzögerung: der Log-Write muss die IndexedDB noch erreichen
+          setTimeout(() => location.reload(), 150);
         };
         try {
           const reg = await navigator.serviceWorker?.getRegistration();

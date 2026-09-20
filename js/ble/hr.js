@@ -19,14 +19,19 @@ export class HeartRate extends EventTarget {
       this.dispatchEvent(new CustomEvent('hr', { detail: bpm }));
     });
     await ch.startNotifications();
-    this.#device.addEventListener('gattserverdisconnected', () =>
-      this.dispatchEvent(new Event('disconnected')));
+    // Benannter Listener — disconnect() räumt ihn ab (kein Geister-Event
+    // einer früheren Instanz am selben gemerkten Gerät)
+    this.#onDisconnect = () => this.dispatchEvent(new Event('disconnected'));
+    this.#device.addEventListener('gattserverdisconnected', this.#onDisconnect);
   }
+
+  #onDisconnect = null;
 
   get deviceName() { return this.#device?.name ?? null; }
   get device() { return this.#device; }
 
   disconnect() {
+    if (this.#onDisconnect) this.#device?.removeEventListener('gattserverdisconnected', this.#onDisconnect);
     try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
   }
 }

@@ -52,6 +52,13 @@ export class RideScreen {
         if (this.ansagenAn) ansageFertig().then(ok => {
           if (!ok && !document.hidden) signal.sage('Programm beendet, gut gemacht');
         });
+        // Dauerhaft sichtbar machen, dass ab jetzt frei ausgerollt wird —
+        // die Aufzeichnung läuft bewusst weiter, Beenden speichert
+        const el = this.$('#m-status');
+        el.hidden = false;
+        el.textContent = 'Programm beendet — Ausrollen läuft, Beenden speichert';
+        el.className = 'status ok';
+        clearTimeout(this.#statusTimer);       // kein Auto-Hide für diese Meldung
       });
     }
     this.#bind();
@@ -338,10 +345,12 @@ export class RideScreen {
     el.style.color = zoneColor(watt, this.settings.ftp);
     this.$('#m-target').textContent = s.target;
     if (this.run) {
-      this.$('#m-time').textContent = fmtTime(Math.max(0, this.run.restImBlock ?? 0));
+      this.$('#m-time').textContent = this.run.index === -2
+        ? '–:–' : fmtTime(Math.max(0, this.run.restImBlock ?? 0));
       this.$('#m-total-time').textContent = fmtTime(Math.max(0, this.run.restGesamt ?? this.run.total));
       const balken = this.$('#m-restbalken');
-      const b = this.run.blocks[Math.max(0, this.run.index)];
+      if (this.run.index === -2) balken.hidden = true;
+      const b = this.run.index === -2 ? null : this.run.blocks[Math.max(0, this.run.index)];
       if (b) {
         balken.hidden = false;
         balken.firstElementChild.style.width =

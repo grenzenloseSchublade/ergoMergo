@@ -84,13 +84,13 @@ export function zeichnePipBild(canvas, d) {
   c.textBaseline = 'alphabetic';
   c.fillStyle = d.farbe || '#e8f1f2';
   c.font = '700 108px system-ui';
-  const wattText = String(d.watt);
-  const wattBreite = c.measureText(wattText).width;   // im 108px-Font messen
-  c.fillText(wattText, w / 2, 128);
+  // Slot fix auf 3 Ziffern bemessen — die Anzeige springt sonst bei 99→100
+  const wattSlot = c.measureText('000').width;
+  c.fillText(String(d.watt), w / 2, 128);
   c.font = '600 30px system-ui';
   c.fillStyle = '#8fa3a6';
   c.textAlign = 'left';
-  c.fillText('W', w / 2 + wattBreite / 2 + 12, 128);
+  c.fillText('W', w / 2 + wattSlot / 2 + 12, 128);
   c.textAlign = 'center';
 
   // Ziel darunter — die eine Zahl, gegen die ERG gerade regelt
@@ -103,13 +103,15 @@ export function zeichnePipBild(canvas, d) {
   // 3-stelligen Werten (Einheit ragte ins Herz der HF).
   const LUECKE = 44, WERT_F = '600 42px system-ui', EINH_F = '400 26px system-ui';
   const segmente = [];
-  if (d.rest) segmente.push({ wert: d.rest, einheit: '', farbe: '#e8f1f2' });
-  segmente.push({ wert: String(d.rpm || '–'), einheit: 'rpm', farbe: '#e8f1f2' });
-  if (d.hr) segmente.push({ wert: `♥ ${d.hr}`, einheit: '', farbe: '#ef6b5e' });
+  if (d.rest) segmente.push({ wert: d.rest, slot: '00:00', einheit: '', farbe: '#e8f1f2' });
+  segmente.push({ wert: String(d.rpm || '–'), slot: '000', einheit: 'rpm', farbe: '#e8f1f2' });
+  if (d.hr) segmente.push({ wert: `♥ ${d.hr}`, slot: '♥ 000', einheit: '', farbe: '#ef6b5e' });
   c.textAlign = 'left';
   for (const s of segmente) {
     c.font = WERT_F;
-    s.wb = c.measureText(s.wert).width;
+    // Slot nach Maximalbreite bemessen (Ziffern fix 3-stellig gedacht) —
+    // die Zeile bleibt damit über alle Werte hinweg ortsstabil
+    s.wb = c.measureText(s.slot ?? s.wert).width;
     c.font = EINH_F;
     s.eb = s.einheit ? c.measureText(s.einheit).width + 8 : 0;
   }
@@ -119,7 +121,8 @@ export function zeichnePipBild(canvas, d) {
   for (const s of segmente) {
     c.fillStyle = s.farbe;
     c.font = WERT_F;
-    c.fillText(s.wert, x, 246);
+    const istB = c.measureText(s.wert).width;
+    c.fillText(s.wert, x + (s.wb - istB) / 2, 246);
     x += s.wb;
     if (s.einheit) {
       c.fillStyle = '#8fa3a6';

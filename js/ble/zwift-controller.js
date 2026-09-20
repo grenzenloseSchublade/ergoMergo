@@ -68,11 +68,16 @@ export class ZwiftController extends EventTarget {
 
     await rxCh.writeValueWithResponse(RIDE_ON);      // unverschlüsselter Handshake
 
-    this.#device.addEventListener('gattserverdisconnected', () => {
+    // Benannter Listener: disconnect() räumt ihn ab — sonst loggt jede
+    // frühere Instanz am selben (gemerkten) Gerät die Trennung erneut
+    this.#onDisconnect = () => {
       logWarn('ctrl', 'Controller getrennt');
       this.dispatchEvent(new Event('disconnected'));
-    });
+    };
+    this.#device.addEventListener('gattserverdisconnected', this.#onDisconnect);
   }
+
+  #onDisconnect = null;
 
   #onNotify(b) {
     if (b[0] === 0x23) {
@@ -117,6 +122,7 @@ export class ZwiftController extends EventTarget {
   }
 
   disconnect() {
+    if (this.#onDisconnect) this.#device?.removeEventListener('gattserverdisconnected', this.#onDisconnect);
     try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
   }
 }
