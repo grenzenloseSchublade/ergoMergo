@@ -241,14 +241,20 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 
 .controls {
   /* Feste Spalten für STOPP/Beenden: Textwechsel (GESTOPPT/WEITER/Sicher?)
-     dürfen die Leiste nicht verschieben */
-  display: grid; grid-template-columns: 1fr 1fr 7rem 7rem; gap: .5rem;
+     dürfen die Leiste nicht verschieben. Gruppenabstände als explizite
+     Abstands-Spuren im Template — Margins auf Grid-Items (width:100%)
+     würden über den Displayrand hinausschieben. Vor STOPP und vor
+     Beenden gleich viel Luft: die gefährlichste Nachbarschaft braucht
+     den größten Abstand. */
+  display: grid;
+  grid-template-columns: 1fr .5rem 1fr .9rem 7rem .9rem 7rem;
+  column-gap: 0; row-gap: .5rem;
   padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom));
 }
-/* Not-Stopp von ± absetzen — und Beenden mindestens genauso weit von
-   STOPP: die gefährlichste Nachbarschaft braucht den größten Abstand */
-.controls #btn-stop { margin-left: .9rem; }
-.controls #btn-end { margin-left: .9rem; }
+#btn-minus { grid-column: 1; }
+#btn-plus { grid-column: 3; }
+#btn-stop { grid-column: 5; }
+#btn-end { grid-column: 7; }
 .ctl {
   min-height: 64px; min-width: 0; width: 100%; border-radius: 14px;
   font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -305,8 +311,11 @@ button:disabled { cursor: default; }
   .row-actions::-webkit-scrollbar { display: none; }
   .row-actions .chip { flex: 0 0 auto; min-height: 40px; }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
-  .controls #btn-stop { margin-left: 0; margin-top: .9rem; }
-  .controls #btn-end { margin-left: 0; margin-top: .9rem; }
+  /* Portrait-Spurzuweisung aufheben — per ID, sonst verliert der Reset
+     den Spezifitätsvergleich gegen #btn-stop { grid-column: 5 } */
+  #btn-minus, #btn-plus, #btn-stop, #btn-end { grid-column: 1; }
+  .controls #btn-stop { margin-top: .9rem; } /* vertikal: kein Overflow möglich */
+  .controls #btn-end { margin-top: .9rem; }
   .ctl { min-width: 96px; }
   /* Large Print quer: nur Werte + Bedienung */
   .ride-grid.large { grid-template-columns: 1fr auto; grid-template-areas: "metrics controls"; }
