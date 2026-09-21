@@ -323,7 +323,11 @@ export class WorkoutChart {
     for (let k = Math.max(0, count - 50); k < count; k++)
       maxW = Math.max(maxW, samples[k * FIELDS + 1]);
     maxW *= 1.15;
-    const x = t => t / total * w;
+    // Ausfahren nach Programmende: Achse wächst mit, statt die Linie rechts
+    // aus dem Canvas laufen zu lassen (Livetest: „nichts mehr getrackt")
+    const letzteT = count ? zeitMap(samples[(count - 1) * FIELDS]) : 0;
+    const anzeigeTotal = Math.max(total, letzteT);
+    const x = t => t / anzeigeTotal * w;
     const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - 6 * s - kopf);
     // Blocklabels/Balken zeigen die effektiven Watt (inkl. ±-Offset)
     const effBlocks = offset ? blocks.map(b => ({ ...b, watt: b.watt + offset })) : blocks;
@@ -337,12 +341,27 @@ export class WorkoutChart {
       t += b.dauer;
     }
     ctx.globalAlpha = 1;
+    // Ausfahr-Bereich optisch absetzen: gedämpfte Fläche + Endlinie des Programms
+    if (anzeigeTotal > total) {
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = css('--ink2');
+      ctx.fillRect(x(total), kopf, w - x(total), (h - fuss) - kopf);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = css('--ink3');
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x(total) + 0.5, kopf);
+      ctx.lineTo(x(total) + 0.5, h - fuss);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     if (gross) {
       zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
       zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
-      zeichneBlockLabels(ctx, css, effBlocks, total, w, h, kopf, fuss, maxW, s);
+      zeichneBlockLabels(ctx, css, effBlocks, anzeigeTotal, w, h, kopf, fuss, maxW, s);
     }
-    zeichneZeitachse(ctx, css, w, h, fuss, total, s, blocks);
+    zeichneZeitachse(ctx, css, w, h, fuss, anzeigeTotal, s, blocks);
 
     zeichneLeistungslinie(ctx, css, samples, count, k => {
       const t = samples[k * FIELDS];
@@ -360,7 +379,7 @@ export class WorkoutChart {
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    zeichneKlammern(ctx, css, w, gruppen, total, s);
+    zeichneKlammern(ctx, css, w, gruppen, anzeigeTotal, s);
   }
 }
 

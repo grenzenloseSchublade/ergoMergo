@@ -76,9 +76,21 @@ export class RideScreen {
     session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('target', () => this.render());
     session.addEventListener('error', e => this.#status(e.detail, 'err'));
-    this.#abo(session.ftms, 'connected', () => this.#status('verbunden', 'ok'));
-    this.#abo(session.ftms, 'disconnected', () => this.#status('getrennt — verbinde neu …', 'err'));
-    this.#abo(session.ftms, 'reconnected', () => this.#status('wieder verbunden', 'ok'));
+    this.#abo(session.ftms, 'connected', () => { this.#verbStatus = 'ok'; this.#status('verbunden', 'ok'); });
+    this.#abo(session.ftms, 'disconnected', () => { this.#verbStatus = 'reconnect'; this.#status('getrennt — verbinde neu …', 'err'); });
+    this.#abo(session.ftms, 'reconnected', () => { this.#verbStatus = 'ok'; this.#status('wieder verbunden', 'ok'); });
+    this.#abo(session.ftms, 'reconnectfehler', e => {
+      if (e.detail.versuch >= 3) this.#status('Trainer nicht erreichbar — eingeschaltet? Weiter wird versucht …', 'err');
+    });
+    this.#abo(session.ftms, 'aufgegeben', () => {
+      this.#verbStatus = 'unerreichbar';
+      this.#status('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten', 'err');
+    });
+    // Initialzustand ableiten statt aufs connected-Event zu warten — das ist
+    // beim übernommenen Pool-Client längst gefeuert (Livetest: „verbinde …"
+    // blieb die ganze Fahrt stehen)
+    if (session.ftms.connected) this.#status('verbunden', 'ok');
+    else this.#status('verbinde …');
     this.render();
   }
 
@@ -97,7 +109,9 @@ export class RideScreen {
     const step = this.settings.wattSchritt;
     const adjust = d => {
       this.session.gestoppt = false;          // ± = bewusstes Weiterfahren, auch im Programm
-      this.run ? this.run.adjust(d) : this.session.adjust(d);
+      // Nach Programmende steuert ± direkt das Session-Ziel — run.adjust()
+      // liefe bei index -2 ins Leere (Livetest: ± beim Ausfahren wirkungslos)
+      this.run && this.run.index !== -2 ? this.run.adjust(d) : this.session.adjust(d);
     };
     this.adjust = adjust;
 
@@ -155,15 +169,23 @@ export class RideScreen {
       const btn = this.$(id);
       btn.classList.remove('on');
       btn.onclick = async () => {
+        const label = rolle === 'hr' ? 'Herzgurt' : 'Controller';
         try {
-          // Chooser nur mit frischer Geste (nichts gemerkt) — nach einem
-          // langen Verbindungsversuch wäre die Aktivierung verbraucht
-          if ((await geraeteManager.gemerkte(rolle)).length === 0) {
+          // Chooser nur mit frischer Geste — nach einem langen Verbindungs-
+          // versuch wäre die Aktivierung verbraucht. Frisch: nichts gemerkt,
+          // Berechtigung weg (verbinde() kann nur scheitern) oder der Nutzer
+          // tippt nach einem Fehlschlag gleich noch einmal (Fallback-Fenster) —
+          // so ist ein in der Fahrt verlorenes Pad wieder einfangbar
+          if ((await geraeteManager.gemerkte(rolle)).length === 0
+            || (await geraeteManager.autorisiert(rolle)).length === 0
+            || Date.now() < this.#koppelFallback[rolle]) {
             await geraeteManager.koppel(rolle);
+            this.#koppelFallback[rolle] = 0;
           } else {
             const n = await geraeteManager.verbinde(rolle);
             if (!n) {
-              this.#status(`${rolle === 'hr' ? 'Herzgurt' : 'Controller'} nicht erreichbar — Gerät wach?`, 'err');
+              this.#koppelFallback[rolle] = Date.now() + 30000;
+              this.#status(`${label} nicht erreichbar — Gerät wecken oder Chip erneut tippen für die Geräteauswahl`, 'err');
               return;
             }
           }
@@ -203,7 +225,11 @@ export class RideScreen {
       const pipDaten = () => ({
         watt: this.session.smoothWatt,
         ziel: this.session.target,
-        rest: this.run ? fmtTime(Math.max(0, this.run.restImBlock ?? 0)) : fmtTime(this.session.elapsed),
+        rest: this.run
+          ? (this.run.index === -2
+            ? '+' + fmtTime(Math.max(0, this.run.programmZeit(this.session.elapsed) - this.run.total))
+            : fmtTime(Math.max(0, this.run.restImBlock ?? 0)))
+          : fmtTime(this.session.elapsed),
         rpm: Math.round(this.session.live.rpm || 0),
         hr: this.session.live.hr || 0,
         farbe: getComputedStyle(this.root).getPropertyValue(
@@ -351,15 +377,21 @@ export class RideScreen {
     addEventListener('keydown', this.#keys);
 
     // Geräte-Watchdog: erkennt still abgerissene GATT-Verbindungen und hält
-    // die Chip-/Statusanzeige ehrlich (5-s-Takt)
+    // die Chip-/Statusanzeige ehrlich (5-s-Takt). Text folgt dem Verbindungs-
+    // Merker — insbesondere wird ein Terminalzustand („aufgegeben") nicht
+    // mehr mit „verbinde neu …" überschrieben
     this.#watchdog = setInterval(() => {
-      if (!this.session.ftms.connected && this.session.status !== 'done')
-        this.#status('Trainer getrennt — verbinde neu …', 'err');
+      if (this.session.ftms.connected || this.session.status === 'done') return;
+      if (this.#verbStatus === 'unerreichbar')
+        this.#status('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten', 'err');
+      else this.#status('Trainer getrennt — verbinde neu …', 'err');
     }, 5000);
   }
 
   #keys = null;
   #watchdog = null;
+  #verbStatus = 'ok';         // 'ok' | 'reconnect' | 'unerreichbar'
+  #koppelFallback = { hr: 0, controller: 0 };   // Zeitfenster: nächster Chip-Tap → Chooser
   #stopSperre = null;
   #endArm = null;
   #cursorBlinkBis = 0;
@@ -388,11 +420,16 @@ export class RideScreen {
     el.style.color = zoneColor(watt, this.settings.ftp);
     this.$('#m-target').textContent = s.target;
     if (this.run) {
-      this.$('#m-time').textContent = this.run.index === -2
-        ? '–:–' : fmtTime(Math.max(0, this.run.restImBlock ?? 0));
-      this.$('#m-total-time').textContent = fmtTime(Math.max(0, this.run.restGesamt ?? this.run.total));
+      const vorbei = this.run.index === -2;
+      // Ausfahren: Überzeit hochzählen statt „–:–"/„0:00" (Livetest-Wunsch)
+      this.$('#m-time-label').textContent = vorbei ? 'Ausfahren' : 'Intervall Rest';
+      this.$('#m-time').textContent = vorbei
+        ? '+' + fmtTime(Math.max(0, this.run.programmZeit(s.elapsed) - this.run.total))
+        : fmtTime(Math.max(0, this.run.restImBlock ?? 0));
+      this.$('#m-total-time').textContent = vorbei
+        ? fmtTime(s.elapsed) : fmtTime(Math.max(0, this.run.restGesamt ?? this.run.total));
       const balken = this.$('#m-restbalken');
-      if (this.run.index === -2) balken.hidden = true;
+      if (vorbei) balken.hidden = true;
       const b = this.run.index === -2 ? null : this.run.blocks[Math.max(0, this.run.index)];
       if (b) {
         balken.hidden = false;
@@ -447,6 +484,7 @@ export class RideScreen {
 
   destroy() {
     this.#tot = true;
+    signal.audioSchlafen();     // Audiofokus zurück an die Musik-App
     this.#resizeObs?.disconnect();
     cancelAnimationFrame(this.#resizeRaf);
     this.#pip?.destroy();

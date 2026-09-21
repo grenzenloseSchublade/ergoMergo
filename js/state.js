@@ -25,6 +25,7 @@ export class Session extends EventTarget {
     this.count = 0;
     this.live = { watt: 0, rpm: 0, hr: 0, kmh: 0 };
     this.kj = 0;
+    this.programmEndeBei = null;   // Aufzeichnungssekunde des Programmendes (ProgramRun setzt)
     this.#startLoops();
     ftms.addEventListener('data', this.#onData);
   }
@@ -174,8 +175,11 @@ export class Session extends EventTarget {
   }
 
   stats() {
+    // Kennwerte bewusst aufs Programmfenster begrenzt: das Ausfahren danach
+    // wird aufgezeichnet (Samples/Chart), verzerrt aber NP/IF/TSS/avg nicht
+    const n = Math.min(this.count, this.programmEndeBei ?? this.count);
     let sumW = 0, maxW = 0, sumRpm = 0, rpmN = 0;
-    for (let k = 0; k < this.count; k++) {
+    for (let k = 0; k < n; k++) {
       const w = this.samples[k * FIELDS + 1];
       sumW += w; if (w > maxW) maxW = w;
       const r = this.samples[k * FIELDS + 3];
@@ -183,11 +187,12 @@ export class Session extends EventTarget {
     }
     return {
       dauer: this.count,
-      avgW: this.count ? Math.round(sumW / this.count) : 0,
+      ausgefahrenSek: Math.max(0, this.count - n),
+      avgW: n ? Math.round(sumW / n) : 0,
       maxW,
-      kJ: Math.round(this.kj),
+      kJ: Math.round(sumW / 1000),     // 1 Sample = 1 s → Watt·s/1000
       avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
-      ...kennwerte(this.samples, this.count, this.settings.ftp),
+      ...kennwerte(this.samples, n, this.settings.ftp),
     };
   }
 

@@ -250,7 +250,13 @@ export class ProgramRun extends EventTarget {
     if (!cur) {
       this.restImBlock = 0;
       this.restGesamt = 0;
-      if (this.index !== -2) { this.index = -2; this.dispatchEvent(new Event('done')); }
+      if (this.index !== -2) {
+        this.index = -2;
+        // Statistik-Schnitt: alles ab hier ist Ausfahren (wird aufgezeichnet,
+        // zählt aber nicht in NP/IF/TSS)
+        this.session.programmEndeBei ??= this.session.elapsed;
+        this.dispatchEvent(new Event('done'));
+      }
       return;
     }
     if (cur.i !== this.index) {
