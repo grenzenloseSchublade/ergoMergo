@@ -305,34 +305,49 @@ export class WorkoutChart {
   // zeitMap: Aufzeichnungszeit → Programmzeit (stückweise Offsets aus dem
   // ProgramRun) — Linie und Cursor liegen damit auch nach Zeitsprüngen exakt
   // auf der Programmachse. blink: Cursor nach einem Zeitsprung hervorheben.
+  // Skaliert mit der Canvas-Höhe: klein (Fahrbildschirm) bleibt reduziert,
+  // groß (Vollbild-Overlay) bekommt Wattachse, FTP-Linie und Blocklabels —
+  // dieselbe Detailstufe wie drawProfile, nur live.
   draw(blocks, total, samples, count, offset, ftp, zeitMap = t => t, blink = false, istPause = null) {
     const { ctx, w, h, css } = prepCanvas(this.canvas);
+    const s = scaleOf(h);
+    // Detailstufe erst ab ~220 px: der kleine Portrait-Ride-Chart (≤180 px)
+    // bleibt reduziert, Querformat-Ride und Vollbild-Overlay bekommen
+    // Wattachse, FTP-Linie und Blocklabels
+    const gross = h >= 220;
     const gruppen = sammleGruppen(blocks);
-    const kopf = gruppen.size ? 13 : 0;
-    const fuss = 13;
+    const kopf = gruppen.size ? 13 * s : 0;
+    const fuss = 13 * s;
     let maxW = 150;
     for (const b of blocks) maxW = Math.max(maxW, b.watt + offset);
     for (let k = Math.max(0, count - 50); k < count; k++)
       maxW = Math.max(maxW, samples[k * FIELDS + 1]);
     maxW *= 1.15;
     const x = t => t / total * w;
-    const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - 6 - kopf);
+    const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - 6 * s - kopf);
+    // Blocklabels/Balken zeigen die effektiven Watt (inkl. ±-Offset)
+    const effBlocks = offset ? blocks.map(b => ({ ...b, watt: b.watt + offset })) : blocks;
 
+    if (gross) zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien');
     let t = 0;
     ctx.globalAlpha = 0.42;
-    for (const b of blocks) {
-      const watt = b.watt + offset;
-      ctx.fillStyle = css(zoneVar(watt, ftp));
-      ctx.fillRect(x(t) + 0.5, y(watt), x(t + b.dauer) - x(t) - 1, (h - fuss) - y(watt));
+    for (const b of effBlocks) {
+      ctx.fillStyle = css(zoneVar(b.watt, ftp));
+      ctx.fillRect(x(t) + 0.5, y(b.watt), x(t + b.dauer) - x(t) - 1, (h - fuss) - y(b.watt));
       t += b.dauer;
     }
     ctx.globalAlpha = 1;
-    zeichneZeitachse(ctx, css, w, h, fuss, total, 1, blocks);
+    if (gross) {
+      zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
+      zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
+      zeichneBlockLabels(ctx, css, effBlocks, total, w, h, kopf, fuss, maxW, s);
+    }
+    zeichneZeitachse(ctx, css, w, h, fuss, total, s, blocks);
 
     zeichneLeistungslinie(ctx, css, samples, count, k => {
       const t = samples[k * FIELDS];
       return istPause?.(t) ? null : x(zeitMap(t));
-    }, y);
+    }, y, 1.5 * Math.min(s, 1.6));
 
     if (count) {
       const px = x(zeitMap(samples[(count - 1) * FIELDS]));
@@ -345,7 +360,7 @@ export class WorkoutChart {
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    zeichneKlammern(ctx, css, w, gruppen, total);
+    zeichneKlammern(ctx, css, w, gruppen, total, s);
   }
 }
 
