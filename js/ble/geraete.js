@@ -91,14 +91,37 @@ class GeraeteManager extends EventTarget {
   #verbindet = new Map();   // rolle → laufendes verbinde()-Promise (wird geteilt)
   #watchdog = null;
   #snapshot = '';
+  #sessionAktiv = false;    // Fahrt läuft → Trainer darf/soll selbst reconnecten
+  #befunde = { trainer: null, hr: null, controller: null };  // letzter verbinde()-Fehlgrund
+
+  // Reconnect-Absicht an den Fahrt-Lebenszyklus koppeln: während der Fahrt
+  // kämpft der Trainer um die Verbindung, danach ist eine Trennung final
+  // (Pool-Eintrag fällt raus, Leiste degradiert auf „gemerkt")
+  starteSession() {
+    this.#sessionAktiv = true;
+    for (const c of this.#clients.trainer) c.autoReconnect = true;
+  }
+
+  beendeSession() {
+    this.#sessionAktiv = false;
+    for (const c of this.#clients.trainer) c.stoppeReconnect();
+    // Wer beim Fahrtende gerade getrennt war (Reconnect lief noch), ist jetzt
+    // eine Leiche — raus, sonst hält er den Watchdog ewig am Laufen
+    const tote = this.#clients.trainer.filter(c => !c.device?.gatt.connected);
+    for (const c of tote) c.disconnect({ gatt: false });
+    if (tote.length) {
+      this.#clients.trainer = this.#clients.trainer.filter(c => !tote.includes(c));
+      this.#change();
+    }
+  }
 
   #change() {
     this.dispatchEvent(new Event('change'));
     this.#pruefeWatchdog();
   }
 
-  // Watchdog entfernt NICHTS (der FTMS-Client reconnectet selbst) — er
-  // erkennt nur Live-Statuswechsel und stößt die Renderer an
+  // Watchdog entfernt NICHTS (Pool-Cleanup machen die disconnected-Listener) —
+  // er erkennt nur still abgerissene Verbindungen und stößt die Renderer an
   #pruefeWatchdog() {
     const aktiv = Object.values(this.#clients).some(l => l.length);
     if (aktiv && !this.#watchdog) {
@@ -124,8 +147,25 @@ class GeraeteManager extends EventTarget {
   async status(rolle) {
     if (this.clients(rolle).length) return 'verbunden';
     if (this.#verbindet.has(rolle)) return 'verbindet';
+    // FTMS-interner Reconnect (Session): ehrlich „verbindet" statt „gemerkt"
+    if (rolle === 'trainer' && this.#clients.trainer.some(c => c.verbindetNeu)) return 'verbindet';
     return (await this.gemerkte(rolle)).length ? 'gemerkt' : 'fehlt';
   }
+
+  // Gemerkte Einträge, die Chrome noch kennt (getDevices) — schnell, braucht
+  // keine User-Geste. Leer trotz gemerkter Geräte = Berechtigung weg → nur
+  // der Chooser hilft. Ohne getDevices-Support ebenfalls leer (Chooser-Weg).
+  async autorisiert(rolle) {
+    if (!kannMerken()) return [];
+    try {
+      const ids = new Set((await navigator.bluetooth.getDevices()).map(d => d.id));
+      return (await this.gemerkte(rolle)).filter(e => ids.has(e.id));
+    } catch { return []; }
+  }
+
+  // Warum hat das letzte verbinde() der Rolle nichts geliefert?
+  // null | 'nichtAutorisiert' | 'schlaeft'
+  befund(rolle) { return this.#befunde[rolle]; }
 
   // Gelernte Tastenbelegung sofort an verbundene Controller durchreichen —
   // die Instanzen lesen ihre Map sonst nur beim Verbindungsaufbau
@@ -150,21 +190,30 @@ class GeraeteManager extends EventTarget {
 
   async #verbindeClient(rolle, device) {
     const settings = await getSettings();
-    const client = this.#neuerClient(rolle, settings);
-    await client.connect(device);
-    // Trennung nur melden — nicht entfernen: FTMS reconnectet selbstständig,
-    // und clients() filtert ohnehin live auf gatt.connected
-    client.addEventListener('disconnected', () => this.#change());
-    client.addEventListener('reconnected', () => this.#change());
-    // Vorgänger desselben Geräts ERSETZEN heißt: sauber abbauen — sonst
-    // lebt dessen Reconnect-Schleife/Listener als Zombie weiter und
-    // verbindet z. B. den Trainer nach bewusstem Trennen wieder
+    // Vorgänger desselben Geräts ZUERST entwaffnen (Listener/Timer weg), aber
+    // OHNE GATT-Trennung: Clients gleicher device.id teilen sich die physische
+    // Verbindung — ein spätes alt.disconnect() würde den frisch verbundenen
+    // neuen Client gleich wieder trennen (Livetest: Pad nicht re-addbar)
     for (const alt of this.#clients[rolle]) {
-      if (alt.device?.id === device.id) alt.disconnect();
+      if (alt.device?.id === device.id) alt.disconnect({ gatt: false });
     }
-    this.#clients[rolle] = this.#clients[rolle]
-      .filter(c => c.device?.id !== device.id)
-      .concat(client);
+    this.#clients[rolle] = this.#clients[rolle].filter(c => c.device?.id !== device.id);
+    const client = this.#neuerClient(rolle, settings);
+    if (rolle === 'trainer') client.autoReconnect = this.#sessionAktiv;
+    await client.connect(device);
+    const raus = () => {
+      client.disconnect({ gatt: false });      // Listener der Leiche lösen
+      this.#clients[rolle] = this.#clients[rolle].filter(c => c !== client);
+    };
+    client.addEventListener('disconnected', () => {
+      // Trainer mit aktiver Session reconnectet selbst und bleibt im Pool —
+      // alles andere ist nach Trennung eine Leiche und fliegt raus
+      if (!(rolle === 'trainer' && client.autoReconnect)) raus();
+      this.#change();
+    });
+    client.addEventListener('reconnected', () => this.#change());
+    if (rolle === 'trainer') client.addEventListener('aufgegeben', () => { raus(); this.#change(); });
+    this.#clients[rolle].push(client);
     return client;
   }
 
@@ -184,18 +233,26 @@ class GeraeteManager extends EventTarget {
   }
 
   async #verbindeInner(rolle) {
+    this.#befunde[rolle] = null;
     const verbundeneIds = new Set(this.clients(rolle).map(c => c.device?.id));
     for (const eintrag of await this.gemerkte(rolle)) {
       if (verbundeneIds.has(eintrag.id)) continue;
       try {
         const device = await findeGemerktesGeraet(eintrag.id);
-        if (!device) continue;
+        if (!device) {
+          // Chrome kennt die id nicht mehr (Berechtigung nicht persistiert) —
+          // hier hilft nur der Chooser, nicht „Gerät aufwecken"
+          this.#befunde[rolle] ??= 'nichtAutorisiert';
+          continue;
+        }
         await verbindeBekanntes(device);
         await this.#verbindeClient(rolle, device);
       } catch (err) {
+        this.#befunde[rolle] = 'schlaeft';
         logWarn('geraete', `${rolle} verbinden fehlgeschlagen (${eintrag.name ?? eintrag.id})`, err.message);
       }
     }
+    if (this.clients(rolle).length) this.#befunde[rolle] = null;
     return this.clients(rolle).length;
   }
 

@@ -28,8 +28,11 @@ export class HeartRate extends EventTarget {
   get deviceName() { return this.#device?.name ?? null; }
   get device() { return this.#device; }
 
-  disconnect() {
+  // gatt:false = nur Teardown — die physische Verbindung ist je device.id geteilt
+  disconnect({ gatt = true } = {}) {
     if (this.#onDisconnect) this.#device?.removeEventListener('gattserverdisconnected', this.#onDisconnect);
-    try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
+    if (gatt) {
+      try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
+    }
   }
 }

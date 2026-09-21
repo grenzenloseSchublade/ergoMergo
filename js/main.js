@@ -82,15 +82,20 @@ async function startRideInner(programm) {
   let ftms = geraeteManager.client('trainer');
   try {
     if (!ftms) {
-      // Chooser nur, wenn KEIN Trainer gemerkt ist — dann ist die User-Geste
-      // noch frisch. Nach einem langen (4-s-)Verbindungsversuch wäre die
-      // Geste verbraucht und requestDevice würde mit SecurityError platzen.
+      // Chooser nur mit frischer User-Geste — nach einem langen (4-s-)
+      // Verbindungsversuch wäre sie verbraucht und requestDevice würde mit
+      // SecurityError platzen. Frisch ist sie in zwei Fällen: nichts gemerkt,
+      // oder gemerkt aber Chrome kennt die Berechtigung nicht mehr
+      // (getDevices leer → verbinde() kann nur scheitern).
       if ((await geraeteManager.gemerkte('trainer')).length === 0) {
+        ftms = await geraeteManager.koppel('trainer');
+      } else if ((await geraeteManager.autorisiert('trainer')).length === 0) {
+        toast('Bluetooth-Berechtigung abgelaufen — Trainer bitte neu wählen');
         ftms = await geraeteManager.koppel('trainer');
       } else {
         await geraeteManager.verbinde('trainer');
         ftms = geraeteManager.client('trainer');
-        if (!ftms) throw Object.assign(new Error('Trainer nicht erreichbar — Gerät wach? Sonst in der Geräte-Leiste neu koppeln.'), { name: 'NichtErreichbar' });
+        if (!ftms) throw Object.assign(new Error('Trainer schläft — Pedal kurz drehen, dann erneut starten.'), { name: 'NichtErreichbar' });
       }
     }
   } catch (err) {
@@ -106,6 +111,7 @@ async function startRideInner(programm) {
   $('#bt-support').textContent = '';
   requestPersistence();
   logInfo('app', `Session-Start: ${programm?.name ?? 'Freies Fahren'}`);
+  geraeteManager.starteSession();           // Trainer kämpft ab jetzt um die Verbindung
   const session = new Session(ftms, settings, programm);
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
@@ -117,7 +123,10 @@ async function startRideInner(programm) {
   rideScreen = new RideScreen(screens.ride, session, settings, async () => {
     rideScreen.destroy();
     rideScreen = null;
-    // Verbindung lebt im Pool weiter — getrennt wird über die Geräte-Leiste
+    // Verbindung lebt im Pool weiter — getrennt wird über die Geräte-Leiste.
+    // Aber: ohne Fahrt kein Auto-Reconnect mehr (sonst kämpft die App nach
+    // Trainer-Standby endlos weiter — Livetest: >25 min Reconnect-Schleife)
+    geraeteManager.beendeSession();
     keepAwake(false);
     if (session.count > 0) toastOk('Fahrt gespeichert');
     // FTP-Rampentest: 0,75 × beste 60-s-Leistung als neuen FTP anbieten

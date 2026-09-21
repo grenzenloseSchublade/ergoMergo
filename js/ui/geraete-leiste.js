@@ -48,9 +48,15 @@ async function zeichneGeraeteLeisteInner() {
           await geraeteManager.koppel(rolle);
           toastOk(`${label} gekoppelt & verbunden`);
           if (rolle === 'controller') toast('Tipp: linkes und rechtes Pad sind eigene Geräte — die andere Seite über „+ 2. Pad" koppeln');
+        } else if ((await geraeteManager.autorisiert(rolle)).length === 0) {
+          // Chrome kennt die Berechtigung nicht mehr — verbinde() kann nur
+          // scheitern; die Geste ist noch frisch → direkt der Chooser
+          toast(`${label}: Berechtigung abgelaufen — bitte neu wählen`);
+          await geraeteManager.koppel(rolle);
+          toastOk(`${label} neu gekoppelt & verbunden`);
         } else {
           const n = await geraeteManager.verbinde(rolle);
-          if (!n) toastErr(`${label} nicht erreichbar — Gerät wach?`);
+          if (!n) toastErr(`${label} schläft — Gerät wecken (kurz bewegen/Pedal drehen) und erneut tippen`);
         }
       } catch (err) {
         if (err.name !== 'NotFoundError') toastErr(`${label}: ${err.message}`);

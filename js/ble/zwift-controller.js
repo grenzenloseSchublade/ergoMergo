@@ -126,12 +126,15 @@ export class ZwiftController extends EventTarget {
     }
   }
 
-  disconnect() {
+  // gatt:false = nur Teardown — die physische Verbindung ist je device.id geteilt
+  disconnect({ gatt = true } = {}) {
     if (this.#onDisconnect) this.#device?.removeEventListener('gattserverdisconnected', this.#onDisconnect);
     // Chrome liefert beim Reconnect dieselben Characteristic-Objekte —
     // ohne Abbau würde eine ersetzte Instanz weiter Notifications empfangen
     if (this.#onNotifyFn) this.#asyncCh?.removeEventListener('characteristicvaluechanged', this.#onNotifyFn);
-    try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
+    if (gatt) {
+      try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
+    }
   }
 }
 

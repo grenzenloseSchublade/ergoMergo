@@ -14,16 +14,28 @@ const BEKANNTE_FW = '3.5.37';        // zuletzt gegen diese CORE-2-Firmware gete
 
 import { logInfo, logWarn, logError } from '../logger.js';
 
+// Reconnect-Obergrenze: bei 10-s-Backoff ~5 min — danach ist der Trainer
+// erfahrungsgemäß aus, nicht kurz gestört
+const MAX_RECONNECT = 30;
+
 export class FTMS extends EventTarget {
   #device = null;
   #cp = null;
   #pending = null;        // { opcode, resolve, reject, timer } — genau ein ausstehender Write
   #wantConnection = false;
   #reconnectTimer = null;
+  #reconnectVersuche = 0;
+  #verbindetNeu = false;
   #onGattWeg = null;
   connected = false;
   features = null;
   firmware = null;
+  // Reconnect-Absicht gehört zur SESSION, nicht zum Client: der GeraeteManager
+  // schaltet sie bei Fahrt-Start/-Ende — ohne Fahrt bleibt eine Trennung final
+  // (Pool-Eintrag fällt raus, Leiste degradiert auf „gemerkt")
+  autoReconnect = false;
+
+  get verbindetNeu() { return this.#verbindetNeu; }
 
   get deviceName() { return this.#device?.name ?? null; }
   get device() { return this.#device; }
@@ -35,6 +47,8 @@ export class FTMS extends EventTarget {
     this.#device.removeEventListener('gattserverdisconnected', this.#onGattWeg);
     this.#device.addEventListener('gattserverdisconnected', this.#onGattWeg);
     this.#wantConnection = true;
+    this.#reconnectVersuche = 0;
+    this.#verbindetNeu = false;
     try {
       await this.#setup();
     } catch (err) {
@@ -134,30 +148,58 @@ export class FTMS extends EventTarget {
       this.#pending.reject(new Error('Verbindung getrennt'));
       this.#pending = null;
     }
-    logWarn('ftms', 'Verbindung getrennt' + (this.#wantConnection ? ', versuche Reconnect' : ''));
+    const will = this.#wantConnection && this.autoReconnect;
+    logWarn('ftms', 'Verbindung getrennt' + (will ? ', versuche Reconnect' : ''));
     this.dispatchEvent(new Event('disconnected'));
-    if (this.#wantConnection) this.#scheduleReconnect(1000);
+    if (will) {
+      this.#reconnectVersuche = 0;
+      this.#scheduleReconnect(1000);
+    }
   }
 
   #scheduleReconnect(delay) {
     clearTimeout(this.#reconnectTimer);
+    this.#verbindetNeu = true;
     this.#reconnectTimer = setTimeout(async () => {
-      if (!this.#wantConnection) return;
+      if (!this.#wantConnection || !this.autoReconnect) { this.#verbindetNeu = false; return; }
       try {
         await this.#setup();
+        this.#reconnectVersuche = 0;
+        this.#verbindetNeu = false;
         logInfo('ftms', 'Reconnect erfolgreich');
         this.dispatchEvent(new Event('reconnected'));
       } catch (err) {
-        logError('ftms', `Reconnect fehlgeschlagen (nächster in ${Math.min(delay * 2, 10000)} ms)`, err.message);
+        this.#reconnectVersuche++;
+        if (this.#reconnectVersuche >= MAX_RECONNECT) {
+          logError('ftms', `Reconnect nach ${this.#reconnectVersuche} Versuchen aufgegeben`, err.message);
+          this.stoppeReconnect();
+          this.dispatchEvent(new Event('aufgegeben'));
+          return;
+        }
+        logError('ftms', `Reconnect fehlgeschlagen (Versuch ${this.#reconnectVersuche}, nächster in ${Math.min(delay * 2, 10000)} ms)`, err.message);
+        this.dispatchEvent(new CustomEvent('reconnectfehler', { detail: { versuch: this.#reconnectVersuche } }));
         this.#scheduleReconnect(Math.min(delay * 2, 10000));
       }
     }, delay);
   }
 
-  disconnect() {
-    this.#wantConnection = false;
+  // Reconnect-Schleife beenden, Verbindung (falls vorhanden) unangetastet lassen
+  stoppeReconnect() {
+    this.autoReconnect = false;
+    this.#verbindetNeu = false;
     clearTimeout(this.#reconnectTimer);
-    try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
+    this.#reconnectTimer = null;
+  }
+
+  // gatt:false = nur Teardown (Listener/Timer) — die physische Verbindung ist
+  // je device.id GETEILT; beim Ersetzen einer Instanz darf sie nicht mit fallen
+  disconnect({ gatt = true } = {}) {
+    this.#wantConnection = false;
+    this.stoppeReconnect();
+    if (this.#onGattWeg) this.#device?.removeEventListener('gattserverdisconnected', this.#onGattWeg);
+    if (gatt) {
+      try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
+    }
     this.connected = false;
   }
 }
