@@ -6,10 +6,8 @@ const CH_HR = 0x2a37;
 export class HeartRate extends EventTarget {
   #device = null;
 
-  async connect(device = null) {
-    this.#device = device ?? await navigator.bluetooth.requestDevice({
-      filters: [{ services: [HR_SERVICE] }],
-    });
+  async connect(device) {
+    this.#device = device;                     // Chooser läuft in der Fassade
     const server = await this.#device.gatt.connect();
     const svc = await server.getPrimaryService(HR_SERVICE);
     const ch = await svc.getCharacteristic(CH_HR);

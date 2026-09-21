@@ -41,11 +41,8 @@ export class ZwiftController extends EventTarget {
   get deviceName() { return this.#device?.name ?? null; }
   get device() { return this.#device; }
 
-  async connect(device = null) {
-    this.#device = device ?? await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'Zwift' }],
-      optionalServices: [SERVICE_ALT, SERVICE_FC82],
-    });
+  async connect(device) {
+    this.#device = device;                     // Chooser läuft in der Fassade
     const server = await this.#device.gatt.connect();
 
     let svc;

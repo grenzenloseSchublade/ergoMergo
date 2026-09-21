@@ -181,30 +181,3 @@ export async function renderDetail(root, session, onClose) {
   };
   return cleanup;
 }
-
-function drawWhole(chart, samples, count) {
-  const c = chart.canvas, ctx = chart.ctx;
-  const dpr = devicePixelRatio || 1;
-  const w = c.clientWidth, h = c.clientHeight;
-  c.width = w * dpr; c.height = h * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (!count) return;
-  let maxW = 100;
-  for (let k = 0; k < count; k++) maxW = Math.max(maxW, samples[k * FIELDS + 1], samples[k * FIELDS + 2]);
-  maxW *= 1.1;
-  const x = k => k / count * w, y = v => h - v / maxW * (h - 8);
-  const css = n => getComputedStyle(c).getPropertyValue(n).trim();
-  ctx.fillStyle = css('--target-fill');
-  ctx.beginPath();
-  ctx.moveTo(0, h);
-  for (let k = 0; k < count; k++) ctx.lineTo(x(k), y(samples[k * FIELDS + 2]));
-  ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = css('--power-line');
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (let k = 0; k < count; k++) {
-    const px = x(k), py = y(samples[k * FIELDS + 1]);
-    k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
-  }
-  ctx.stroke();
-}

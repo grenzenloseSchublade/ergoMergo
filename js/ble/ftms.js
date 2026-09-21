@@ -8,7 +8,6 @@ const CH_FW_REV = 0x2a26;
 const CH_BIKE_DATA = 0x2ad2;
 const CH_FEATURE = 0x2acc;
 const CH_CONTROL = 0x2ad9;
-const CH_STATUS = 0x2ada;
 
 const RESULT = { 1: 'Success', 2: 'Op Code Not Supported', 3: 'Invalid Parameter', 4: 'Operation Failed', 5: 'Control Not Permitted' };
 const BEKANNTE_FW = '3.5.37';        // zuletzt gegen diese CORE-2-Firmware getestet
@@ -30,11 +29,8 @@ export class FTMS extends EventTarget {
   get device() { return this.#device; }
 
   // Optionales device: bereits autorisiertes Gerät (Schnellverbindung ohne Chooser)
-  async connect(device = null) {
-    this.#device = device ?? await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'KICKR' }, { services: [FTMS_SERVICE] }],
-      optionalServices: [FTMS_SERVICE, DIS_SERVICE],
-    });
+  async connect(device) {
+    this.#device = device;                     // Chooser läuft in der Fassade
     this.#onGattWeg ??= () => this.#onDisconnected();
     this.#device.removeEventListener('gattserverdisconnected', this.#onGattWeg);
     this.#device.addEventListener('gattserverdisconnected', this.#onGattWeg);
@@ -87,13 +83,6 @@ export class FTMS extends EventTarget {
     this.#cp.addEventListener('characteristicvaluechanged', this.#onCpIndication);
     await this.#cp.startNotifications();
 
-    try {
-      const st = await svc.getCharacteristic(CH_STATUS);
-      st.removeEventListener('characteristicvaluechanged', this.#onMachineStatus);
-      st.addEventListener('characteristicvaluechanged', this.#onMachineStatus);
-      await st.startNotifications();
-    } catch { /* Status-Characteristic ist optional */ }
-
     await this.#write(0x00);          // Request Control — zwingend als Erstes
     await this.#write(0x07);          // Start/Resume
     this.connected = true;
@@ -105,10 +94,6 @@ export class FTMS extends EventTarget {
   };
 
   #onCpIndication = e => this.#onIndication(e.target.value);
-
-  #onMachineStatus = e => {
-    this.dispatchEvent(new CustomEvent('machinestatus', { detail: new Uint8Array(e.target.value.buffer)[0] }));
-  };
 
   #onIndication(value) {
     const b = new Uint8Array(value.buffer);

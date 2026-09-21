@@ -12,7 +12,7 @@ import { ZwiftController } from './zwift-controller.js';
 
 export const kannMerken = () => !!navigator.bluetooth?.getDevices;
 
-export async function findeGemerktesGeraet(id) {
+async function findeGemerktesGeraet(id) {
   if (!id || !kannMerken()) return null;
   try {
     const geraete = await navigator.bluetooth.getDevices();
@@ -23,7 +23,7 @@ export async function findeGemerktesGeraet(id) {
 // Verbindet ein bereits autorisiertes Gerät: erst direkt, sonst auf
 // Advertisement warten (Gerät muss wach sein), dann verbinden.
 // Kurzes Fenster: ein schlafendes Gerät darf den Kaltstart nicht lange bremsen
-export async function verbindeBekanntes(device, timeoutMs = 4000) {
+async function verbindeBekanntes(device, timeoutMs = 4000) {
   try {
     await device.gatt.connect();
     return device;
@@ -54,7 +54,7 @@ export function eintraegeVon(geraete, rolle) {
   return Array.isArray(e) ? e : [e];          // Migration: Alt-Objekt → Liste
 }
 
-export async function merkeGeraet(rolle, device, extra = {}) {
+async function merkeGeraet(rolle, device, extra = {}) {
   const s = await getSettings();
   const geraete = { ...(s.geraete ?? {}) };
   const neu = { id: device.id, name: device.name ?? null, ...extra };
@@ -68,25 +68,11 @@ export async function merkeGeraet(rolle, device, extra = {}) {
   logInfo('geraete', `${rolle} gemerkt: ${device.name}`);
 }
 
-export async function vergissGeraet(rolle) {
+async function vergissGeraet(rolle) {
   const s = await getSettings();
   const geraete = { ...(s.geraete ?? {}) };
   delete geraete[rolle];
   await setSetting('geraete', geraete);
-}
-
-// Bequemer Einstieg: gemerktes Gerät der Rolle suchen und verbinden, null wenn nicht möglich
-export async function schnellverbinde(rolle) {
-  const s = await getSettings();
-  const eintrag = s.geraete?.[rolle];
-  const device = await findeGemerktesGeraet(eintrag?.id);
-  if (!device) return null;
-  try {
-    return await verbindeBekanntes(device);
-  } catch (err) {
-    logWarn('geraete', `Schnellverbindung ${rolle} fehlgeschlagen`, err.message);
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -227,4 +213,3 @@ class GeraeteManager extends EventTarget {
 }
 
 export const geraeteManager = new GeraeteManager();
-export { CHOOSER_FILTER };
