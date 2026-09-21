@@ -60,6 +60,14 @@ export class RideScreen {
       });
     }
     this.#bind();
+    // Chart-Resize (Rotation, Fokus-Wechsel, Fenster): sofort neu zeichnen
+    // statt auf den nächsten Sekunden-Tick zu warten — sonst streckt CSS
+    // die alte Bitmap kurz verzerrt (Standard-Muster: ResizeObserver + rAF)
+    this.#resizeObs = new ResizeObserver(() => {
+      cancelAnimationFrame(this.#resizeRaf);
+      this.#resizeRaf = requestAnimationFrame(() => this.render());
+    });
+    this.#resizeObs.observe(root.querySelector('#live-chart'));
     // session stirbt mit der Fahrt (Abos dort unkritisch); ftms lebt im Pool
     // weiter — dessen Listener MÜSSEN in destroy() wieder abgebaut werden
     session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
@@ -345,6 +353,8 @@ export class RideScreen {
   #endArm = null;
   #cursorBlinkBis = 0;
   #statusTimer = null;
+  #resizeObs = null;
+  #resizeRaf = 0;
 
   // Erfolgsmeldungen verschwinden nach kurzer Zeit — dauerhaft sichtbar
   // bleiben nur Fehler (weniger Rauschen in der Sekundärzeile)
@@ -426,6 +436,8 @@ export class RideScreen {
 
   destroy() {
     this.#tot = true;
+    this.#resizeObs?.disconnect();
+    cancelAnimationFrame(this.#resizeRaf);
     this.#pip?.destroy();
     this.#pip = null;
     removeEventListener('keydown', this.#keys);
