@@ -260,7 +260,12 @@ export class RideScreen {
       if (!aktiv) grid.classList.add(`fokus-${ziel}`);
       this.render();                           // Canvas an neue Größe anpassen
     };
-    this.$('#m-watt').onclick = () => setzeFokus('werte');
+    // Großzügige Klickfläche: der gesamte obere Werte-Block toggelt den
+    // Werte-Fokus (nicht nur die Watt-Zahl); Buttons blieben ausgenommen
+    this.root.querySelector('.metrics').onclick = e => {
+      if (e.target.closest('button')) return;
+      setzeFokus('werte');
+    };
     this.$('#live-chart').onclick = e => {
       // Totzonen: oberer Rand (knapp verfehlte Chips) und äußerste Ränder
       const rect = e.currentTarget.getBoundingClientRect();

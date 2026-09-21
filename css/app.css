@@ -210,7 +210,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   color: var(--z4); border: 1px solid var(--z4); border-radius: 999px;
   padding: .15rem .7rem; font-size: .72rem; letter-spacing: .04em; z-index: 5;
 }
-.metrics { position: relative; }
+.metrics { position: relative; cursor: pointer; }
 /* Platz schaffen, wenn der Demo-Badge eingeblendet ist */
 .metrics:has(.demo-badge:not([hidden])) { padding-top: 2rem; }
 
