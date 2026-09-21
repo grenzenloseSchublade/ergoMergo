@@ -4,6 +4,8 @@
 // Bausteine + Konkatenation über die AudioContext-Uhr überleben das.
 // Live-TTS (signals.sage) bleibt nur Fallback, wenn Bausteine fehlen.
 
+import { wecke, quelleStart, quelleEnde } from './signals.js';
+
 const BASE = new URL('../audio/', import.meta.url);
 
 let ctx = null;
@@ -54,17 +56,22 @@ export function initAnsagen(audioCtx) {
   for (const n of ['minuten', 'minute', 'watt', 'und', 'hundert', 'fertig', 'sekunden']) lade(n);
 }
 
-// Baustein-Folge lückenlos über die AudioContext-Uhr planen
+// Baustein-Folge lückenlos über die AudioContext-Uhr planen.
+// Danach den Context wieder schlafen legen (Quellen-Zählung in signals.js) —
+// ein dauerhaft laufender Context hält sonst den Android-Audiofokus.
 async function spiele(namen) {
   if (!ctx || !namen?.length) return false;
   const bufs = await Promise.all(namen.map(lade));
   if (bufs.some(b => !b)) return false;         // Baustein fehlt → Fallback TTS
+  wecke();
   if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { return false; } }
   let t = ctx.currentTime + 0.05;
   for (const buf of bufs) {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
+    quelleStart();
+    src.onended = quelleEnde;
     src.start(t);
     t += buf.duration + 0.02;
   }
