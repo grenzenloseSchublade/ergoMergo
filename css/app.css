@@ -307,17 +307,21 @@ button:disabled { cursor: default; }
 /* Fokus-Zustände (symmetrisch): Tap auf die Wattzahl → Werte groß, Graph
    als Orientierungsstreifen; Tap auf den Graphen → Graph groß in voller
    Detailstufe (inline), Werte kompakt. Erneuter Tap zurück. */
-.ride-grid.fokus-werte .metric-power .value { font-size: clamp(6rem, 30vmin, 12rem); }
+.ride-grid.fokus-werte .metric-power .value { font-size: clamp(6rem, 28vmin, 12rem); }
 .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(2.4rem, 11vmin, 4.5rem); }
 .ride-grid.fokus-werte #live-chart { height: 74px; }
 .ride-grid.fokus-werte .row-actions { display: none; }
-/* Sekundärzeile kompakt: rpm und Herzfrequenz behalten, Rest weg */
-.ride-grid.fokus-werte .row-secondary > span:has(#m-kj),
-.ride-grid.fokus-werte .row-secondary > #m-total { display: none; }
+/* Sekundärzeile vollwertig und fahrtauglich groß (inkl. kJ und gesamt) —
+   die Icons skalieren per em mit */
+.ride-grid.fokus-werte .row-secondary { font-size: clamp(1.1rem, 4.2vmin, 1.6rem); gap: .3rem 1.2rem; }
+.ride-grid.fokus-werte .row-secondary .status { font-size: .72em; }
+.ride-grid.fokus-werte .row-secondary .si,
+.ride-grid.fokus-graph .row-secondary .si { width: 1em; height: 1em; vertical-align: -.12em; }
 
 .ride-grid.fokus-graph #live-chart { height: clamp(300px, 52vh, 480px); }
 .ride-grid.fokus-graph .metric-power .value { font-size: clamp(2.2rem, 9vmin, 3.4rem); }
 .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.3rem, 5.5vmin, 2rem); }
+.ride-grid.fokus-graph .row-secondary { font-size: clamp(.95rem, 3vmin, 1.15rem); }
 .ride-grid.fokus-graph .restbalken { display: none; }
 
 /* Querformat: Werte links, Chart groß in der Mitte (volle Resthöhe),
