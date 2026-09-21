@@ -454,5 +454,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gear svg { width: 21px; height: 21px; display: block; }
 
 /* Mini-Icons (Lucide) vor den Sekundärwerten: rpm/HF/Energie */
-.row-secondary .si { width: 13px; height: 13px; vertical-align: -2px; margin-right: .2rem; color: var(--ink3); }
+.row-secondary .si { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: .2rem; color: var(--ink3); font-style: normal; }
+.row-secondary .si svg { display: block; width: 100%; height: 100%; }
 .row-secondary .si-hf { color: var(--danger); }

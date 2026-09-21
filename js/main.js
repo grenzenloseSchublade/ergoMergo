@@ -17,6 +17,7 @@ import { startDemo } from './demo.js';
 const demoStarten = variante =>
   startDemo(variante, { show, screens, registriere: rs => { rideScreen = rs; } });
 import { zeichneGeraeteLeiste } from './ui/geraete-leiste.js';
+import { montiereIcons } from './ui/icons.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung } from './metrics.js';
@@ -385,6 +386,7 @@ $('#btn-back').addEventListener('click', goHome);
 // sobald die App läuft, weg damit
 $('#seo-intro').hidden = true;
 renderProgrammTiles();
+montiereIcons();
 $('#app-version').textContent = APP_VERSION;
 zeichneGeraeteLeiste();
 starteUpdateWatchdog($('#version-status'));

@@ -4,6 +4,22 @@
 // User-Geste. Frames werden aktiv per track.requestFrame() geschoben, weil
 // requestAnimationFrame im Hintergrund gedrosselt wird.
 
+import { zeichneIcon } from './icons.js';
+
+// Farb-Tokens zur Zeichenzeit aus dem CSS lesen — Palette-Änderungen
+// ziehen damit automatisch ins PiP-Fenster mit
+function tokens() {
+  const css = getComputedStyle(document.documentElement);
+  const t = name => css.getPropertyValue(name).trim();
+  return {
+    bg: t('--bg') || '#0b1113',
+    ink: t('--ink') || '#ecf3f5',
+    ink2: t('--ink2') || '#9fb0b6',
+    accent: t('--accent') || '#45c7d4',
+    danger: t('--danger') || '#ef6b5e',
+  };
+}
+
 export class PiP {
   #canvas = document.createElement('canvas');
   #video = document.createElement('video');
@@ -110,62 +126,49 @@ export class PiP {
 // PiP-Fenster (real oft nur 120–260 px breit) nicht lesbar hinein.
 export function zeichnePipBild(canvas, d) {
   const c = canvas.getContext('2d');
-  const { width: w, height: h } = canvas;
-  c.fillStyle = '#0b1113';
-  c.fillRect(0, 0, w, h);
+  const { width: w } = canvas;
+  const farbe = tokens();
+  c.fillStyle = farbe.bg;
+  c.fillRect(0, 0, w, canvas.height);
 
   // Ist-Watt, groß und mittig
   c.textAlign = 'center';
   c.textBaseline = 'alphabetic';
-  c.fillStyle = d.farbe || '#e8f1f2';
+  c.fillStyle = d.farbe || farbe.ink;
   c.font = '700 108px system-ui';
   // Slot fix auf 3 Ziffern bemessen — die Anzeige springt sonst bei 99→100
   const wattSlot = c.measureText('000').width;
   c.fillText(String(d.watt), w / 2, 128);
   c.font = '600 30px system-ui';
-  c.fillStyle = '#8fa3a6';
+  c.fillStyle = farbe.ink2;
   c.textAlign = 'left';
   c.fillText('W', w / 2 + wattSlot / 2 + 12, 128);
   c.textAlign = 'center';
 
   // Ziel darunter — die eine Zahl, gegen die ERG gerade regelt
   c.font = '500 34px system-ui';
-  c.fillStyle = '#45c7d4';
+  c.fillStyle = farbe.accent;
   c.fillText(`Ziel ${d.ziel} W`, w / 2, 176);
 
-  // Untere Zeile: Rest · rpm · ♥HF (HF nur mit Gurt). Als EINE zentrierte
-  // Gruppe mit festen Lücken layoutet — ein Spaltenraster kollidiert bei
-  // 3-stelligen Werten (Einheit ragte ins Herz der HF).
-  const LUECKE = 44, WERT_F = '600 42px system-ui', EINH_F = '400 26px system-ui';
+  // Untere Zeile: Rest · rpm · HF — Icons aus derselben Quelle wie der
+  // Fahrbildschirm (icons.js), als EINE zentrierte Gruppe mit festen Lücken
+  const LUECKE = 44, ICON = 26, ICON_ABSTAND = 8, WERT_F = '600 42px system-ui';
   const segmente = [];
-  if (d.rest) segmente.push({ wert: d.rest, slot: '00:00', einheit: '', farbe: '#e8f1f2' });
-  segmente.push({ wert: String(d.rpm || '–'), slot: '000', einheit: 'rpm', farbe: '#e8f1f2' });
-  if (d.hr) segmente.push({ wert: `♥ ${d.hr}`, slot: '♥ 000', einheit: '', farbe: '#ef6b5e' });
+  if (d.rest) segmente.push({ wert: d.rest, slot: '00:00', icon: 'timer', farbe: farbe.ink });
+  segmente.push({ wert: String(d.rpm || '–'), slot: '000', icon: 'rotate', farbe: farbe.ink });
+  if (d.hr) segmente.push({ wert: String(d.hr), slot: '000', icon: 'herzpuls', farbe: farbe.danger });
   c.textAlign = 'left';
-  for (const s of segmente) {
-    c.font = WERT_F;
-    // Slot nach Maximalbreite bemessen (Ziffern fix 3-stellig gedacht) —
-    // die Zeile bleibt damit über alle Werte hinweg ortsstabil
-    s.wb = c.measureText(s.slot ?? s.wert).width;
-    c.font = EINH_F;
-    s.eb = s.einheit ? c.measureText(s.einheit).width + 8 : 0;
-  }
-  const gesamt = segmente.reduce((a, s) => a + s.wb + s.eb, 0)
-    + LUECKE * (segmente.length - 1);
+  c.font = WERT_F;
+  for (const s of segmente) s.wb = ICON + ICON_ABSTAND + c.measureText(s.slot).width;
+  const gesamt = segmente.reduce((a, s) => a + s.wb, 0) + LUECKE * (segmente.length - 1);
   let x = (w - gesamt) / 2;
   for (const s of segmente) {
+    zeichneIcon(c, s.icon, x, 246 - 32, ICON, s.icon === 'herzpuls' ? farbe.danger : farbe.ink2);
     c.fillStyle = s.farbe;
     c.font = WERT_F;
+    const slotB = s.wb - ICON - ICON_ABSTAND;
     const istB = c.measureText(s.wert).width;
-    c.fillText(s.wert, x + (s.wb - istB) / 2, 246);
-    x += s.wb;
-    if (s.einheit) {
-      c.fillStyle = '#8fa3a6';
-      c.font = EINH_F;
-      c.fillText(s.einheit, x + 8, 246);
-      x += s.eb;
-    }
-    x += LUECKE;
+    c.fillText(s.wert, x + ICON + ICON_ABSTAND + (slotB - istB) / 2, 246);
+    x += s.wb + LUECKE;
   }
-  c.textAlign = 'center';
 }
