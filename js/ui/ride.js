@@ -1,7 +1,6 @@
 // Fahrbildschirm: Livewerte, ±-Bedienung mit Tastenwiederholung, Not-Stopp.
 
 import { LiveChart, WorkoutChart, zoneColor } from './chart.js';
-import { zeigeGraphOverlay, graphOverlayOffen, redrawGraphOverlay, setzeGraphOverlayTitel, schliesseGraphOverlay } from './overlay.js';
 import * as signal from '../signals.js';
 import { geraeteManager } from '../ble/geraete.js';
 import { initAnsagen, ansageBlock, ansageFertig } from '../ansagen.js';
@@ -63,14 +62,7 @@ export class RideScreen {
     this.#bind();
     // session stirbt mit der Fahrt (Abos dort unkritisch); ftms lebt im Pool
     // weiter — dessen Listener MÜSSEN in destroy() wieder abgebaut werden
-    session.addEventListener('tick', () => {
-      this.render();
-      this.#pip?.update();
-      if (graphOverlayOffen()) {
-        redrawGraphOverlay();
-        setzeGraphOverlayTitel(this.#grossTitel());
-      }
-    });
+    session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('target', () => this.render());
     session.addEventListener('error', e => this.#status(e.detail, 'err'));
     this.#abo(session.ftms, 'connected', () => this.#status('verbunden', 'ok'));
@@ -248,19 +240,26 @@ export class RideScreen {
     };
     hold(this.$('#btn-plus'), step);
     hold(this.$('#btn-minus'), -step);
-    // Large-Print-Umschalter (PM5-Muster): Tap auf die große Zahl
-    this.$('#m-watt').onclick = () =>
-      this.root.querySelector('.ride-grid').classList.toggle('large');
-    // Tap auf den Graphen: Vollbild-Overlay (gleiche Mechanik wie Vorschau/
-    // Detail) mit Live-Aktualisierung pro Tick — statt das Fahrt-Layout zu
-    // stauchen. Tap irgendwo im Overlay schließt.
+    // Fokus-Konzept (symmetrisch): Tap auf die Watt-Zahl holt die WERTE in
+    // den Fokus (Graph schrumpft zum Orientierungsstreifen), Tap auf den
+    // Graphen holt den GRAPHEN in den Fokus (Werte kompakt, Chart groß und
+    // in voller Detailstufe — inline, kein Overlay). Tap auf das bereits
+    // fokussierte Element geht zurück zu Normal.
+    const grid = this.root.querySelector('.ride-grid');
+    const setzeFokus = ziel => {
+      const aktiv = grid.classList.contains(`fokus-${ziel}`);
+      grid.classList.remove('fokus-werte', 'fokus-graph');
+      if (!aktiv) grid.classList.add(`fokus-${ziel}`);
+      this.render();                           // Canvas an neue Größe anpassen
+    };
+    this.$('#m-watt').onclick = () => setzeFokus('werte');
     this.$('#live-chart').onclick = e => {
       // Totzonen: oberer Rand (knapp verfehlte Chips) und äußerste Ränder
       const rect = e.currentTarget.getBoundingClientRect();
       if (e.clientY - rect.top < 18) return;
       const relX = (e.clientX - rect.left) / rect.width;
       if (relX < 0.05 || relX > 0.95) return;
-      this.#oeffneGrossansicht();
+      setzeFokus('graph');
     };
     // Not-Stopp mit Panik-Schutz: nach dem Stopp bleibt der Slot 3 s
     // gesperrt („GESTOPPT"), erst dann wird er zum grünen WEITER —
@@ -345,33 +344,7 @@ export class RideScreen {
   #stopSperre = null;
   #endArm = null;
   #cursorBlinkBis = 0;
-
   #statusTimer = null;
-  #overlayChart = null;       // Chart-Instanz fürs Vollbild-Overlay (lazy)
-
-  #oeffneGrossansicht() {
-    const big = document.querySelector('#graph-big');
-    this.#overlayChart = this.run ? new WorkoutChart(big) : new LiveChart(big);
-    zeigeGraphOverlay(() => this.#zeichneGross(), this.#grossTitel());
-  }
-
-  #zeichneGross() {
-    const s = this.session;
-    if (this.run) {
-      this.#overlayChart.draw(this.run.blocks, this.run.total, s.samples, s.count,
-        this.run.offset, this.settings.ftp,
-        t => this.run.programmZeit(t), false, t => this.run.istPause(t));
-    } else {
-      this.#overlayChart.draw(s.samples, s.count, s.target);
-    }
-  }
-
-  #grossTitel() {
-    const rest = this.run
-      ? `Rest ${this.run.index === -2 ? '–:–' : fmtTime(Math.max(0, this.run.restImBlock ?? 0))}`
-      : fmtTime(this.session.elapsed);
-    return `${this.session.smoothWatt} W <span>· Ziel ${this.session.target} W · ${rest}</span>`;
-  }
 
   // Erfolgsmeldungen verschwinden nach kurzer Zeit — dauerhaft sichtbar
   // bleiben nur Fehler (weniger Rauschen in der Sekundärzeile)
@@ -465,8 +438,7 @@ export class RideScreen {
     for (const [t, typ, fn] of this.#abos) t.removeEventListener(typ, fn);
     this.#abos = [];
     this.#uebernommen.clear();
-    schliesseGraphOverlay();
-    this.root.querySelector('.ride-grid').classList.remove('large');
+    this.root.querySelector('.ride-grid').classList.remove('fokus-werte', 'fokus-graph');
   }
 }
 

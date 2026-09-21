@@ -233,7 +233,10 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   flex-basis: 100%; text-align: center;
   max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.row-secondary .status[hidden] { display: none; }
+/* Platz bleibt reserviert: das Erscheinen der Meldung (STOPP, verbunden …)
+   darf die Werte darüber/darunter nicht verschieben */
+.row-secondary .status[hidden] { display: block !important; visibility: hidden; }
+.row-secondary .status { min-height: 1.2em; }
 /* Aktions-Chips in eigener Zeile, fahrtauglich groß */
 .row-actions {
   display: flex; flex-wrap: wrap; justify-content: center;
@@ -299,12 +302,21 @@ button:disabled { cursor: default; }
 .ctl-end { background: none; border: 1px solid var(--line); color: var(--ink2); font-size: .95rem; font-weight: 500; }
 .ctl-end.armiert { border-color: var(--danger); color: var(--danger); font-weight: 700; }
 
-/* Large Print (PM5-Muster): Tap auf die Wattzahl — nur die Kernwerte, riesig */
-.ride-grid.large #live-chart, .ride-grid.large .row-actions { display: none; }
-.ride-grid.large .row-secondary > :not(.status) { display: none; }
-.ride-grid.large .restbalken { display: none; }
-.ride-grid.large .metric-power .value { font-size: clamp(6rem, 34vmin, 14rem); }
-.ride-grid.large .metric:not(.metric-power) .value { font-size: clamp(2.6rem, 12vmin, 5rem); }
+/* Fokus-Zustände (symmetrisch): Tap auf die Wattzahl → Werte groß, Graph
+   als Orientierungsstreifen; Tap auf den Graphen → Graph groß in voller
+   Detailstufe (inline), Werte kompakt. Erneuter Tap zurück. */
+.ride-grid.fokus-werte .metric-power .value { font-size: clamp(6rem, 30vmin, 12rem); }
+.ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(2.4rem, 11vmin, 4.5rem); }
+.ride-grid.fokus-werte #live-chart { height: 74px; }
+.ride-grid.fokus-werte .row-actions { display: none; }
+/* Sekundärzeile kompakt: rpm und Herzfrequenz behalten, Rest weg */
+.ride-grid.fokus-werte .row-secondary > span:has(#m-kj),
+.ride-grid.fokus-werte .row-secondary > #m-total { display: none; }
+
+.ride-grid.fokus-graph #live-chart { height: clamp(300px, 52vh, 480px); }
+.ride-grid.fokus-graph .metric-power .value { font-size: clamp(2.2rem, 9vmin, 3.4rem); }
+.ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.3rem, 5.5vmin, 2rem); }
+.ride-grid.fokus-graph .restbalken { display: none; }
 
 /* Querformat: Werte links, Chart groß in der Mitte (volle Resthöhe),
    Chips als schmale Leiste darunter, Bedienung rechts */
@@ -334,8 +346,15 @@ button:disabled { cursor: default; }
   .controls #btn-stop { margin-top: .9rem; } /* vertikal: kein Overflow möglich */
   .controls #btn-end { margin-top: .9rem; }
   .ctl { min-width: 96px; }
-  /* Large Print quer: nur Werte + Bedienung */
-  .ride-grid.large { grid-template-columns: 1fr auto; grid-template-areas: "metrics controls"; }
+  /* Fokus quer: Spaltenverhältnis kippt statt Zeilenhöhen */
+  .ride-grid.fokus-werte { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; }
+  .ride-grid.fokus-werte .metric-power .value { font-size: clamp(4.5rem, 24vmin, 9rem); }
+  .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(2rem, 9vmin, 3.2rem); }
+  .ride-grid.fokus-werte #live-chart { height: 100%; }   /* Streifen-Regel gilt nur hochkant */
+  .ride-grid.fokus-graph { grid-template-columns: 9.5rem minmax(0, 1fr) auto; }
+  .ride-grid.fokus-graph #live-chart { height: 100%; }
+  .ride-grid.fokus-graph .metric-power .value { font-size: clamp(2rem, 10vmin, 3rem); }
+  .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.1rem, 5vmin, 1.6rem); }
 }
 
 /* ---------- Detail ---------- */
