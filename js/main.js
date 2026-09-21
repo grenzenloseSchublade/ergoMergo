@@ -6,19 +6,19 @@ import { RideScreen } from './ui/ride.js';
 import { renderList, renderDetail } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
-import { logInfo, logError, formatLog } from './logger.js';
-import { geraeteManager, kannMerken, eintraegeVon } from './ble/geraete.js';
+import { logInfo, logError } from './logger.js';
+import { geraeteManager } from './ble/geraete.js';
 import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
-import { exportiereAlles, importiereAlles } from './backup.js';
+import { openSettings } from './ui/settings.js';
+import { startDemo } from './demo.js';
+import { zeichneGeraeteLeiste } from './ui/geraete-leiste.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung } from './metrics.js';
-import { getLogs, clearLogs } from './storage.js';
-import { download } from './export.js';
-import { PROGRAMME, expand, ProgramRun } from './program.js';
+import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
-import { initAudio, tick } from './signals.js';
+import { initAudio } from './signals.js';
 import { starteMessung } from './energie.js';
 
 const $ = s => document.querySelector(s);
@@ -128,17 +128,6 @@ async function startRideInner(programm) {
   }, run);
 }
 
-// Blockliste eines Programms für gegebene Optionen (Generator oder klassisch)
-function baueBlocks(programm, opts, ftp) {
-  return programm.generieren
-    ? programm.generieren(opts, ftp)
-    : expand(programm.bauen(opts), ftp);
-}
-
-function defaultOpts(programm) {
-  return Object.fromEntries(Object.entries(programm.optionen).map(([k, v]) => [k, v.default]));
-}
-
 // Startdialog: Optionsfelder aus der Programmdefinition
 function startDialog(programm, settings = {}) {
   const dlg = $('#dlg-start');
@@ -193,292 +182,6 @@ function startDialog(programm, settings = {}) {
     zeichne();            // erst nach showModal: Canvas braucht sein Layout
   });
 }
-
-async function openSettings() {
-  const s = await getSettings();
-  const dlg = $('#dlg-settings');
-  // Diagnose-Log laden (letzte 200 Einträge, neueste unten)
-  getLogs().then(entries => {
-    $('#log-view').textContent = entries.length
-      ? formatLog(entries.slice(-200)) : 'Noch keine Einträge.';
-    $('#log-view').scrollTop = $('#log-view').scrollHeight;
-  });
-  $('#btn-log-export').onclick = async () =>
-    download(`ergomergo-log-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.txt`,
-      formatLog(await getLogs()), 'text/plain');
-  $('#btn-log-clear').onclick = async () => {
-    await clearLogs();
-    $('#log-view').textContent = 'Geleert.';
-  };
-
-  // Geräte-Bereich: Karten je Rolle — reiner Renderer über den GeraeteManager
-  $('#geraete-hint').hidden = kannMerken();
-  const rollen = GL_ROLLEN;
-  const zeichneGeraete = async () => {
-    const geraete = (await getSettings()).geraete;
-    const liste = $('#geraete-liste');
-    liste.replaceChildren();
-    for (const [rolle, label] of rollen) {
-      const eintraege = eintraegeVon(geraete, rolle);
-      const li = document.createElement('li');
-      const namen = eintraege.map(e => `${e.name ?? e.id}${e.fw ? ` <span class="g-fw">FW ${e.fw}</span>` : ''}`).join(' + ');
-      li.innerHTML = `
-        <span class="g-icon">${GL_ICONS[rolle]}</span>
-        <span class="g-info">
-          <span class="g-rolle">${label}</span>
-          <span class="g-name">${eintraege.length ? `<i class="dot on"></i>${namen}` : '<i class="dot"></i>nicht gemerkt'}</span>
-        </span>`;
-      const aktion = document.createElement('button');
-      aktion.type = 'button';
-      if (eintraege.length) {
-        aktion.textContent = 'Entfernen';
-        aktion.className = 'ghost';
-        aktion.onclick = async () => {
-          await geraeteManager.vergiss(rolle);
-          toast(`${label} vergessen`);
-          zeichneGeraete();
-        };
-      } else {
-        aktion.textContent = 'Koppeln';
-        aktion.onclick = async () => {
-          try {
-            await geraeteManager.koppel(rolle);
-            toastOk(`${label} gekoppelt & verbunden`);
-            zeichneGeraete();
-          } catch (err) {
-            if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
-          }
-        };
-      }
-      li.append(aktion);
-      // Lenker: zweites Pad nachkoppeln (linke + rechte Seite sind eigene Geräte)
-      if (rolle === 'controller' && eintraege.length === 1) {
-        const pad2 = document.createElement('button');
-        pad2.type = 'button';
-        pad2.className = 'ghost';
-        pad2.textContent = '+ 2. Pad';
-        pad2.title = 'Zweite Lenkerseite koppeln (eigenes BLE-Gerät)';
-        pad2.onclick = async () => {
-          try {
-            await geraeteManager.koppel('controller');
-            toastOk('Zweites Pad gekoppelt & verbunden');
-            zeichneGeraete();
-          } catch (err) {
-            if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
-          }
-        };
-        li.append(pad2);
-      }
-      liste.append(li);
-    }
-  };
-  zeichneGeraete();
-
-  // Tastenbelegung des Controllers: Anzeige + Lern-Modus
-  const zeigeMap = map => {
-    const belegt = CONTROLLER_AKTIONEN.filter(([k]) => map?.[k] !== undefined && map[k] !== null);
-    $('#ctrl-map-anzeige').textContent = belegt.length
-      ? 'Belegung: ' + belegt.map(([k, l]) => `${l} = Taste ${map[k]}`).join(' · ')
-      : 'Keine Tasten zugeordnet.';
-  };
-  zeigeMap(s.controllerMap);
-  $('#btn-map-lernen').onclick = () => lerneTasten(zeigeMap);
-  history.pushState({ dialog: 'settings' }, '');
-  dlg.addEventListener('close', () => {
-    if (history.state?.dialog === 'settings') history.back();
-  }, { once: true });
-  $('#set-ftp').value = s.ftp;
-  $('#set-schritt').value = s.wattSchritt;
-  $('#set-max').value = s.maxWatt;
-  $('#set-start').value = s.startWatt;
-  $('#set-sprache').checked = s.sprachansagen;
-  $('#set-icukey').value = s.icuApiKey;
-
-  // Sicherung: Export/Import der kompletten Datenbank
-  $('#btn-backup').onclick = async () => {
-    download(`ergomergo-backup-${new Date().toISOString().slice(0, 10)}.json`,
-      await exportiereAlles(), 'application/json');
-    toastOk('Sicherung heruntergeladen');
-  };
-  $('#btn-restore').onclick = () => $('#backup-file').click();
-  $('#backup-file').onchange = async e => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const n = await importiereAlles(await file.text());
-      toastOk(`Wiederhergestellt: ${n} Fahrten — lade neu …`);
-      setTimeout(() => location.reload(), 1200);
-    } catch (err) { toastErr('Import fehlgeschlagen: ' + err.message); }
-  };
-  dlg.onclose = async () => {
-    if (dlg.returnValue !== 'ok') return;
-    await setSetting('ftp', Number($('#set-ftp').value) || 0);
-    await setSetting('wattSchritt', Math.max(1, Number($('#set-schritt').value) || 10));
-    await setSetting('maxWatt', Math.max(100, Number($('#set-max').value) || 400));
-    await setSetting('startWatt', Math.max(20, Number($('#set-start').value) || 100));
-    await setSetting('sprachansagen', $('#set-sprache').checked);
-    await setSetting('icuApiKey', $('#set-icukey').value.trim());
-    renderProgrammTiles();      // Zonenfarben/Profile an neue FTP anpassen
-    toastOk('Einstellungen gespeichert');
-  };
-  dlg.showModal();
-}
-
-// Tasten-Lern-Modus: verbindet den Controller und fragt Aktion für Aktion
-// eine Taste ab — ersetzt die alte Bit-Raterei über den Diagnose-Log.
-async function lerneTasten(zeigeMap) {
-  const dlg = $('#dlg-mapping');
-  const schritte = CONTROLLER_AKTIONEN;
-  const map = {};
-  let i = 0;
-  let fertig = false;
-  initAudio();                                   // Klick kam per Geste — Audio freischalten
-  const zeigeSchritt = () => {
-    $('#map-schritt').textContent = `Drücke die Taste für: ${schritte[i][1]}`;
-  };
-  let lauscher = [];                             // [client, fn] — beim Ende abbauen
-  const ende = () => {
-    fertig = true;
-    for (const [c, fn] of lauscher) c.removeEventListener('button', fn);
-    lauscher = [];
-    dlg.close();                                 // Verbindungen bleiben im Pool
-  };
-  $('#btn-map-abbruch').onclick = () => dlg.close();
-  // 'close' fängt ALLE Wege (ESC, Abbrechen, Zurück-Taste via popstate) —
-  // oncancel feuert bei programmatischem close() nicht
-  dlg.addEventListener('close', ende, { once: true });
-  const weiter = async () => {
-    i++;
-    if (i >= schritte.length) {
-      await setSetting('controllerMap', map);
-      geraeteManager.setzeControllerMap(map);   // verbundene Pads sofort umbelegen
-      zeigeMap(map);
-      toastOk('Tastenbelegung gespeichert');
-      ende();
-      return;
-    }
-    zeigeSchritt();
-  };
-  $('#btn-map-skip').onclick = () => {
-    if (fertig || i >= schritte.length) return;
-    map[schritte[i][0]] = null;
-    weiter();
-  };
-  const onButton = e => {
-    // i kann während des await in weiter() schon hinter dem letzten Schritt
-    // stehen (zwei Bits in einer Notification) — hart abfangen
-    if (fertig || i >= schritte.length) return;
-    const bit = e.detail;
-    if (Object.values(map).includes(bit)) {
-      $('#map-status').textContent = `Taste ${bit} ist schon belegt — andere Taste drücken.`;
-      return;
-    }
-    map[schritte[i][0]] = bit;
-    tick();
-    $('#map-status').textContent = `Taste ${bit} zugeordnet.`;
-    weiter();
-  };
-  dlg.showModal();
-  zeigeSchritt();
-  try {
-    if ((await geraeteManager.gemerkte('controller')).length === 0) {
-      await geraeteManager.koppel('controller');   // frische Geste → Chooser ok
-    } else {
-      await geraeteManager.verbinde('controller');
-    }
-    if (fertig) return;                          // Abbruch — Pool behält die Verbindung
-    if (!geraeteManager.clients('controller').length) {
-      $('#map-status').textContent = 'Controller nicht erreichbar — Gerät wecken und erneut öffnen.';
-      return;
-    }
-    const clients = geraeteManager.clients('controller');
-    for (const c of clients) { c.addEventListener('button', onButton); lauscher.push([c, onButton]); }
-    const namen = clients.map(c => c.deviceName ?? 'Controller').join(' + ');
-    $('#map-status').textContent =
-      `Verbunden: ${namen} — jetzt drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für Ride nötig.)`;
-  } catch (err) {
-    if (err.name !== 'NotFoundError') toastErr('Controller-Verbindung fehlgeschlagen: ' + err.message);
-    ende();
-  }
-}
-
-// Controller-Aktionen: EINE Quelle für Belegungsanzeige und Lern-Modus
-const CONTROLLER_AKTIONEN = [
-  ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
-  ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
-];
-
-// Geräte-Leiste auf dem Home: Status je Rolle, Tap = koppeln/verbinden/trennen.
-// Icons: Lucide (lucide.dev, MIT) — inline, kein CDN
-const GL_ICONS = {
-  trainer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>',
-  hr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>',
-  controller: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg>',
-};
-const GL_ROLLEN = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Lenker']];
-
-let glKette = Promise.resolve();
-function zeichneGeraeteLeiste() {
-  // Serialisiert + atomar (Fragment): parallele Aufrufe (Boot, goHome,
-  // change-Events) dürfen die Leiste nicht doppelt befüllen
-  glKette = glKette.then(zeichneGeraeteLeisteInner).catch(err => logError('app', 'Geräteleiste', err.message));
-  return glKette;
-}
-
-async function zeichneGeraeteLeisteInner() {
-  const wrap = $('#geraete-leiste');
-  if (!wrap) return;
-  const geraete = (await getSettings()).geraete;
-  const frag = document.createDocumentFragment();
-  for (const [rolle, label] of GL_ROLLEN) {
-    const eintraege = eintraegeVon(geraete, rolle);
-    const status = await geraeteManager.status(rolle);
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = status;
-    const name = eintraege.length === 1 ? (eintraege[0].name ?? label)
-      : eintraege.length === 2 ? `${label} (2 Pads)` : label;
-    const anz = geraeteManager.clients(rolle).length;
-    btn.innerHTML = `${GL_ICONS[rolle]}<i class="dot"></i>${status === 'fehlt' ? `+ ${label}` : name}${eintraege.length === 2 && status === 'verbunden' && anz < 2 ? ' · 1/2' : ''}`;
-    btn.title = { fehlt: `${label} koppeln`, gemerkt: `${name} verbinden`, verbindet: 'verbindet …', verbunden: `${name} trennen` }[status];
-    btn.onclick = async () => {
-      try {
-        if (status === 'verbunden') { geraeteManager.trenne(rolle); return; }
-        if (status === 'verbindet') return;
-        if (status === 'fehlt') {
-          await geraeteManager.koppel(rolle);
-          toastOk(`${label} gekoppelt & verbunden`);
-          if (rolle === 'controller') toast('Tipp: linkes und rechtes Pad sind eigene Geräte — die andere Seite über „+ 2. Pad" koppeln');
-        } else {
-          const n = await geraeteManager.verbinde(rolle);
-          if (!n) toastErr(`${label} nicht erreichbar — Gerät wach?`);
-        }
-      } catch (err) {
-        if (err.name !== 'NotFoundError') toastErr(`${label}: ${err.message}`);
-      }
-    };
-    frag.append(btn);
-    // Lenker mit nur einem gemerkten Pad: zweites direkt anbieten
-    if (rolle === 'controller' && eintraege.length === 1 && status !== 'verbindet') {
-      const pad2 = document.createElement('button');
-      pad2.type = 'button';
-      pad2.className = 'zusatz fehlt';
-      pad2.textContent = '+ 2. Pad';
-      pad2.onclick = async () => {
-        try {
-          await geraeteManager.koppel('controller');
-          toastOk('Zweites Pad gekoppelt & verbunden');
-        } catch (err) {
-          if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
-        }
-      };
-      frag.append(pad2);
-    }
-  }
-  wrap.replaceChildren(frag);
-}
-geraeteManager.addEventListener('change', zeichneGeraeteLeiste);
 
 let tilesKette = Promise.resolve();
 function renderProgrammTiles() {
@@ -672,7 +375,7 @@ async function openDetail(sessionMeta, { push = true } = {}) {
 
 $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => { if (!rideScreen) startDemo('vo2max'); });
-$('#btn-settings').addEventListener('click', openSettings);
+$('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
 $('#btn-back').addEventListener('click', goHome);
 // Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —
 // sobald die App läuft, weg damit
@@ -692,59 +395,6 @@ addEventListener('appinstalled', async () => {
   toastOk('App installiert — Speicher geschützt');
 });
 
-// ?demo — Fahrbildschirm mit synthetischen Daten, ohne Trainer (UI-Arbeit, Screenshots).
-// ?demo=programm zeigt den Programm-Modus mit Workout-Graph.
-async function startDemo(variante) {
-  const settings = await getSettings();
-  const ftms = new EventTarget();
-  Object.assign(ftms, { connected: true, busy: false, setTargetPower: async () => {}, disconnect: () => {} });
-  const session = new Session(ftms, settings);
-  session.save = async () => {};   // Demo-Fahrten nicht in die echte Historie schreiben
-  ftms.istDemo = true;             // u. a.: kein Auto-Connect echter Geräte im Demo
-  let run = null;
-  const prefill = (secs, zielAt) => {
-    const F = 6;
-    for (let k = 0; k < secs; k++) {
-      const ziel = zielAt(k);
-      const watt = ziel + Math.round(Math.sin(k / 3) * 10 + (Math.random() - 0.5) * 8);
-      session.samples.set([k, watt, ziel, 88, 141, 325], k * F);
-      session.kj += watt / 1000;
-    }
-    session.count = secs;
-  };
-  const workout = WORKOUTS.find(x => x.id === variante);
-  if (workout) {
-    const o = Object.fromEntries(Object.entries(workout.optionen).map(([k, v]) => [k, v.default]));
-    const blocks = workout.generieren(o, settings.ftp);
-    prefill(600, () => 120);
-    run = new ProgramRun(session, workout.name, blocks);
-  } else if (variante === 'programm') {
-    const p = PROGRAMME.find(x => x.id === 'intervalle44');
-    const blocks = expand(p.bauen({ wdh: 4, hart: 210, locker: 90 }), settings.ftp);
-    prefill(600, k => k < 480 ? 108 : 210);
-    run = new ProgramRun(session, p.name, blocks);
-  } else {
-    prefill(480, k => k < 120 ? 120 : k < 300 ? 200 : 160);
-    session.setTarget(160, { instant: true });
-  }
-  Object.assign(session.live, { watt: session.target, rpm: 89, hr: 142, kmh: 32.5 });
-  const ping = new URLSearchParams(location.search).has('ping');
-  setInterval(() => {
-    ftms.dispatchEvent(new CustomEvent('data', { detail: {
-      watt: Math.round(session.target + (Math.random() - 0.5) * 10),
-      rpm: 88 + Math.round(Math.random() * 4), kmh: 32.5, hr: 142,
-    } }));
-    // ?ping — Hintergrund-Throttling messen: 1 Request/s, Servlog zeigt Lücken
-    if (ping) fetch(`ping?t=${session.elapsed}&vis=${document.visibilityState}`).catch(() => {});
-  }, 1000);
-  show('ride');
-  history.pushState({ screen: 'ride' }, '');   // double-back-Schutz auch in der Demo
-  // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde
-  rideScreen = new RideScreen(screens.ride, session, settings,
-    async () => { $('#m-demo').hidden = true; location.href = location.pathname; }, run);
-  ftms.dispatchEvent(new Event('connected'));
-  $('#m-demo').hidden = false;                 // persistenter Badge, unabhängig vom Status
-}
 
 
 if (!navigator.bluetooth) {
@@ -772,7 +422,7 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
 
 const demoParam = new URLSearchParams(location.search).get('demo');
 const dlgParam = new URLSearchParams(location.search).get('dlg');
-if (demoParam !== null) startDemo(demoParam);
+if (demoParam !== null) startDemo(demoParam, { show, screens, registriere: rs => { rideScreen = rs; } });
 else goHome().then(() => { if (!dlgParam) restoreUiState(); });
 // ?dlg=<id> — Startdialog für UI-Arbeit/Screenshots direkt öffnen
 if (dlgParam) {

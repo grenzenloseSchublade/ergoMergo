@@ -6,7 +6,7 @@ import { toastOk, toastErr } from './toast.js';
 import { toTCX, download } from '../export.js';
 import { drawSessionChart } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
-import { fmtTime } from './ride.js';
+import { fmtTime } from '../format.js';
 import { kennwerte } from '../metrics.js';
 
 // Zeit-in-Zonen als schmaler Farbbalken (HTML, nutzt --z1..--z6)

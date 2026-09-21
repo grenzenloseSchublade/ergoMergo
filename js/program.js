@@ -273,3 +273,14 @@ export class ProgramRun extends EventTarget {
     if (b) this.session.setTarget(b.watt + this.offset);
   }
 }
+
+// Blockliste eines Programms für gegebene Optionen (Generator oder klassisch)
+export function baueBlocks(programm, opts, ftp) {
+  return programm.generieren
+    ? programm.generieren(opts, ftp)
+    : expand(programm.bauen(opts), ftp);
+}
+
+export function defaultOpts(programm) {
+  return Object.fromEntries(Object.entries(programm.optionen).map(([k, v]) => [k, v.default]));
+}
