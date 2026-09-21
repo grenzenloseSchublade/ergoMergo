@@ -93,19 +93,19 @@
         <span class="unit">Watt</span>
       </div>
       <div class="metric metric-target">
-        <span class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Ziel</span>
+        <span class="label">Ziel</span>
         <span class="value" id="m-target">0</span>
         <span class="unit">Watt</span>
       </div>
       <div class="metric metric-time">
-        <span class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg> <i id="m-time-label">Zeit</i></span>
+        <span class="label" id="m-time-label">Zeit</span>
         <span class="value value-time" id="m-time">0:00</span>
         <span class="restbalken" id="m-restbalken" hidden><i></i></span>
       </div>
       <div class="row-secondary">
-        <span><b id="m-rpm">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
-        <span><i class="hf-herz">♥</i> <b id="m-hr">–</b> bpm</span>
-        <span><b id="m-kj">0</b> kJ</span>
+        <span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg><b id="m-rpm">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
+        <span><svg class="si si-hf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg><b id="m-hr">–</b> bpm</span>
+        <span><svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg><b id="m-kj">0</b> kJ</span>
         <span id="m-total" hidden><b id="m-total-time">0:00</b> gesamt</span>
         <span id="m-status" class="status" aria-live="polite">verbinde …</span>
       </div>
