@@ -125,6 +125,19 @@ python3 tools/gatt_dump.py --control  # zusätzlich Steuerbefehle testen
 
 `test/bonding.html` ist die Browser-Gegenprobe.
 
+### Diagnose-Log vom Gerät ziehen
+
+`tools/log-pull.mjs` holt das Diagnose-Log und die Fahrtdaten direkt aus der
+IndexedDB der App auf dem Android-Gerät — ohne Export in der App. Es nutzt
+`adb forward` auf den Chrome-DevTools-Socket und das DevTools-Protokoll.
+Voraussetzungen: USB-Debugging, Chrome mit offenem ergoMergo-Tab, Node ≥ 22.
+
+```sh
+node tools/log-pull.mjs                    # Log anzeigen + Komplett-Dump als JSON
+node tools/log-pull.mjs --logs-only        # nur das Log
+node tools/log-pull.mjs --seit 2026-09-21  # Log ab Datum
+```
+
 ## Lizenz
 
 MIT
