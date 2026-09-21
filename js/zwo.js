@@ -71,7 +71,7 @@ export function parseZwo(xmlText) {
 }
 
 // Gespeichertes Import-Programm → Programmobjekt für Kacheln/Startdialog
-export function zwoProgramm(gespeichert, EFF_FTP_DEFAULT = 170) {
+export function zwoProgramm(gespeichert, EFF_FTP_DEFAULT) {
   const totalMin = Math.round(gespeichert.bloecke.reduce((a, b) => a + b.dauer, 0) / 60);
   let gruppenSeq = 0;
   return {

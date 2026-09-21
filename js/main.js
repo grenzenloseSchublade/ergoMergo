@@ -65,9 +65,7 @@ async function startRideInner(programm) {
   if (programm) {
     const opts = await startDialog(programm, settings);
     if (!opts) return;
-    blocks = programm.generieren
-      ? programm.generieren(opts, settings.ftp)
-      : expand(programm.bauen(opts), settings.ftp);
+    blocks = baueBlocks(programm, opts, settings.ftp);
   }
   // Vorabcheck: ist der Bluetooth-Adapter überhaupt verfügbar/an?
   if (await navigator.bluetooth.getAvailability?.() === false) {
@@ -215,7 +213,7 @@ async function openSettings() {
 
   // Geräte-Bereich: Karten je Rolle — reiner Renderer über den GeraeteManager
   $('#geraete-hint').hidden = kannMerken();
-  const rollen = [['trainer', 'Trainer'], ['hr', 'Herzgurt'], ['controller', 'Lenker/Controller']];
+  const rollen = GL_ROLLEN;
   const zeichneGeraete = async () => {
     const geraete = (await getSettings()).geraete;
     const liste = $('#geraete-liste');
@@ -245,7 +243,7 @@ async function openSettings() {
         aktion.onclick = async () => {
           try {
             await geraeteManager.koppel(rolle);
-            toastOk(`${label} gekoppelt`);
+            toastOk(`${label} gekoppelt & verbunden`);
             zeichneGeraete();
           } catch (err) {
             if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
@@ -263,7 +261,7 @@ async function openSettings() {
         pad2.onclick = async () => {
           try {
             await geraeteManager.koppel('controller');
-            toastOk('Zweites Pad gekoppelt');
+            toastOk('Zweites Pad gekoppelt & verbunden');
             zeichneGeraete();
           } catch (err) {
             if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
@@ -277,12 +275,8 @@ async function openSettings() {
   zeichneGeraete();
 
   // Tastenbelegung des Controllers: Anzeige + Lern-Modus
-  const MAP_AKTIONEN = [
-    ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
-    ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
-  ];
   const zeigeMap = map => {
-    const belegt = MAP_AKTIONEN.filter(([k]) => map?.[k] !== undefined && map[k] !== null);
+    const belegt = CONTROLLER_AKTIONEN.filter(([k]) => map?.[k] !== undefined && map[k] !== null);
     $('#ctrl-map-anzeige').textContent = belegt.length
       ? 'Belegung: ' + belegt.map(([k, l]) => `${l} = Taste ${map[k]}`).join(' · ')
       : 'Keine Tasten zugeordnet.';
@@ -335,10 +329,7 @@ async function openSettings() {
 // eine Taste ab — ersetzt die alte Bit-Raterei über den Diagnose-Log.
 async function lerneTasten(zeigeMap) {
   const dlg = $('#dlg-mapping');
-  const schritte = [
-    ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
-    ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
-  ];
+  const schritte = CONTROLLER_AKTIONEN;
   const map = {};
   let i = 0;
   let fertig = false;
@@ -353,8 +344,10 @@ async function lerneTasten(zeigeMap) {
     lauscher = [];
     dlg.close();                                 // Verbindungen bleiben im Pool
   };
-  $('#btn-map-abbruch').onclick = ende;
-  dlg.oncancel = ende;                           // ESC/Back schließt sauber
+  $('#btn-map-abbruch').onclick = () => dlg.close();
+  // 'close' fängt ALLE Wege (ESC, Abbrechen, Zurück-Taste via popstate) —
+  // oncancel feuert bei programmatischem close() nicht
+  dlg.addEventListener('close', ende, { once: true });
   const weiter = async () => {
     i++;
     if (i >= schritte.length) {
@@ -409,6 +402,12 @@ async function lerneTasten(zeigeMap) {
     ende();
   }
 }
+
+// Controller-Aktionen: EINE Quelle für Belegungsanzeige und Lern-Modus
+const CONTROLLER_AKTIONEN = [
+  ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
+  ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
+];
 
 // Geräte-Leiste auf dem Home: Status je Rolle, Tap = koppeln/verbinden/trennen.
 // Icons: Lucide (lucide.dev, MIT) — inline, kein CDN

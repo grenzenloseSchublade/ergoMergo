@@ -36,7 +36,9 @@ export class RideScreen {
             // im Vordergrund — im Hintergrund stirbt SpeechSynthesis eh
             if (!ok && !document.hidden) {
               const min = Math.round(b.dauer / 60 * 10) / 10;
-              signal.sage(`${min >= 1 ? `${min} Minuten, ` : ''}${b.watt + run.offset} Watt`);
+              const minText = min < 1 ? '' : min === 1 ? '1 Minute, '
+                : `${String(min).replace('.', ' Komma ')} Minuten, `;
+              signal.sage(`${minText}${b.watt + run.offset} Watt`);
             }
           });
         }
@@ -248,6 +250,9 @@ export class RideScreen {
     };
     hold(this.$('#btn-plus'), step);
     hold(this.$('#btn-minus'), -step);
+    // Beschriftung folgt der eingestellten Schrittweite
+    this.$('#btn-plus').textContent = `+${step}`;
+    this.$('#btn-minus').textContent = `−${step}`;
     // Fokus-Konzept (symmetrisch): Tap auf die Watt-Zahl holt die WERTE in
     // den Fokus (Graph schrumpft zum Orientierungsstreifen), Tap auf den
     // Graphen holt den GRAPHEN in den Fokus (Werte kompakt, Chart groß und

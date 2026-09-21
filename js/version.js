@@ -89,7 +89,7 @@ export function starteUpdateWatchdog(statusEl) {
               }
             });
           };
-          reg.addEventListener('updatefound', () => beobachte(reg.installing));
+          reg.onupdatefound = () => beobachte(reg.installing);   // Zuweisung: kein Stapeln bei Retries
           beobachte(reg.installing);
           if (reg.waiting) { beobachte(reg.waiting); reg.waiting.postMessage('skipWaiting'); }
           await reg.update();

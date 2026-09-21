@@ -25,15 +25,25 @@ export class PiP {
     document.body.append(this.#video);
   }
 
+  #stelleStreamSicher() {
+    if (this.#track) return;
+    const stream = this.#canvas.captureStream(0);
+    this.#track = stream.getVideoTracks()[0];
+    this.#video.srcObject = stream;
+  }
+
+  #beiEnde() {
+    this.#video.addEventListener('leavepictureinpicture', () => {
+      this.aktiv = false;
+      this.onEnde?.();
+    }, { once: true });
+  }
+
   // Fahrtstart: Stream scharf halten + Auto-PiP-Handler registrieren,
   // damit browser-initiiertes PiP (ohne User-Geste) möglich wird
   async arm(datenFn) {
     this.#datenFn = datenFn;
-    if (!this.#track) {
-      const stream = this.#canvas.captureStream(0);
-      this.#track = stream.getVideoTracks()[0];
-      this.#video.srcObject = stream;
-    }
+    this.#stelleStreamSicher();
     this.#zeichne();
     try { await this.#video.play(); } catch { /* ohne Geste evtl. verweigert */ }
     try {
@@ -41,10 +51,7 @@ export class PiP {
         try {
           await this.#video.requestPictureInPicture();
           this.aktiv = true;
-          this.#video.addEventListener('leavepictureinpicture', () => {
-            this.aktiv = false;
-            this.onEnde?.();
-          }, { once: true });
+          this.#beiEnde();
           this.onAuto?.();
         } catch { /* Chrome hat es sich anders überlegt */ }
       });
@@ -66,19 +73,12 @@ export class PiP {
       return false;
     }
     this.#datenFn = datenFn;
-    if (!this.#track) {
-      const stream = this.#canvas.captureStream(0);
-      this.#track = stream.getVideoTracks()[0];
-      this.#video.srcObject = stream;
-    }
+    this.#stelleStreamSicher();
     this.#zeichne();
     await this.#video.play();
     await this.#video.requestPictureInPicture();
     this.aktiv = true;
-    this.#video.addEventListener('leavepictureinpicture', () => {
-      this.aktiv = false;
-      this.onEnde?.();
-    }, { once: true });
+    this.#beiEnde();
     return true;
   }
 
