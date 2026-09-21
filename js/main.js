@@ -12,6 +12,10 @@ import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version
 import { toast, toastOk, toastErr } from './ui/toast.js';
 import { openSettings } from './ui/settings.js';
 import { startDemo } from './demo.js';
+
+// Demo mit den App-Callbacks starten (Button auf Home + ?demo-Parameter)
+const demoStarten = variante =>
+  startDemo(variante, { show, screens, registriere: rs => { rideScreen = rs; } });
 import { zeichneGeraeteLeiste } from './ui/geraete-leiste.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
@@ -374,7 +378,7 @@ async function openDetail(sessionMeta, { push = true } = {}) {
 }
 
 $('#start-free').addEventListener('click', () => startRide());
-$('#btn-demo').addEventListener('click', () => { if (!rideScreen) startDemo('vo2max'); });
+$('#btn-demo').addEventListener('click', () => { if (!rideScreen) demoStarten('vo2max'); });
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
 $('#btn-back').addEventListener('click', goHome);
 // Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —
@@ -422,7 +426,7 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
 
 const demoParam = new URLSearchParams(location.search).get('demo');
 const dlgParam = new URLSearchParams(location.search).get('dlg');
-if (demoParam !== null) startDemo(demoParam, { show, screens, registriere: rs => { rideScreen = rs; } });
+if (demoParam !== null) demoStarten(demoParam);
 else goHome().then(() => { if (!dlgParam) restoreUiState(); });
 // ?dlg=<id> — Startdialog für UI-Arbeit/Screenshots direkt öffnen
 if (dlgParam) {

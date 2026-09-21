@@ -103,6 +103,9 @@ dialog {
 }
 /* Offener Modal-Dialog riegelt den Seiten-Scroll ab (Backdrop-Touch inklusive) */
 body:has(dialog[open]) { overflow: hidden; }
+/* Einstellungen: feste Maße — auf-/zuklappende Rubriken dürfen das
+   Fenster nicht umher-resizen, der Inhalt scrollt intern */
+#dlg-settings { width: min(30rem, 92vw); height: min(46rem, 90dvh); }
 dialog::backdrop { background: rgba(0, 0, 0, .55); }
 dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
 .dlg-fields { display: grid; gap: .7rem; }
