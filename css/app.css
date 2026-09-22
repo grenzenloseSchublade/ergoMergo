@@ -278,8 +278,11 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
      den größten Abstand. */
   display: grid;
   /* −10/+10 quadratisch (64px = Buttonhöhe), Restraum als flexible Spur
-     davor Stopp/Beenden — die behalten ihre festen 7rem-Slots */
-  grid-template-columns: 64px .5rem 64px minmax(.9rem, 1fr) 7rem .9rem 7rem;
+     davor Stopp/Beenden. Deren Slots sind auf 7rem gedeckelt (Textwechsel
+     verschiebt nichts), dürfen aber auf schmalen Displays gleichmäßig
+     schrumpfen — feste 7rem liefen rechts über den Rand (408px auf 360px) */
+  grid-template-columns: 64px .5rem 64px minmax(.6rem, 1fr)
+    minmax(4.5rem, 7rem) minmax(.5rem, .9rem) minmax(4.5rem, 7rem);
   column-gap: 0; row-gap: .5rem;
   padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom));
 }
