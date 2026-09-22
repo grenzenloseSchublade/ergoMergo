@@ -93,10 +93,11 @@ export async function blockwechsel(hart) {
   if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
   await wecke();
   const t = ctx.currentTime + 0.05;
-  // hart (Watt rauf): A-Dur-Dreiklang aufwärts, Schlusston gehalten — „es
-  // geht rauf". weich (Watt runter): zwei Töne abwärts — „wird leichter".
-  if (hart) { tone(880, t, 0.11); tone(1109, t + 0.13, 0.11); tone(1319, t + 0.26, 0.45, 0.5, true); }
-  else { tone(1319, t, 0.11, 0.4); tone(880, t + 0.13, 0.4, 0.5, true); }
+  // EIN gehaltener Ton genau beim Wechsel (nach den Countdown-Beeps) —
+  // keine Vortöne. Unterscheidung über die Höhe: hart (Watt rauf) hoch,
+  // weich (Watt runter) tief.
+  if (hart) tone(1319, t, 0.5, 0.5, true);
+  else tone(880, t, 0.5, 0.5, true);
 }
 
 // Kurzer Bestätigungs-Tick für Controller-Tastendrücke
