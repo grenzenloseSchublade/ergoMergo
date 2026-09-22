@@ -63,21 +63,28 @@ function suspendBald(ms = 250) {
   }, ms);
 }
 
-// halten: Lautstärke bis kurz vor Ende konstant (hörbar „langer" Ton) —
-// der Standard-Exponentialabfall klingt schon nach ~0.15 s wie vorbei
-function tone(freq, at, dur = 0.15, gainVal = 0.4, halten = false) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.frequency.value = freq;
-  osc.type = 'square';
-  gain.gain.setValueAtTime(gainVal, at);
-  if (halten) gain.gain.setValueAtTime(gainVal, at + Math.max(0, dur - 0.08));
-  gain.gain.exponentialRampToValueAtTime(0.001, at + dur);
-  osc.connect(gain).connect(ctx.destination);
-  quelleStart();
-  osc.onended = quelleEnde;
-  osc.start(at);
-  osc.stop(at + dur);
+// Klangdesign: Dreieck statt Rechteck (Rechteck beißt bei kurzen Beeps in
+// den Ohren), dazu eine leise Oktave obendrauf — mehrere Frequenzkomponenten
+// tragen über Lüfter-/Fahrgeräusch, ohne lauter sein zu müssen. 10 ms
+// Attack-Rampe gegen Knackser; halten = Pegel bis kurz vor Ende konstant
+// (hörbar „langer" Ton — der Exponentialabfall allein klingt nach ~0.15 s
+// wie vorbei). Frequenzen ab ~660 Hz: tiefere verzerren am Handy-Speaker.
+function tone(freq, at, dur = 0.15, gainVal = 0.5, halten = false) {
+  for (const [f, g] of [[freq, gainVal], [freq * 2, gainVal * 0.22]]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = f;
+    osc.type = 'triangle';
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.linearRampToValueAtTime(g, at + 0.01);
+    if (halten) gain.gain.setValueAtTime(g, at + Math.max(0.01, dur - 0.1));
+    gain.gain.exponentialRampToValueAtTime(0.001, at + dur);
+    osc.connect(gain).connect(ctx.destination);
+    quelleStart();
+    osc.onended = quelleEnde;
+    osc.start(at);
+    osc.stop(at + dur);
+  }
 }
 
 export async function blockwechsel(hart) {
@@ -86,8 +93,10 @@ export async function blockwechsel(hart) {
   if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
   await wecke();
   const t = ctx.currentTime + 0.05;
-  if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.45, 0.4, true); }
-  else { tone(587, t, 0.4, 0.4, true); }
+  // hart (Watt rauf): A-Dur-Dreiklang aufwärts, Schlusston gehalten — „es
+  // geht rauf". weich (Watt runter): zwei Töne abwärts — „wird leichter".
+  if (hart) { tone(880, t, 0.11); tone(1109, t + 0.13, 0.11); tone(1319, t + 0.26, 0.45, 0.5, true); }
+  else { tone(1319, t, 0.11, 0.4); tone(880, t + 0.13, 0.4, 0.5, true); }
 }
 
 // Kurzer Bestätigungs-Tick für Controller-Tastendrücke
@@ -95,7 +104,7 @@ export async function tick() {
   if (!ctx) return;
   if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
   await wecke();
-  tone(1350, ctx.currentTime + 0.02, 0.035, 0.18);
+  tone(1200, ctx.currentTime + 0.02, 0.035, 0.15);
 }
 
 export async function countdown() {
@@ -103,7 +112,7 @@ export async function countdown() {
   if (!ctx) return;
   if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
   await wecke();
-  tone(660, ctx.currentTime + 0.05, 0.08, 0.25);
+  tone(880, ctx.currentTime + 0.05, 0.09, 0.4);
 }
 
 // Sprachansage (SpeechSynthesis) — z. B. „3 Minuten, 210 Watt"
@@ -123,5 +132,7 @@ export async function fertig() {
   if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
   await wecke();
   const t = ctx.currentTime + 0.05;
-  [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.18, 0.16));
+  // Festliches Dur-Arpeggio aufwärts, Schlusston gehalten
+  [659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.16, 0.15));
+  tone(1319, t + 3 * 0.16, 0.5, 0.5, true);
 }
