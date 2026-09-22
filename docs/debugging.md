@@ -22,11 +22,20 @@ Zeilen mit `[INFO:CONSOLE(...)]` sind die JS-Konsolenausgaben der Seite, inklusi
 |---|---|
 | `?demo` | Fahrbildschirm „Freies Fahren" mit synthetischen Daten |
 | `?demo=<workout-id>` | Programm-Modus, z. B. `?demo=sprint3030`, `vo2max`, `schwelle` |
+| `?demo=programm` | Programm-Modus mit klassischem Intervallprogramm (4×4) |
 | `?dlg=<id>` | Startdialog eines Programms direkt öffnen |
 | `?big=<id>` | Graph-Vollbild eines Programms direkt öffnen |
+| `?demo&ping` | zusätzlich 1 Request/s an den Dev-Server — Hintergrund-Throttling im Servlog sichtbar |
 
-Demo-Fahrten werden nicht in die Historie gespeichert.
+Demo-Fahrten werden nicht in die Historie gespeichert. Die Demo nutzt denselben
+Fahrbildschirm, Audio-Pfad (Töne + thorsten-Ansagen) und Fahrt-Eintritt wie die
+echte Fahrt; nur Datenquelle und Speichern sind simuliert. Beim `?demo`-Start
+ohne Berührung bleiben Töne stumm, bis einmal getippt wurde (Autoplay-Policy).
 
-## 5. Zwift-Ride-Tastenbelegung ermitteln
+## 5. Zwift-Ride-Tasten belegen
 
-Controller im Fahrbildschirm über „+ Controller" verbinden, beliebige Tasten drücken, dann Diagnose-Log ansehen: jede Taste erscheint als `Ride-Taste Bit <n> gedrückt`. Die Bits für ± sind als Einstellung hinterlegt (Standard: Bit 4 = plus, Bit 0 = minus) und können bei Abweichung angepasst werden.
+Einstellungen (⚙) → Geräte → „Tasten zuordnen": der Lern-Modus verbindet den
+Controller und fragt Aktion für Aktion (+/−, Block vor/zurück, STOPP) eine
+Taste ab — die Belegung landet als `controllerMap` in den Einstellungen.
+Zur Diagnose erscheint weiterhin jede gedrückte Taste im Diagnose-Log als
+`Ride-Taste Bit <n> gedrückt`.

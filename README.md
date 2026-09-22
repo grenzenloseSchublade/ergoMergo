@@ -40,10 +40,10 @@ dem Gerät.
 | ERG-Steuerung | Ziel-Watt mit sanften Rampen, ±-Tasten (Touch, Tastatur, Zwift Click/Ride), Not-Stopp mit geschütztem WEITER |
 | Programme | Zeitbasierte Generatoren (Sprint 30/30, HIIT 40/20, VO2max 4×4, Schwelle, Ausdauer, Recovery), klassische Programme, FTP-Rampentest, `.zwo`-Import |
 | Fahrbildschirm | Live-Graph mit Programmprofil und Positionscursor, Blocksteuerung (überspringen/zurück/+30 s), Kadenz-Zielbereiche, Fokus-Modus (Tap auf Werte oder Graph kippt die Gewichtung), Bild-in-Bild (Experiment) |
-| Ansagen & Töne | Blockwechsel-Signale und Sprachansagen aus vorgerenderten Audio-Bausteinen — funktionieren auch mit Bildschirm aus |
+| Ansagen & Töne | Countdown vor jedem Wechsel, unterscheidbare Signale für härter/leichter (Dur-Dreiklang rauf bzw. Töne abwärts), Sprachansagen aus vorgerenderten Audio-Bausteinen — funktionieren auch mit Bildschirm aus |
 | Geräte | Trainer, Herzfrequenz-Gurt, Zwift Click/Ride; Tasten frei belegbar per Lern-Modus; Schnellverbindung ohne Geräteauswahl (mit Chrome-Flag) |
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
-| Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud |
+| Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
 ## Getestet mit
 
@@ -109,8 +109,25 @@ python3 -m http.server 8000
 # http://localhost:8000 — localhost ist Secure Context, HTTPS lokal nicht nötig.
 ```
 
-Dev-Parameter: `?demo=<workoutId>` (z. B. `?demo=vo2max` — Demo-Fahrt ohne Trainer), `?demo` (freies Fahren). Test vom
-Android-Gerät: GitHub-Pages-Deployment oder USB-Debugging + `chrome://inspect`.
+Dev-Parameter: `?demo=<workoutId>` (z. B. `?demo=vo2max` — Demo-Fahrt ohne
+Trainer), `?demo` (freies Fahren); alle Parameter in
+[docs/debugging.md](docs/debugging.md). Test vom Android-Gerät:
+GitHub-Pages-Deployment oder USB-Debugging + `chrome://inspect`.
+
+### Release
+
+Der Versionsstempel steht doppelt (`VERSION` in `sw.js` für die
+Update-Erkennung, `APP_VERSION` in `js/version.js` für den
+Install-Konsistenz-Check) — laufen sie auseinander, bricht jede
+Service-Worker-Installation ab. Deshalb ausschließlich über das Skript bumpen:
+
+```sh
+node tools/release.mjs            # nächste Version, setzt beide Stempel
+node tools/release.mjs --check    # prüft vor dem Push auf Drift
+```
+
+Danach committen (Konvention: „…; Release vXX") und pushen — GitHub Pages
+deployt `main` direkt; installierte Apps bieten das Update per Button an.
 
 ### V0 — Gerätecheck
 

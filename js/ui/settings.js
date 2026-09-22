@@ -149,6 +149,10 @@ export async function openSettings({ nachSpeichern } = {}) {
     toastOk('Einstellungen gespeichert');
   };
   dlg.showModal();
+  // showModal fokussiert sonst das erste Eingabefeld (FTP) — am Gerät
+  // klappt sofort die Tastatur auf und verdeckt den Dialog. Fokus lösen;
+  // die Tastatur kommt erst, wenn bewusst in ein Feld getippt wird.
+  document.activeElement?.blur();
 }
 
 // Tasten-Lern-Modus: verbindet den Controller und fragt Aktion für Aktion

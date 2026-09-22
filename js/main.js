@@ -206,6 +206,9 @@ function startDialog(programm, settings = {}) {
     };
     history.pushState({ dialog: 'start' }, '');
     dlg.showModal();
+    // Kein Auto-Fokus ins erste Zahlenfeld — sonst öffnet am Gerät sofort
+    // die Tastatur (gleiche Kur wie im Einstellungen-Dialog)
+    document.activeElement?.blur();
     zeichne();            // erst nach showModal: Canvas braucht sein Layout
   });
 }
