@@ -247,8 +247,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   gap: .5rem; margin: .5rem .5rem 0;
 }
 .row-actions .chip {
-  min-height: 46px; min-width: 46px; padding: .4rem .9rem; font-size: .9rem;
-  display: inline-flex; align-items: center;
+  min-height: 46px; min-width: 46px; padding: .4rem 1rem; font-size: .9rem;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 /* Fahr-Aktionen (häufig) gefüllt und zuerst; Verbinden (einmalig) zurückhaltend */
 .chip-fahrt { background: var(--surface2); border-color: var(--ink3); color: var(--ink); font-weight: 600; }

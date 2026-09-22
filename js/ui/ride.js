@@ -28,11 +28,14 @@ export class RideScreen {
     if (run) {
       let prevWatt = null;
       run.addEventListener('block', e => {
-        if (prevWatt !== null && this.tonAn) signal.blockwechsel(e.detail.watt > prevWatt);
+        const tonGespielt = prevWatt !== null && this.tonAn;
+        if (tonGespielt) signal.blockwechsel(e.detail.watt > prevWatt);
         prevWatt = e.detail.watt;
         if (this.ansagenAn) {
           const b = run.blocks[e.detail.index];
-          ansageBlock(b.dauer, b.watt + run.offset).then(ok => {
+          // Erst der Wechselton, dann die Ansage — gleichzeitig maskiert
+          // die (lautere) Stimme den Ton
+          setTimeout(() => ansageBlock(b.dauer, b.watt + run.offset).then(ok => {
             // Bausteine fehlen (offline-Erstlauf o. Ä.): Live-TTS, aber nur
             // im Vordergrund — im Hintergrund stirbt SpeechSynthesis eh
             if (!ok && !document.hidden) {
@@ -41,7 +44,7 @@ export class RideScreen {
                 : `${String(min).replace('.', ' Komma ')} Minuten, `;
               signal.sage(`${minText}${b.watt + run.offset} Watt`);
             }
-          });
+          }), tonGespielt ? 900 : 0);
         }
       });
       run.addEventListener('countdown', () => { if (this.tonAn) signal.countdown(); });
@@ -50,9 +53,9 @@ export class RideScreen {
       });
       run.addEventListener('done', () => {
         if (this.tonAn) signal.fertig();
-        if (this.ansagenAn) ansageFertig().then(ok => {
+        if (this.ansagenAn) setTimeout(() => ansageFertig().then(ok => {
           if (!ok && !document.hidden) signal.sage('Programm beendet, gut gemacht');
-        });
+        }), this.tonAn ? 1100 : 0);
         // Dauerhaft sichtbar machen, dass ab jetzt frei ausgerollt wird —
         // die Aufzeichnung läuft bewusst weiter, Beenden speichert
         const el = this.$('#m-status');

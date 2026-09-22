@@ -48,12 +48,15 @@ function suspendBald(ms = 250) {
   }, ms);
 }
 
-function tone(freq, at, dur = 0.15, gainVal = 0.4) {
+// halten: Lautstärke bis kurz vor Ende konstant (hörbar „langer" Ton) —
+// der Standard-Exponentialabfall klingt schon nach ~0.15 s wie vorbei
+function tone(freq, at, dur = 0.15, gainVal = 0.4, halten = false) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.frequency.value = freq;
   osc.type = 'square';
   gain.gain.setValueAtTime(gainVal, at);
+  if (halten) gain.gain.setValueAtTime(gainVal, at + Math.max(0, dur - 0.08));
   gain.gain.exponentialRampToValueAtTime(0.001, at + dur);
   osc.connect(gain).connect(ctx.destination);
   quelleStart();
@@ -67,8 +70,8 @@ export function blockwechsel(hart) {
   if (!ctx) return;
   wecke();
   const t = ctx.currentTime;
-  if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.45); }
-  else { tone(587, t, 0.4); }
+  if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.45, 0.4, true); }
+  else { tone(587, t, 0.4, 0.4, true); }
 }
 
 // Kurzer Bestätigungs-Tick für Controller-Tastendrücke
