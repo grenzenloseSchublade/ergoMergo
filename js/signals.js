@@ -9,6 +9,12 @@
 let ctx = null;
 let suspendTimer = null;
 let aktiveQuellen = 0;
+// Erst nach dem ersten erfolgreichen resume() (User-Geste) dürfen Töne
+// geplant werden — vorher hängt resume() endlos und Töne würden sich
+// aufstauen und beim ersten Tap gleichzeitig herausplatzen (?demo-Autostart)
+let entsperrt = false;
+
+export function istEntsperrt() { return entsperrt; }
 
 // Geteilter Context für ansagen.js (Bausteine über dieselbe Audio-Uhr)
 export function audioCtx() { return ctx; }
@@ -19,23 +25,32 @@ export function audioCtx() { return ctx; }
 export function initAudio() {
   try {
     ctx ??= new AudioContext();
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx.state === 'suspended') ctx.resume().then(() => { entsperrt = true; }).catch(() => {});
+    else entsperrt = true;
     suspendBald(1500);
   } catch { /* ohne Audio weiterfahren */ }
 }
 
-// Vor jeder Wiedergabe: anstehenden Suspend abräumen, Context aufwecken
+// Vor jeder Wiedergabe: anstehenden Suspend abräumen, Context aufwecken.
+// Liefert ein Promise, das nach dem resume() auflöst — Töne erst DANACH
+// planen (wie spiele() in ansagen.js): synchron bei suspended geplante
+// Oszillatoren gehen auf Android teils verloren.
 export function wecke() {
-  if (!ctx) return;
+  if (!ctx) return Promise.resolve();
   clearTimeout(suspendTimer);
-  if (ctx.state === 'suspended') ctx.resume().catch(() => { /* ohne Ton weiter */ });
+  if (ctx.state === 'suspended')
+    return ctx.resume().then(() => { entsperrt = true; }).catch(() => { /* ohne Ton weiter */ });
+  return Promise.resolve();
 }
 
 // Quellen-Zählung: erst wenn die letzte Quelle geendet hat, wird suspendiert
 export function quelleStart() { clearTimeout(suspendTimer); aktiveQuellen++; }
 export function quelleEnde() {
   aktiveQuellen = Math.max(0, aktiveQuellen - 1);
-  if (!aktiveQuellen) suspendBald();
+  // 1.5 s Gnadenfrist: Countdown-Beeps (2s/1s), Wechselton und Ansage
+  // bleiben ein Wachzyklus — jeder Suspend/Resume dazwischen riskiert
+  // auf Android einen Sink-Neustart, der kurze Töne verschluckt
+  if (!aktiveQuellen) suspendBald(1500);
 }
 
 // Fahrtende: nichts spielt mehr — Fokus sofort freigeben
@@ -65,27 +80,30 @@ function tone(freq, at, dur = 0.15, gainVal = 0.4, halten = false) {
   osc.stop(at + dur);
 }
 
-export function blockwechsel(hart) {
+export async function blockwechsel(hart) {
   navigator.vibrate?.(hart ? [200, 100, 200] : 200);
   if (!ctx) return;
-  wecke();
-  const t = ctx.currentTime;
+  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
+  await wecke();
+  const t = ctx.currentTime + 0.05;
   if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.45, 0.4, true); }
   else { tone(587, t, 0.4, 0.4, true); }
 }
 
 // Kurzer Bestätigungs-Tick für Controller-Tastendrücke
-export function tick() {
+export async function tick() {
   if (!ctx) return;
-  wecke();
-  tone(1350, ctx.currentTime, 0.035, 0.18);
+  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
+  await wecke();
+  tone(1350, ctx.currentTime + 0.02, 0.035, 0.18);
 }
 
-export function countdown() {
+export async function countdown() {
   navigator.vibrate?.(80);
   if (!ctx) return;
-  wecke();
-  tone(660, ctx.currentTime, 0.08, 0.25);
+  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
+  await wecke();
+  tone(660, ctx.currentTime + 0.05, 0.08, 0.25);
 }
 
 // Sprachansage (SpeechSynthesis) — z. B. „3 Minuten, 210 Watt"
@@ -99,10 +117,11 @@ export function sage(text) {
   } catch { /* nicht überall verfügbar */ }
 }
 
-export function fertig() {
+export async function fertig() {
   navigator.vibrate?.([150, 80, 150, 80, 400]);
   if (!ctx) return;
-  wecke();
-  const t = ctx.currentTime;
+  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
+  await wecke();
+  const t = ctx.currentTime + 0.05;
   [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.18, 0.16));
 }

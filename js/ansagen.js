@@ -4,7 +4,7 @@
 // Bausteine + Konkatenation über die AudioContext-Uhr überleben das.
 // Live-TTS (signals.sage) bleibt nur Fallback, wenn Bausteine fehlen.
 
-import { wecke, quelleStart, quelleEnde } from './signals.js';
+import { wecke, quelleStart, quelleEnde, istEntsperrt } from './signals.js';
 
 const BASE = new URL('../audio/', import.meta.url);
 
@@ -61,6 +61,8 @@ export function initAnsagen(audioCtx) {
 // ein dauerhaft laufender Context hält sonst den Android-Audiofokus.
 async function spiele(namen) {
   if (!ctx || !namen?.length) return false;
+  // Ohne User-Geste hängt resume() endlos — Ansage verwerfen statt stauen
+  if (!istEntsperrt() && ctx.state === 'suspended') return false;
   const bufs = await Promise.all(namen.map(lade));
   if (bufs.some(b => !b)) return false;         // Baustein fehlt → Fallback TTS
   wecke();

@@ -13,9 +13,14 @@ import { toast, toastOk, toastErr } from './ui/toast.js';
 import { openSettings } from './ui/settings.js';
 import { startDemo } from './demo.js';
 
-// Demo mit den App-Callbacks starten (Button auf Home + ?demo-Parameter)
-const demoStarten = variante =>
-  startDemo(variante, { show, screens, registriere: rs => { rideScreen = rs; } });
+// Demo starten (Button auf Home + ?demo-Parameter) — durch denselben
+// Guard wie startRide: kein Doppelstart neben laufendem BLE-Connect
+async function demoStarten(variante) {
+  if (startLaeuft || rideScreen) return;
+  startLaeuft = true;
+  try { await startDemo(variante, { betreteFahrt }); }
+  finally { startLaeuft = false; }
+}
 import { zeichneGeraeteLeiste } from './ui/geraete-leiste.js';
 import { montiereIcons } from './ui/icons.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
@@ -52,6 +57,18 @@ document.addEventListener('visibilitychange', () => {
 
 let rideScreen = null;
 let startLaeuft = false;    // Doppel-Tap auf eine Kachel → nur ein Verbindungsaufbau
+
+// Gemeinsamer Fahrt-Eintritt für echte Fahrt UND Demo — eine Stelle für
+// Screen-Wechsel, History, UI-State und WakeLock, damit die Demo bei
+// Ergänzungen nicht wieder stumm zurückfällt (passiert mit keepAwake)
+function betreteFahrt(session, settings, onEnd, run) {
+  show('ride');
+  history.pushState({ screen: 'ride' }, '');
+  speichereUiState();
+  keepAwake(true);
+  rideScreen = new RideScreen(screens.ride, session, settings, onEnd, run);
+  return rideScreen;
+}
 
 async function startRide(programm = null) {
   if (startLaeuft || rideScreen) return;
@@ -116,11 +133,7 @@ async function startRideInner(programm) {
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
-  show('ride');
-  history.pushState({ screen: 'ride' }, '');
-  speichereUiState();
-  keepAwake(true);
-  rideScreen = new RideScreen(screens.ride, session, settings, async () => {
+  betreteFahrt(session, settings, async () => {
     rideScreen.destroy();
     rideScreen = null;
     // Verbindung lebt im Pool weiter — getrennt wird über die Geräte-Leiste.
@@ -388,7 +401,7 @@ async function openDetail(sessionMeta, { push = true } = {}) {
 }
 
 $('#start-free').addEventListener('click', () => startRide());
-$('#btn-demo').addEventListener('click', () => { if (!rideScreen) demoStarten('vo2max'); });
+$('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
 $('#btn-back').addEventListener('click', goHome);
 // Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —

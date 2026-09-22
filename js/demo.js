@@ -2,10 +2,9 @@
 // (Onboarding-Feature + UI-Arbeit/Screenshots). Aus main.js ausgelagert;
 // Screen-Wechsel und rideScreen-Registrierung kommen als Callbacks.
 
-import { getSettings } from './storage.js';
+import { getSettings, FIELDS } from './storage.js';
 import { initAudio } from './signals.js';
 import { Session } from './state.js';
-import { RideScreen } from './ui/ride.js';
 import { WORKOUTS } from './workouts.js';
 import { PROGRAMME, ProgramRun, expand, defaultOpts } from './program.js';
 
@@ -13,7 +12,7 @@ const $ = s => document.querySelector(s);
 
 // ?demo — Fahrbildschirm mit synthetischen Daten, ohne Trainer (UI-Arbeit, Screenshots).
 // ?demo=programm zeigt den Programm-Modus mit Workout-Graph.
-export async function startDemo(variante, { show, screens, registriere }) {
+export async function startDemo(variante, { betreteFahrt }) {
   const settings = await getSettings();
   const ftms = new EventTarget();
   Object.assign(ftms, { connected: true, busy: false, setTargetPower: async () => {}, disconnect: () => {} });
@@ -22,11 +21,10 @@ export async function startDemo(variante, { show, screens, registriere }) {
   ftms.istDemo = true;             // u. a.: kein Auto-Connect echter Geräte im Demo
   let run = null;
   const prefill = (secs, zielAt) => {
-    const F = 6;
     for (let k = 0; k < secs; k++) {
       const ziel = zielAt(k);
       const watt = ziel + Math.round(Math.sin(k / 3) * 10 + (Math.random() - 0.5) * 8);
-      session.samples.set([k, watt, ziel, 88, 141, 325], k * F);
+      session.samples.set([k, watt, ziel, 88, 141, 325], k * FIELDS);
       session.kj += watt / 1000;
     }
     session.count = secs;
@@ -60,11 +58,9 @@ export async function startDemo(variante, { show, screens, registriere }) {
   // ?demo-Autostart hat keine User-Geste — erste Berührung entsperrt dann nach.
   initAudio();
   document.addEventListener('pointerdown', initAudio, { once: true });
-  show('ride');
-  history.pushState({ screen: 'ride' }, '');   // double-back-Schutz auch in der Demo
   // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde
-  registriere(new RideScreen(screens.ride, session, settings,
-    async () => { $('#m-demo').hidden = true; location.href = location.pathname; }, run));
+  betreteFahrt(session, settings,
+    async () => { $('#m-demo').hidden = true; location.href = location.pathname; }, run);
   ftms.dispatchEvent(new Event('connected'));
   $('#m-demo').hidden = false;                 // persistenter Badge, unabhängig vom Status
 }

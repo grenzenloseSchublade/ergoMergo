@@ -27,35 +27,55 @@ export class RideScreen {
     initAnsagen(signal.audioCtx());
     if (run) {
       let prevWatt = null;
-      run.addEventListener('block', e => {
-        const tonGespielt = prevWatt !== null && this.tonAn;
-        if (tonGespielt) signal.blockwechsel(e.detail.watt > prevWatt);
-        prevWatt = e.detail.watt;
-        if (this.ansagenAn) {
-          const b = run.blocks[e.detail.index];
-          // Erst der Wechselton, dann die Ansage — gleichzeitig maskiert
-          // die (lautere) Stimme den Ton
-          setTimeout(() => ansageBlock(b.dauer, b.watt + run.offset).then(ok => {
+      // Nur die JÜNGSTE geplante Ansage gewinnt (Skip-Spam), und destroy()
+      // räumt sie ab — sonst spricht die Fahrt nach ihrem Ende weiter
+      const planeAnsage = (b, verzoegerung) => {
+        if (!this.ansagenAn) return;
+        clearTimeout(this.#ansageTimer);
+        this.#ansageTimer = setTimeout(() => {
+          if (this.#tot) return;
+          ansageBlock(b.dauer, b.watt + run.offset).then(ok => {
             // Bausteine fehlen (offline-Erstlauf o. Ä.): Live-TTS, aber nur
             // im Vordergrund — im Hintergrund stirbt SpeechSynthesis eh
-            if (!ok && !document.hidden) {
+            if (!ok && !document.hidden && !this.#tot) {
               const min = Math.round(b.dauer / 60 * 10) / 10;
               const minText = min < 1 ? '' : min === 1 ? '1 Minute, '
                 : `${String(min).replace('.', ' Komma ')} Minuten, `;
               signal.sage(`${minText}${b.watt + run.offset} Watt`);
             }
-          }), tonGespielt ? 900 : 0);
-        }
+          });
+        }, verzoegerung);
+      };
+      run.addEventListener('block', e => {
+        const tonGespielt = prevWatt !== null && this.tonAn;
+        if (tonGespielt) signal.blockwechsel(e.detail.watt > prevWatt);
+        prevWatt = e.detail.watt;
+        // Erst der Wechselton, dann die Ansage — gleichzeitig maskiert
+        // die (lautere) Stimme den Ton
+        planeAnsage(run.blocks[e.detail.index], tonGespielt ? 900 : 0);
       });
+      // Der Konstruktor-#tick des Runs lief VOR dieser Registrierung —
+      // das block-Event des ersten (bzw. aktuellen) Blocks kam nie an:
+      // Ton-Referenz und Erst-Ansage von Hand nachziehen
+      if (run.index >= 0) {
+        prevWatt = run.blocks[run.index].watt;
+        planeAnsage(run.blocks[run.index], 0);
+      }
       run.addEventListener('countdown', () => { if (this.tonAn) signal.countdown(); });
       run.addEventListener('zeitsprung', () => {
         this.#cursorBlinkBis = Date.now() + 2000;   // Cursor kurz hervorheben
       });
       run.addEventListener('done', () => {
         if (this.tonAn) signal.fertig();
-        if (this.ansagenAn) setTimeout(() => ansageFertig().then(ok => {
-          if (!ok && !document.hidden) signal.sage('Programm beendet, gut gemacht');
-        }), this.tonAn ? 1100 : 0);
+        if (this.ansagenAn) {
+          clearTimeout(this.#ansageTimer);
+          this.#ansageTimer = setTimeout(() => {
+            if (this.#tot) return;
+            ansageFertig().then(ok => {
+              if (!ok && !document.hidden && !this.#tot) signal.sage('Programm beendet, gut gemacht');
+            });
+          }, this.tonAn ? 1100 : 0);
+        }
         // Dauerhaft sichtbar machen, dass ab jetzt frei ausgerollt wird —
         // die Aufzeichnung läuft bewusst weiter, Beenden speichert
         const el = this.$('#m-status');
@@ -102,6 +122,7 @@ export class RideScreen {
   #abos = [];                 // [target, typ, fn] — Listener auf langlebigen Pool-Clients
   #uebernommen = new Set();   // Client-Objekte, die diese Fahrt schon verdrahtet hat
   #tot = false;               // destroy() gelaufen — späte Auto-Connect-Promises ignorieren
+  #ansageTimer = null;        // jüngste geplante Sprachansage (Block/Fertig)
 
   #abo(target, typ, fn) {
     target.addEventListener(typ, fn);
@@ -487,6 +508,7 @@ export class RideScreen {
 
   destroy() {
     this.#tot = true;
+    clearTimeout(this.#ansageTimer);   // keine Geister-Ansage nach Fahrtende
     signal.audioSchlafen();     // Audiofokus zurück an die Musik-App
     this.#resizeObs?.disconnect();
     cancelAnimationFrame(this.#resizeRaf);
