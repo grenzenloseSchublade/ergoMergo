@@ -67,8 +67,8 @@ export function blockwechsel(hart) {
   if (!ctx) return;
   wecke();
   const t = ctx.currentTime;
-  if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.3); }
-  else { tone(587, t, 0.25); }
+  if (hart) { tone(880, t); tone(880, t + 0.2); tone(1175, t + 0.4, 0.45); }
+  else { tone(587, t, 0.4); }
 }
 
 // Kurzer Bestätigungs-Tick für Controller-Tastendrücke

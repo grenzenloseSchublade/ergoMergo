@@ -266,7 +266,7 @@ export class ProgramRun extends EventTarget {
     }
     this.restImBlock = cur.ende - t;
     this.restGesamt = this.total - t;
-    if (this.restImBlock === 5 && cur.i < this.blocks.length - 1)
+    if ((this.restImBlock === 2 || this.restImBlock === 1) && cur.i < this.blocks.length - 1)
       this.dispatchEvent(new Event('countdown'));
   }
 

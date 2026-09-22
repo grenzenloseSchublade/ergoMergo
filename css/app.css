@@ -212,6 +212,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   background: rgba(227, 198, 63, .16);
   color: var(--z4); border: 1px solid var(--z4); border-radius: 999px;
   padding: .15rem .7rem; font-size: .72rem; letter-spacing: .04em; z-index: 5;
+  white-space: nowrap;
 }
 .metrics { position: relative; cursor: pointer; }
 /* Platz schaffen, wenn der Demo-Badge eingeblendet ist */
@@ -338,6 +339,8 @@ button:disabled { cursor: default; }
     padding: .4rem .6rem;
   }
   .metrics::-webkit-scrollbar { display: none; }
+  /* Schmale Metrics-Spalte: Zusatztext würde umbrechen — nur „DEMO" zeigen */
+  .demo-badge-hint { display: none; }
   .metric-power .value { font-size: clamp(3rem, 16vmin, 6rem); }
   .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 6.5vmin, 2.4rem); }
   .row-secondary { gap: .2rem .9rem; font-size: .8rem; }

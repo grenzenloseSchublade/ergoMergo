@@ -3,6 +3,7 @@
 // Screen-Wechsel und rideScreen-Registrierung kommen als Callbacks.
 
 import { getSettings } from './storage.js';
+import { initAudio } from './signals.js';
 import { Session } from './state.js';
 import { RideScreen } from './ui/ride.js';
 import { WORKOUTS } from './workouts.js';
@@ -54,6 +55,11 @@ export async function startDemo(variante, { show, screens, registriere }) {
     // ?ping — Hintergrund-Throttling messen: 1 Request/s, Servlog zeigt Lücken
     if (ping) fetch(`ping?t=${session.elapsed}&vis=${document.visibilityState}`).catch(() => {});
   }, 1000);
+  // Audio wie in der echten Fahrt (Beeps + Ansage-Bausteine statt Browser-TTS).
+  // Vor dem RideScreen, damit dessen initAnsagen den Context schon bekommt.
+  // ?demo-Autostart hat keine User-Geste — erste Berührung entsperrt dann nach.
+  initAudio();
+  document.addEventListener('pointerdown', initAudio, { once: true });
   show('ride');
   history.pushState({ screen: 'ride' }, '');   // double-back-Schutz auch in der Demo
   // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde

@@ -222,8 +222,10 @@ function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) 
 // (Sample ohne Position, z. B. Not-Stopp-Pause → Lücke). Springt x rückwärts
 // (Block zurück), wird vom alten Durchlauf nur der tatsächlich ÜBERHOLTE
 // Teil (x hinter der Sprungstelle) grau abgesetzt — er zählt nicht mehr;
-// der Verlauf davor bleibt normal weiß.
-function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5) {
+// der Verlauf davor bleibt normal weiß. tFn (optional, Programmzeit pro
+// Sample) macht Vorwärtssprünge (Skip) erkennbar: dort keine durchgezogene
+// Linie, sondern eine graue gestrichelte Brücke über die Lücke.
+function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5, tFn = null) {
   const zeichne = (pts, farbe, alpha) => {
     if (!pts.length) return;
     ctx.globalAlpha = alpha;
@@ -241,14 +243,34 @@ function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5)
     ctx.globalAlpha = 1;
   };
   const seg = [];
+  let tPrev = null;
   for (let k = 0; k < count; k++) {
     const px = xFn(k);
     if (px === null) {                         // Lücke: Segment normal beenden
       zeichne(seg, css('--power-line'), 1);
       seg.length = 0;
+      tPrev = null;
       continue;
     }
     const py = yFn(samples[k * FIELDS + 1]);
+    const t = tFn ? tFn(k) : null;
+    if (seg.length && tPrev !== null && t !== null && t - tPrev > 1.5) {
+      // Vorwärtssprung (Skip): weißes Segment beenden, die übersprungene
+      // Strecke nur als graue gestrichelte Brücke andeuten
+      const [lx, ly] = seg[seg.length - 1];
+      zeichne(seg, css('--power-line'), 1);
+      seg.length = 0;
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = css('--ink3');
+      ctx.lineWidth = Math.max(1, breite * 0.6);
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
     if (seg.length && px < seg[seg.length - 1][0]) {
       // Rücksprung: Segment an der Sprungstelle teilen — vorderer Teil
       // bleibt gültig, der überholte hintere wird grau verworfen
@@ -259,6 +281,7 @@ function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5)
       seg.length = 0;
     }
     seg.push([px, py]);
+    if (t !== null) tPrev = t;
   }
   zeichne(seg, css('--power-line'), 1);
 }
@@ -366,7 +389,7 @@ export class WorkoutChart {
     zeichneLeistungslinie(ctx, css, samples, count, k => {
       const t = samples[k * FIELDS];
       return istPause?.(t) ? null : x(zeitMap(t));
-    }, y, 1.5 * Math.min(s, 1.6));
+    }, y, 1.5 * Math.min(s, 1.6), k => zeitMap(samples[k * FIELDS]));
 
     if (count) {
       const px = x(zeitMap(samples[(count - 1) * FIELDS]));
