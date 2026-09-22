@@ -277,7 +277,9 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
      Beenden gleich viel Luft: die gefährlichste Nachbarschaft braucht
      den größten Abstand. */
   display: grid;
-  grid-template-columns: 1fr .5rem 1fr .9rem 7rem .9rem 7rem;
+  /* −10/+10 quadratisch (64px = Buttonhöhe), Restraum als flexible Spur
+     davor Stopp/Beenden — die behalten ihre festen 7rem-Slots */
+  grid-template-columns: 64px .5rem 64px minmax(.9rem, 1fr) 7rem .9rem 7rem;
   column-gap: 0; row-gap: .5rem;
   padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom));
 }
