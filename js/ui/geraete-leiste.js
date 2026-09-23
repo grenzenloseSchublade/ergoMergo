@@ -1,7 +1,7 @@
 // Geräte-Leiste auf dem Home: reiner Renderer über den GeraeteManager.
 // Icons: Lucide (lucide.dev, MIT) — inline, kein CDN.
 
-import { geraeteManager, eintraegeVon } from '../ble/geraete.js';
+import { geraeteManager, eintraegeVon, kannMerken } from '../ble/geraete.js';
 import { getSettings } from '../storage.js';
 import { toast, toastOk, toastErr } from './toast.js';
 import { logError } from '../logger.js';
@@ -49,9 +49,13 @@ async function zeichneGeraeteLeisteInner() {
           toastOk(`${label} gekoppelt & verbunden`);
           if (rolle === 'controller') toast('Tipp: linkes und rechtes Pad sind eigene Geräte — die andere Seite über „+ 2. Pad" koppeln');
         } else if ((await geraeteManager.autorisiert(rolle)).length === 0) {
-          // Chrome kennt die Berechtigung nicht mehr — verbinde() kann nur
-          // scheitern; die Geste ist noch frisch → direkt der Chooser
-          toast(`${label}: Berechtigung abgelaufen — bitte neu wählen`);
+          // verbinde() kann nur scheitern; die Geste ist noch frisch → direkt
+          // der Chooser. Grund unterscheiden: ohne getDevices (Chrome-Flag)
+          // kann sich die App keine Berechtigung merken — sonst ist sie
+          // schlicht abgelaufen.
+          toast(kannMerken()
+            ? `${label}: Berechtigung abgelaufen — bitte neu wählen`
+            : `${label}: Schnellverbinden braucht ein Chrome-Flag — Hinweis in den Einstellungen`);
           await geraeteManager.koppel(rolle);
           toastOk(`${label} neu gekoppelt & verbunden`);
         } else {

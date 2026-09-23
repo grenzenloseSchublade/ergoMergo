@@ -330,29 +330,40 @@ button:disabled { cursor: default; }
 .ride-grid.fokus-graph .row-secondary { font-size: clamp(.95rem, 3vmin, 1.15rem); }
 .ride-grid.fokus-graph .restbalken { display: none; }
 
-/* Querformat: Werte links, Chart groß in der Mitte (volle Resthöhe),
-   Chips als schmale Leiste darunter, Bedienung rechts */
-@media (orientation: landscape) and (max-height: 500px) {
+/* Querformat: wie Hochformat rotiert — Werte als Zeile oben, Chart in
+   voller Breite darunter (Resthöhe), Chips als schmale Leiste, Bedienung
+   rechts. Schwelle 620px: auch große Handys/Foldables quer sollen dieses
+   Layout bekommen statt des breitgezogenen Portrait-Stapels. */
+@media (orientation: landscape) and (max-height: 620px) {
   .ride-grid {
-    grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr) auto;
-    grid-template-areas: "metrics chart controls" "metrics chips controls";
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "metrics controls" "chart controls" "chips controls";
   }
   .metrics {
-    grid-area: metrics; min-height: 0; overflow: auto; scrollbar-width: none;
-    align-content: safe center;      /* Überlauf nie oben unerreichbar abschneiden */
-    padding: .4rem .6rem;
+    grid-area: metrics;
+    grid-template-columns: auto auto auto;
+    grid-template-areas: "power target time" "sec sec sec";
+    column-gap: clamp(1rem, 5vw, 3rem);
+    justify-content: center; align-items: center;
+    padding: .3rem .6rem 0;
   }
-  .metrics::-webkit-scrollbar { display: none; }
-  /* Schmale Metrics-Spalte: Zusatztext würde umbrechen — nur „DEMO" zeigen */
+  /* Metrikzeile ist flach: Badge-Zusatztext würde drücken — nur „DEMO" zeigen */
   .demo-badge-hint { display: none; }
-  .metric-power .value { font-size: clamp(3rem, 16vmin, 6rem); }
-  .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 6.5vmin, 2.4rem); }
-  .row-secondary { gap: .2rem .9rem; font-size: .8rem; }
+  .metric-power .value { font-size: clamp(2.4rem, 13vmin, 4rem); }
+  .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 8vmin, 2.4rem); }
+  .row-secondary { gap: .2rem 1.2rem; font-size: .85rem; margin-top: 0; }
   #live-chart { grid-area: chart; height: 100%; min-height: 0; }
-  .row-actions { grid-area: chips; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-content: safe center; margin: .3rem .3rem calc(.4rem + env(safe-area-inset-bottom)); }
+  .row-actions {
+    grid-area: chips; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    justify-content: safe center;
+    margin: .3rem 0 calc(.4rem + env(safe-area-inset-bottom));
+    padding: 0 max(.3rem, env(safe-area-inset-right)) 0 max(.3rem, env(safe-area-inset-left));
+    /* Überlaufende Chips als „da ist mehr" lesbar machen statt abgeschnitten */
+    mask-image: linear-gradient(to right, transparent, #000 1rem, #000 calc(100% - 1.5rem), transparent);
+  }
   .row-actions::-webkit-scrollbar { display: none; }
-  .row-actions .chip { flex: 0 0 auto; min-height: 40px; }
+  .row-actions .chip { flex: 0 0 auto; min-height: 38px; padding: .3rem .75rem; font-size: .82rem; }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
   /* Portrait-Spurzuweisung aufheben — per ID, sonst verliert der Reset
      den Spezifitätsvergleich gegen #btn-stop { grid-column: 5 } */
@@ -360,14 +371,13 @@ button:disabled { cursor: default; }
   .controls #btn-stop { margin-top: .9rem; } /* vertikal: kein Overflow möglich */
   .controls #btn-end { margin-top: .9rem; }
   .ctl { min-width: 96px; }
-  /* Fokus quer: Spaltenverhältnis kippt statt Zeilenhöhen */
-  .ride-grid.fokus-werte { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; }
-  .ride-grid.fokus-werte .metric-power .value { font-size: clamp(4.5rem, 24vmin, 9rem); }
-  .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(2rem, 9vmin, 3.2rem); }
+  /* Fokus quer: nur Schriftgrößen kippen — der Chart behält die volle
+     Restfläche (fokus-werte blendet die Chips aus, 1fr wächst von selbst) */
+  .ride-grid.fokus-werte .metric-power .value { font-size: clamp(3.2rem, 18vmin, 5.5rem); }
+  .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 9vmin, 3rem); }
   .ride-grid.fokus-werte #live-chart { height: 100%; }   /* Streifen-Regel gilt nur hochkant */
-  .ride-grid.fokus-graph { grid-template-columns: 9.5rem minmax(0, 1fr) auto; }
   .ride-grid.fokus-graph #live-chart { height: 100%; }
-  .ride-grid.fokus-graph .metric-power .value { font-size: clamp(2rem, 10vmin, 3rem); }
+  .ride-grid.fokus-graph .metric-power .value { font-size: clamp(1.8rem, 8vmin, 2.6rem); }
   .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.1rem, 5vmin, 1.6rem); }
 }
 
