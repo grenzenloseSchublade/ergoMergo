@@ -1,12 +1,12 @@
 // Trainingsliste (Start) und Detailansicht mit Export/Löschen.
 
-import { listSessions, getSamples, deleteSession, getSettings, FIELDS } from '../storage.js';
+import { listSessions, getSamples, deleteSession, saveSession, getSettings, FIELDS } from '../storage.js';
 import { logInfo, logError } from '../logger.js';
 import { toastOk, toastErr } from './toast.js';
 import { toTCX, download } from '../export.js';
 import { drawSessionChart } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
-import { fmtTime } from '../format.js';
+import { fmtTime, fmtKm } from '../format.js';
 import { kennwerte } from '../metrics.js';
 
 // Zeit-in-Zonen als schmaler Farbbalken (HTML, nutzt --z1..--z6)
@@ -60,8 +60,9 @@ export function wochenbilanz(sessions) {
   vorwochenstart.setDate(vorwochenstart.getDate() - 7);
   const summe = list => list.reduce((a, s) => ({
     n: a.n + 1, sek: a.sek + s.dauer, kJ: a.kJ + s.kJ, tss: a.tss + (s.tss ?? 0),
+    km: a.km + (s.km ?? 0),
     akku: a.akku + (s.akkuProStunde ?? 0), akkuN: a.akkuN + (s.akkuProStunde ? 1 : 0),
-  }), { n: 0, sek: 0, kJ: 0, tss: 0, akku: 0, akkuN: 0 });
+  }), { n: 0, sek: 0, kJ: 0, tss: 0, km: 0, akku: 0, akkuN: 0 });
   return {
     woche: summe(sessions.filter(s => s.start >= wochenstart.getTime())),
     vorwoche: summe(sessions.filter(s => s.start >= vorwochenstart.getTime() && s.start < wochenstart.getTime())),
@@ -76,8 +77,17 @@ export async function renderList(ul, onOpen) {
   if (bilanzEl) {
     if (sessions.length) {
       const { woche, vorwoche } = wochenbilanz(sessions);
-      const fmt = b => `${b.n} ${b.n === 1 ? 'Fahrt' : 'Fahrten'} · ${fmtTime(b.sek)} · ${Math.round(b.kJ)} kJ${b.tss ? ` · ${b.tss} TSS` : ''}${b.akkuN ? ` · ≈ ${Math.round(b.akku / b.akkuN * 10) / 10} %/h Akku` : ''}`;
-      bilanzEl.innerHTML = `<b>Diese Woche:</b> ${fmt(woche)}<br><span>Vorwoche: ${fmt(vorwoche)}</span>`;
+      // Kennzahlen-Grid: Wert fett, Label klein, Vorwochenwert grau darunter
+      const zelle = (label, wert, vor) =>
+        `<span class="bk"><b>${wert}</b><i>${label}</i><s>${vor}</s></span>`;
+      bilanzEl.innerHTML = `<span class="bilanz-head">Diese Woche <i>· grau: Vorwoche</i></span>
+        <span class="bilanz-grid">
+          ${zelle('Fahrten', woche.n, vorwoche.n)}
+          ${zelle('Zeit', fmtTime(woche.sek), fmtTime(vorwoche.sek))}
+          ${woche.km || vorwoche.km ? zelle('km', fmtKm(woche.km), fmtKm(vorwoche.km)) : ''}
+          ${zelle('kJ', Math.round(woche.kJ), Math.round(vorwoche.kJ))}
+          ${woche.tss || vorwoche.tss ? zelle('TSS', woche.tss, vorwoche.tss) : ''}
+        </span>${woche.akkuN ? `<span class="bilanz-fuss">≈ ${Math.round(woche.akku / woche.akkuN * 10) / 10} %/h Akku</span>` : ''}`;
       bilanzEl.hidden = false;
     } else {
       bilanzEl.hidden = true;
@@ -97,7 +107,7 @@ export async function renderList(ul, onOpen) {
     const d = new Date(s.start);
     li.innerHTML = `<span class="zeile"><span>${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
       ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-      <span class="meta">${s.programm} · ${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ${s.final ? '' : ' · abgebrochen'}</span></span>
+      <span class="meta">${s.programm} · ${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ${s.km ? ` · ${fmtKm(s.km)} km` : ''}${s.final ? '' : ' · abgebrochen'}</span></span>
       ${zonenBalken(s.zonenSek, 5)}`;
     li.addEventListener('click', () => onOpen(s));
     ul.append(li);
@@ -109,15 +119,18 @@ export async function renderDetail(root, session, onClose) {
     new Date(session.start).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
   const data = await getSamples(session.id);
 
-  // Fehlende Kennwerte (alte Sessions) aus den Rohsamples nachberechnen
-  if (data && session.np === undefined) {
+  // Fehlende Kennwerte (alte Sessions) aus den Rohsamples nachberechnen und
+  // persistieren, damit km auch in Liste und Wochenbilanz auftaucht
+  if (data && (session.np === undefined || session.km === undefined)) {
     Object.assign(session, kennwerte(data.samples, data.count, session.ftp ?? 0));
+    saveSession(session);
   }
 
   const stats = [
     ['Dauer', fmtTime(session.dauer)], ['Ø', `${session.avgW} W`], ['max', `${session.maxW} W`],
     ['Arbeit', `${session.kJ} kJ`], ['Ø Kadenz', `${session.avgRpm} rpm`],
   ];
+  if (session.km) stats.push(['Distanz', `${fmtKm(session.km)} km`]);
   if (session.np) stats.push(['NP', `${session.np} W`]);
   if (session.if) stats.push(['IF', session.if], ['TSS', session.tss]);
   if (session.hrAvg) stats.push(['Ø HF', `${session.hrAvg} bpm`], ['max HF', `${session.hrMax} bpm`]);

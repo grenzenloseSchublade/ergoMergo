@@ -4,7 +4,7 @@
 
 import { FIELDS, saveSamples, saveSession } from './storage.js';
 import { logInfo, logWarn } from './logger.js';
-import { kennwerte } from './metrics.js';
+import { kennwerte, distanzKm } from './metrics.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
 const RAMP_MS = 2000;         // Zielsprünge als Rampe, nicht als Sprung
@@ -25,6 +25,7 @@ export class Session extends EventTarget {
     this.count = 0;
     this.live = { watt: 0, rpm: 0, hr: 0, kmh: 0 };
     this.kj = 0;
+    this.km = 0;
     this.programmEndeBei = null;   // Aufzeichnungssekunde des Programmendes (ProgramRun setzt)
     this.#startLoops();
     ftms.addEventListener('data', this.#onData);
@@ -160,6 +161,7 @@ export class Session extends EventTarget {
     s[i + 5] = Math.round(this.live.kmh * 10);
     this.count++;
     this.kj += this.live.watt / 1000;
+    this.km += s[i + 5] / 36000;   // aus dem Sample, damit Live-km == distanzKm(samples)
     this.dispatchEvent(new Event('tick'));
   }
 
@@ -193,6 +195,10 @@ export class Session extends EventTarget {
       kJ: Math.round(sumW / 1000),     // 1 Sample = 1 s → Watt·s/1000
       avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
       ...kennwerte(this.samples, n, this.settings.ftp),
+      // Distanz über die ganze Fahrt inkl. Ausrollen — konsistent zum
+      // TCX-Export; überschreibt bewusst das aufs Programmfenster begrenzte
+      // km aus kennwerte()
+      km: Math.round(distanzKm(this.samples, this.count) * 100) / 100,
     };
   }
 

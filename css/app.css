@@ -162,10 +162,17 @@ dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
 .listhead { font-size: .8rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; margin: 1.6rem 0 .5rem; }
 .bilanz {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-  padding: .55rem .9rem; margin: 0 0 .5rem; font-size: .85rem;
+  padding: .55rem .9rem .6rem; margin: 0 0 .5rem; font-size: .85rem;
   font-variant-numeric: tabular-nums;
 }
-.bilanz span { color: var(--ink3); font-size: .78rem; }
+.bilanz-head { display: block; font-size: .7rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .4rem; }
+.bilanz-head i { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .8; }
+.bilanz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.6rem, 1fr)); gap: .3rem .5rem; }
+.bk { display: grid; gap: .05rem; }
+.bk b { font-size: 1rem; color: var(--ink); }
+.bk i { font-style: normal; font-size: .66rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
+.bk s { text-decoration: none; font-size: .74rem; color: var(--ink3); }
+.bilanz-fuss { display: block; margin-top: .35rem; color: var(--ink3); font-size: .74rem; }
 
 .zonen { display: flex; width: 100%; border-radius: 3px; overflow: hidden; }
 .zonen i { display: block; height: 100%; }

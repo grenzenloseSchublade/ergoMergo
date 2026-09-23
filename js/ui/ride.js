@@ -1,7 +1,7 @@
 // Fahrbildschirm: Livewerte, ±-Bedienung mit Tastenwiederholung, Not-Stopp.
 
 import { LiveChart, WorkoutChart, zoneColor } from './chart.js';
-import { fmtTime } from '../format.js';
+import { fmtTime, fmtKm } from '../format.js';
 import * as signal from '../signals.js';
 import { geraeteManager } from '../ble/geraete.js';
 import { initAnsagen, ansageBlock, ansageFertig } from '../ansagen.js';
@@ -467,6 +467,7 @@ export class RideScreen {
     this.#renderRpm(s);
     this.$('#m-hr').textContent = s.live.hr || '–';
     this.$('#m-kj').textContent = Math.round(s.kj);
+    this.$('#m-km').textContent = fmtKm(s.km);
     if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, this.settings.ftp,
       t => this.run.programmZeit(t), Date.now() < this.#cursorBlinkBis, t => this.run.istPause(t));
     else this.chart.draw(s.samples, s.count, s.target);

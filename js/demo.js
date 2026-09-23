@@ -3,6 +3,7 @@
 // Screen-Wechsel und rideScreen-Registrierung kommen als Callbacks.
 
 import { getSettings, FIELDS } from './storage.js';
+import { distanzKm } from './metrics.js';
 import { initAudio } from './signals.js';
 import { Session } from './state.js';
 import { WORKOUTS } from './workouts.js';
@@ -28,6 +29,7 @@ export async function startDemo(variante, { betreteFahrt }) {
       session.kj += watt / 1000;
     }
     session.count = secs;
+    session.km = distanzKm(session.samples, secs);   // zentral aus den Samples, kein zweiter Rechenweg
   };
   const workout = WORKOUTS.find(x => x.id === variante);
   if (workout) {

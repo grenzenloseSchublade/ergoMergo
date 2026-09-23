@@ -1,6 +1,6 @@
 // Trainingskennwerte aus den Rohsamples (Int16 n×6: s, watt, ziel, rpm, hf, kmh×10).
 // Alles nachträglich aus sessionData ableitbar — alte Sessions lassen sich
-// damit in der Detailansicht nachberechnen.
+// damit in der Detailansicht nachberechnen (inkl. Distanz aus der Trainer-Speed).
 
 import { FIELDS } from './storage.js';
 
@@ -26,11 +26,21 @@ export function besteDauerleistung(samples, count, fenster = 60) {
   return Math.round(best / fenster);
 }
 
+// Distanz als Integral der Trainer-Speed (Feld 5, kmh×10, 1 Sample = 1 s) —
+// dieselbe Rechnung wie im TCX-Export; im ERG-Modus gangabhängig, also
+// „Trainer-Distanz", keine Leistungsgröße
+export function distanzKm(samples, count) {
+  let sum = 0;
+  for (let k = 0; k < count; k++) sum += samples[k * FIELDS + 5];
+  return sum / 36000;
+}
+
 // NP nach dem Standardverfahren: 30-s-gleitender Mittelwert der Leistung,
 // vierte Potenz, Mittel, vierte Wurzel. IF = NP/FTP, TSS = h·IF²·100.
 export function kennwerte(samples, count, ftp = 0) {
   const out = { np: 0, hrAvg: 0, hrMax: 0, zonenSek: null };
   if (!count) return out;
+  out.km = Math.round(distanzKm(samples, count) * 100) / 100;
 
   // Präfixsummen für den 30-s-Rolling-Mean
   let rollSum = 0, potSum = 0, potN = 0;
