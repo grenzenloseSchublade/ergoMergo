@@ -81,6 +81,15 @@ async function startRide(programm = null) {
 }
 
 async function startRideInner(programm) {
+  // Ohne Web Bluetooth (Brave/Firefox/iOS) kann keine Fahrt starten — der
+  // Tap bleibt möglich, damit der Nutzer den Grund erfährt statt eines
+  // stumm toten Buttons
+  if (!navigator.bluetooth) {
+    toastErr(navigator.brave
+      ? 'Brave blockiert Web Bluetooth — bitte Chrome verwenden'
+      : 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig');
+    return;
+  }
   const settings = await getSettings();
   initAudio();                              // braucht die User-Geste des Start-Taps
   let run = null, blocks = null;
@@ -432,7 +441,6 @@ if (!navigator.bluetooth) {
   $('#bt-support').textContent = navigator.brave
     ? 'Brave blockiert Web Bluetooth — bitte Chrome verwenden (oder brave://flags/#brave-web-bluetooth-api)'
     : 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig';
-  $('#start-free').disabled = true;
 } else if (navigator.brave) {
   // Brave lässt die API teils existieren, blockt aber den Chooser
   $('#bt-support').textContent = 'Brave blockiert Web Bluetooth meist — bei Problemen Chrome verwenden';
