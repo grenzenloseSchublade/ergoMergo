@@ -36,6 +36,15 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .brand h1 { font-size: 1.3rem; font-weight: 400; letter-spacing: .01em; margin: 0; }
 .brand h1 b { font-weight: 700; color: var(--accent); }
 .hint { font-size: .75rem; color: var(--ink3); }
+.hint code { font-size: .72rem; color: var(--ink2); word-break: break-all; }
+/* .hint .copy-btn: bewusst spezifischer als die Rubrik-Regel „.diagnose button",
+   damit der Button in Einstellungen und Header identisch aussieht */
+.hint .copy-btn {
+  background: none; border: 1px solid var(--line); border-radius: 6px;
+  color: var(--accent); padding: .3rem .55rem; line-height: 0;
+  cursor: pointer; vertical-align: middle; margin: 0 .1rem;
+}
+.hint .copy-btn svg, .hint .copy-btn .si { width: .85rem; height: .85rem; display: inline-block; font-style: normal; }
 .back { background: none; color: var(--ink2); font-size: 1rem; padding: .3rem .6rem .3rem 0; }
 
 .tiles {

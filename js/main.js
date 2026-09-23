@@ -22,7 +22,7 @@ async function demoStarten(variante) {
   finally { startLaeuft = false; }
 }
 import { zeichneGeraeteLeiste } from './ui/geraete-leiste.js';
-import { montiereIcons } from './ui/icons.js';
+import { montiereIcons, svgIcon } from './ui/icons.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung } from './metrics.js';
@@ -437,10 +437,31 @@ addEventListener('appinstalled', async () => {
 
 
 
+// Flag-URLs sind nicht klickbar (Browser blocken chrome://-Links) — deshalb
+// Kopier-Buttons. Ein delegierter Listener bedient alle .copy-btn; kopiert
+// wird der Text des davorstehenden <code>-Elements (URL steht so nur EINMAL
+// im Markup), data-copy bleibt als expliziter Override möglich.
+document.addEventListener('click', e => {
+  const b = e.target.closest('.copy-btn');
+  if (!b) return;
+  const text = b.dataset.copy ?? b.previousElementSibling?.textContent;
+  if (!text) return;
+  navigator.clipboard.writeText(text)
+    .then(() => toastOk('Kopiert — in die Adresszeile einfügen'))
+    .catch(() => toastErr('Kopieren fehlgeschlagen'));
+});
+
+// URL als <code> + Kopier-Button — svgIcon direkt einbetten, montiereIcons()
+// ist zu diesem Zeitpunkt schon gelaufen
+const flagChip = url => `<code>${url}</code> <button type="button" class="copy-btn" aria-label="Flag-Adresse kopieren" title="kopieren">${svgIcon('copy')}</button>`;
+
 if (!navigator.bluetooth) {
-  $('#bt-support').textContent = navigator.brave
-    ? 'Brave blockiert Web Bluetooth — bitte Chrome verwenden (oder brave://flags/#brave-web-bluetooth-api)'
-    : 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig';
+  const linux = /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+  $('#bt-support').innerHTML = navigator.brave
+    ? `Brave blockiert Web Bluetooth — bitte Chrome verwenden (oder ${flagChip('brave://flags/#brave-web-bluetooth-api')})`
+    : linux
+      ? `Kein Web Bluetooth — unter Linux-Chrome erst ${flagChip('chrome://flags/#enable-web-bluetooth')} aktivieren`
+      : 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig';
 } else if (navigator.brave) {
   // Brave lässt die API teils existieren, blockt aber den Chooser
   $('#bt-support').textContent = 'Brave blockiert Web Bluetooth meist — bei Problemen Chrome verwenden';

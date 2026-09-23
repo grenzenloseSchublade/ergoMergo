@@ -202,7 +202,10 @@
     </details>
     <details class="diagnose">
       <summary>Geräte</summary>
-      <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht chrome://flags/#enable-web-bluetooth-new-permissions-backend — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
+      <!-- Kopier-Button ohne data-copy: kopiert den Text des <code> davor (Listener in main.js) -->
+      <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht <code>chrome://flags/#enable-web-bluetooth-new-permissions-backend</code>
+        <button type="button" class="copy-btn" aria-label="Flag-Adresse kopieren" title="kopieren"><i class="si" data-icon="copy"></i></button>
+        — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
       <p class="hint">Zwift-Lenker: linkes und rechtes Pad sind eigene Geräte — beim Koppeln den Eintrag „Zwift Ride" wählen (kryptische Namen sind Nebenkanäle), danach „+ 2. Pad" für die andere Seite.</p>
       <ul id="geraete-liste" class="geraete"></ul>
       <p class="hint" id="ctrl-map-anzeige"></p>
