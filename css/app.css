@@ -19,6 +19,7 @@
   --taste-gruen: #4cc76e; --taste-magenta: #e0489a; --taste-blau: #4a9bd8; --taste-orange: #f0892f;
   --power-line: #ecf3f5;
   --target-fill: rgba(69, 199, 212, .18);
+  --hr-line: #ff6f8a;          /* Herzfrequenz-Kurve + HF-Werte in der Detailansicht */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -293,11 +294,14 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .bilanz-head { display: block; font-size: .7rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .4rem; }
 .bilanz-head i { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .8; }
-.bilanz-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(3.6rem, 1fr)); gap: .3rem .5rem; }
-.bk { display: grid; gap: .05rem; }
-.bk b { font-size: 1rem; color: var(--ink); }
-.bk i { font-style: normal; font-size: .66rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
-.bk s { text-decoration: none; font-size: .74rem; color: var(--ink3); }
+/* Fahrzeit je Woche: 8 Balken, Wert oben, KW unten, aktuelle Woche in Akzentfarbe */
+.wochen-balken { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .35rem; align-items: end; }
+.wb { display: flex; flex-direction: column; align-items: center; gap: .15rem; min-width: 0; }
+.wb b { font-size: .64rem; font-weight: 600; color: var(--ink2); white-space: nowrap; min-height: 1em; line-height: 1; }
+.wb i { display: block; width: 100%; max-width: 2.2rem; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--ink3); opacity: .55; }
+.wb s { text-decoration: none; font-size: .64rem; color: var(--ink3); line-height: 1.2; }
+.wb.jetzt i { background: var(--accent); opacity: 1; }
+.wb.jetzt s { color: var(--accent); }
 .bilanz-fuss { display: block; margin-top: .35rem; color: var(--ink3); font-size: .74rem; }
 
 .zonen { display: flex; width: 100%; border-radius: 3px; overflow: hidden; }
@@ -309,8 +313,41 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
   padding: .6rem .9rem; display: grid; gap: .35rem; cursor: pointer;
   font-variant-numeric: tabular-nums;
 }
-.sessions .zeile { display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
-.sessions .meta { color: var(--ink2); font-size: .82rem; }
+.sessions .zeile { display: flex; justify-content: space-between; align-items: baseline; gap: .8rem; min-width: 0; }
+.sessions .datum { white-space: nowrap; }
+.sessions .prog { color: var(--ink2); font-size: .9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sessions .meta { color: var(--ink2); font-size: .82rem; margin-top: -.25rem; }
+/* Probefahrten/Fehlstarts unter 2 min: bleiben da, drängen sich aber nicht vor */
+.sessions li.kurz { opacity: .55; }
+/* Home: Sprung in die Fahrten-Historie */
+.alle-fahrten {
+  display: block; width: 100%; margin: .45rem 0 0; padding: .6rem .9rem; text-align: center;
+  background: none; border: 1px solid var(--line); border-radius: 10px; color: var(--accent); font-size: .9rem;
+}
+#wochenbilanz { cursor: pointer; }
+
+/* Fahrten-Screen: Monate als aufklappbare Bereiche mit Summenzeile */
+.monat { margin: 0 0 .6rem; }
+.monat > summary {
+  display: flex; align-items: baseline;
+  padding: .7rem .2rem .45rem; cursor: pointer; list-style: none; border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.monat > summary::-webkit-details-marker { display: none; }
+.monat > summary::before { content: '▸'; color: var(--accent); margin-right: .45rem; font-size: .8rem; }
+.monat[open] > summary::before { content: '▾'; }
+.monat .m-titel { font-size: .85rem; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: .06em; margin-right: auto; }
+.monat .m-summe { font-size: .8rem; color: var(--ink3); margin-left: .8rem; white-space: nowrap; }
+.monat > .sessions { margin-top: .3rem; }
+
+.sessions li.woche {
+  /* fest zweizeilig (Name, darunter Summen) — einzeilig bräche je nach Länge mal um, mal nicht */
+  background: none; border: 0; padding: .7rem .1rem 0; cursor: default; gap: 0;
+}
+.sessions li.woche:first-child { padding-top: 0; }
+.woche .w-titel { font-size: .74rem; font-weight: 600; color: var(--ink2); text-transform: uppercase; letter-spacing: .06em; }
+.woche .w-titel i { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink3); }
+.woche .w-summe { font-size: .78rem; color: var(--ink3); }
 .sessions .empty { border-style: dashed; color: var(--ink3); cursor: default; justify-content: center; }
 
 /* ---------- Fahrt ---------- */
@@ -340,16 +377,24 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .metric-target { grid-area: target; }
 .metric-time { grid-area: time; }
 .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 8vmin, 3rem); }
-.demo-badge {
-  position: absolute; top: .5rem; left: 50%; transform: translateX(-50%);
-  background: rgba(227, 198, 63, .16);
-  color: var(--z4); border: 1px solid var(--z4); border-radius: 999px;
-  padding: .15rem .7rem; font-size: .72rem; letter-spacing: .04em; z-index: 5;
-  white-space: nowrap;
+.demo-badge, .demo-beispiel {
+  border-radius: 999px; padding: .15rem .7rem; font-size: .72rem; letter-spacing: .04em;
+  line-height: 1.5; white-space: nowrap;
 }
+.demo-badge { background: rgba(227, 198, 63, .16); color: var(--z4); border: 1px solid var(--z4); }
+/* Fahrbildschirm im Demo: Badge + Sprung zur Beispielfahrt oben mittig */
+.demo-leiste {
+  position: absolute; top: .5rem; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex; gap: .4rem; align-items: center;
+}
+.demo-beispiel { background: none; color: var(--accent); border: 1px solid var(--accent); }
+/* Detailansicht: Badge als eigene Zeile unter dem Kopf — neben Zurück und
+   Datum wäre bei 360 px kein Platz */
+#screen-detail .brand, #screen-fahrten .brand { flex-wrap: wrap; }
+.brand .demo-badge { order: 3; margin-top: -.5rem; }
 .metrics { position: relative; cursor: pointer; }
-/* Platz schaffen, wenn der Demo-Badge eingeblendet ist */
-.metrics:has(.demo-badge:not([hidden])) { padding-top: 2rem; }
+/* Platz schaffen, wenn die Demo-Leiste eingeblendet ist */
+.metrics:has(.demo-leiste:not([hidden])) { padding-top: 2rem; }
 
 /* Countdown-Balken unter der Intervall-Restzeit: leert sich mit dem Block */
 .restbalken {
@@ -520,6 +565,7 @@ button:disabled { cursor: default; }
 .d-stats .zonen { flex-basis: 100%; }
 .d-stats span { color: var(--ink2); font-size: .9rem; }
 .d-stats b { color: var(--ink); font-size: 1.1rem; }
+.d-stats .hf b { color: var(--hr-line); }   /* zugleich Legende der HF-Kurve */
 #detail-chart { width: 100%; height: 180px; background: var(--surface); border-radius: 10px; }
 .compliance { margin-top: .8rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .compliance summary { padding: .55rem .8rem; cursor: pointer; font-size: .85rem; }

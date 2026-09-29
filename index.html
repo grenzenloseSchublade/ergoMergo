@@ -80,13 +80,18 @@
   <h2 class="listhead">Letzte Fahrten</h2>
   <div id="wochenbilanz" class="bilanz" hidden></div>
   <ul id="session-list" class="sessions"></ul>
+  <button type="button" class="alle-fahrten" id="btn-alle-fahrten" hidden>Alle Fahrten ›</button>
+  <button type="button" class="demo-link" id="btn-demo-fahrt">▶ Beispielfahrten ansehen <span>· Fahrten-Historie mit Herzfrequenz</span></button>
 </section>
 
 <!-- ============ FAHRT ============ -->
 <section id="screen-ride" class="screen" hidden>
   <div class="ride-grid">
     <div class="metrics">
-      <span class="demo-badge" id="m-demo" hidden>DEMO<span class="demo-badge-hint"> — wird nicht gespeichert</span></span>
+      <div class="demo-leiste" id="m-demo" hidden>
+        <span class="demo-badge">DEMO<span class="demo-badge-hint"> — wird nicht gespeichert</span></span>
+        <button type="button" class="demo-beispiel" id="btn-demo-beispiel">Beispielfahrten ›</button>
+      </div>
       <div class="metric metric-power">
         <span class="label">Leistung</span>
         <span class="value" id="m-watt">0</span>
@@ -137,11 +142,23 @@
   </div>
 </section>
 
+<!-- ============ FAHRTEN (Historie) ============ -->
+<section id="screen-fahrten" class="screen" hidden>
+  <header class="brand">
+    <button class="back" id="btn-back-fahrten">‹ Zurück</button>
+    <h1>Fahrten</h1>
+    <span class="demo-badge" id="f-demo" hidden>DEMO<span class="demo-badge-hint"> — Beispielfahrten</span></span>
+  </header>
+  <div id="fahrten-diagramm" class="bilanz"></div>
+  <div id="fahrten-monate"></div>
+</section>
+
 <!-- ============ DETAIL ============ -->
 <section id="screen-detail" class="screen" hidden>
   <header class="brand">
     <button class="back" id="btn-back">‹ Zurück</button>
     <h1 id="d-title">Fahrt</h1>
+    <span class="demo-badge" id="d-demo" hidden>DEMO<span class="demo-badge-hint"> — Beispielfahrt</span></span>
   </header>
   <div class="d-stats" id="d-stats"></div>
   <canvas id="detail-chart"></canvas>

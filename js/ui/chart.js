@@ -124,13 +124,26 @@ function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
       ctx.moveTo(0, y + 0.5);
       ctx.lineTo(w, y + 0.5);
     }
-    if (phase !== 'linien') ctx.fillText(`${v} W`, 3, y - 2);
+    // oben abgeschnittene Beschriftung weglassen statt halb zeigen
+    if (phase !== 'linien' && y - 2 - axisFont(s) >= 0) beschrifte(ctx, css, `${v} W`, 3, y - 2);
   }
   ctx.stroke();
 }
 
+// Achsentext mit Hof in Canvas-Hintergrundfarbe: bleibt lesbar, auch wenn
+// eine Linie darunter durchläuft
+function beschrifte(ctx, css, text, x, y) {
+  ctx.save();
+  ctx.strokeStyle = css('background-color');
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, x, y);
+  ctx.restore();
+  ctx.fillText(text, x, y);
+}
+
 // Gestrichelte Referenzlinie bei 100 % FTP (nur wenn FTP bekannt und im Bild)
-function zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s) {
+function zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s, xLabel = w - 3) {
   if (!ftp || ftp >= maxW) return;
   const y = kopf + (h - kopf - fuss) * (1 - ftp / maxW);
   ctx.strokeStyle = css('--ink3');
@@ -145,7 +158,24 @@ function zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s) {
   ctx.font = `${axisFont(s)}px system-ui`;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'bottom';
-  ctx.fillText('FTP', w - 3, y - 1);
+  beschrifte(ctx, css, 'FTP', xLabel, y - 1);
+}
+
+// Bereich nach Programmende (Ausfahren) gedämpft absetzen, mit gestrichelter
+// Endlinie des Programms
+function zeichneAusfahrBereich(ctx, css, x0, w, kopf, unten) {
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = css('--ink2');
+  ctx.fillRect(x0, kopf, w - x0, unten - kopf);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = css('--ink3');
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x0 + 0.5, kopf);
+  ctx.lineTo(x0 + 0.5, unten);
+  ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 // Wiederholte Abschnitte (gruppe/gruppeLabel an den Blöcken) einsammeln
@@ -365,20 +395,7 @@ export class WorkoutChart {
     }
     ctx.globalAlpha = 1;
     // Ausfahr-Bereich optisch absetzen: gedämpfte Fläche + Endlinie des Programms
-    if (anzeigeTotal > total) {
-      ctx.globalAlpha = 0.08;
-      ctx.fillStyle = css('--ink2');
-      ctx.fillRect(x(total), kopf, w - x(total), (h - fuss) - kopf);
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = css('--ink3');
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 4]);
-      ctx.beginPath();
-      ctx.moveTo(x(total) + 0.5, kopf);
-      ctx.lineTo(x(total) + 0.5, h - fuss);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
+    if (anzeigeTotal > total) zeichneAusfahrBereich(ctx, css, x(total), w, kopf, h - fuss);
     if (gross) {
       zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
       zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
@@ -455,30 +472,113 @@ export class LiveChart {
   }
 }
 
-// Detailansicht einer gespeicherten Fahrt: Zielfläche + Ist-Linie über die
-// gesamte Dauer, mit Zeitachse.
-export function drawSessionChart(canvas, samples, count) {
+// Gleitender, zentrierter Mittelwert eines Sample-Felds. mitNullen=false:
+// 0 heißt „kein Wert" (HF ohne Gurtkontakt) — zählt nicht mit und bleibt als
+// Lücke (NaN) stehen, statt die Kurve auf 0 zu ziehen.
+function glaette(samples, count, feld, fenster, mitNullen = true) {
+  const out = new Float32Array(count);
+  const r = Math.floor(fenster / 2);
+  for (let k = 0; k < count; k++) {
+    if (!mitNullen && !samples[k * FIELDS + feld]) { out[k] = NaN; continue; }
+    let sum = 0, n = 0;
+    for (let j = Math.max(0, k - r); j <= Math.min(count - 1, k + r); j++) {
+      const v = samples[j * FIELDS + feld];
+      if (mitNullen || v) { sum += v; n++; }
+    }
+    out[k] = sum / n;
+  }
+  return out;
+}
+
+// Detailansicht einer gespeicherten Fahrt (klein und im Vollbild-Overlay):
+// Zielblöcke zonengefärbt wie im Fahrbildschirm, Ist-Leistung 3-s-geglättet,
+// Herzfrequenz als eigene Kurve mit bpm-Achse rechts, Not-Stopps und
+// Ausfahren nach Programmende gedämpft.
+// opts: ftp (Zonenfarben + FTP-Linie), programmEnde (Sekunde, ab der
+// ausgefahren wurde — null bei freiem Fahren/alten Fahrten)
+export function drawSessionChart(canvas, samples, count, { ftp = 0, programmEnde = null } = {}) {
   const { ctx, w, h, css } = prepCanvas(canvas);
   if (!count) return;
   const s = scaleOf(h);
+  const gross = h >= 160;                    // Achsen + FTP-Linie
+  const kopf = 6 * s;
   const fuss = 13 * s;
+  const unten = h - fuss;
+  const watt = glaette(samples, count, 1, 3);
   let maxW = 100;
-  for (let k = 0; k < count; k++)
-    maxW = Math.max(maxW, samples[k * FIELDS + 1], samples[k * FIELDS + 2]);
+  for (let k = 0; k < count; k++) maxW = Math.max(maxW, watt[k], samples[k * FIELDS + 2]);
   maxW *= 1.1;
-  const total = samples[(count - 1) * FIELDS] || count;
-  const x = k => samples[k * FIELDS] / total * w;
-  const y = v => (h - fuss) - v / maxW * (h - fuss - 8);
+  const x = k => k / count * w;
+  const y = v => unten - Math.max(0, v) / maxW * (unten - kopf);
 
-  ctx.fillStyle = css('--target-fill');
-  ctx.beginPath();
-  ctx.moveTo(0, h - fuss);
-  for (let k = 0; k < count; k++) ctx.lineTo(x(k), y(samples[k * FIELDS + 2]));
-  ctx.lineTo(w, h - fuss);
-  ctx.closePath();
-  ctx.fill();
+  if (gross) zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien');
 
-  if (h >= 160) zeichneWattachse(ctx, css, w, h, 0, fuss, maxW, s);
-  zeichneLeistungslinie(ctx, css, samples, count, x, y, 1.5 * s);
-  zeichneZeitachse(ctx, css, w, h, fuss, total, s);
+  // Zielblöcke: Lauflängen der Zielleistung. Ziel 0 vor Programmende =
+  // Not-Stopp/Pause → gedämpfter Streifen statt Block
+  const ende = programmEnde && programmEnde < count ? programmEnde : count;
+  for (let a = 0, k = 1; k <= count; k++) {
+    const ziel = samples[a * FIELDS + 2];
+    if (k < count && samples[k * FIELDS + 2] === ziel) continue;
+    if (ziel > 0) {
+      ctx.globalAlpha = 0.42;
+      ctx.fillStyle = css(zoneVar(ziel, ftp));
+      ctx.fillRect(x(a), y(ziel), x(k) - x(a), unten - y(ziel));
+    } else if (a < ende) {
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = css('--ink2');
+      ctx.fillRect(x(a), kopf, x(Math.min(k, ende)) - x(a), unten - kopf);
+    }
+    a = k;
+  }
+  ctx.globalAlpha = 1;
+  if (ende < count) zeichneAusfahrBereich(ctx, css, x(ende), w, kopf, unten);
+
+  // HF-Skala: eigener Bereich (10er-gerundet) über die volle Plothöhe
+  const hf = glaette(samples, count, 4, 5, false);
+  let hfMin = Infinity, hfMax = 0;
+  for (const v of hf) if (v > 0) { hfMin = Math.min(hfMin, v); hfMax = Math.max(hfMax, v); }
+  const mitHf = hfMax > 0;
+  const hfLo = Math.floor((hfMin - 5) / 10) * 10, hfHi = Math.ceil((hfMax + 5) / 10) * 10;
+  const yHf = v => unten - (v - hfLo) / (hfHi - hfLo) * (unten - kopf);
+
+  const breite = 1.4 * Math.min(s, 1.3);     // wächst im Overlay kaum mit
+  const geglaettet = Int16Array.from(samples.subarray(0, count * FIELDS));
+  for (let k = 0; k < count; k++) geglaettet[k * FIELDS + 1] = Math.round(watt[k]);
+  zeichneLeistungslinie(ctx, css, geglaettet, count, x, y, breite);
+
+  if (mitHf) {
+    ctx.strokeStyle = css('--hr-line');
+    ctx.lineWidth = breite;
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    let offen = false;
+    for (let k = 0; k < count; k++) {
+      if (Number.isNaN(hf[k])) { offen = false; continue; }
+      offen ? ctx.lineTo(x(k), yHf(hf[k])) : ctx.moveTo(x(k), yHf(hf[k]));
+      offen = true;
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  let xFtpLabel = w - 3;
+  if (gross) {
+    zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
+    if (mitHf) {
+      // bpm-Beschriftung rechts, ohne eigene Rasterlinien (die gehören der Wattachse)
+      ctx.fillStyle = css('--hr-line');
+      ctx.font = `${axisFont(s)}px system-ui`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      const schritt = [10, 20, 40].find(r => (unten - kopf) * r / (hfHi - hfLo) >= 30) ?? 40;
+      for (let v = Math.ceil((hfLo + 1) / schritt) * schritt; v < hfHi; v += schritt) {
+        const yy = yHf(v);
+        if (yy - 2 - axisFont(s) >= 0 && unten - yy >= 4) beschrifte(ctx, css, `${v} bpm`, w - 3, yy - 2);
+      }
+      xFtpLabel = w - 3 - ctx.measureText('000 bpm').width - 8;
+    }
+    zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s, xFtpLabel);
+  }
+  zeichneZeitachse(ctx, css, w, h, fuss, count, s);
 }

@@ -4,7 +4,7 @@
 
 import { FIELDS, saveSamples, saveSession } from './storage.js';
 import { logInfo, logWarn } from './logger.js';
-import { kennwerte, distanzKm } from './metrics.js';
+import { fahrtStats } from './metrics.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
 const RAMP_MS = 2000;         // Zielsprünge als Rampe, nicht als Sprung
@@ -178,29 +178,7 @@ export class Session extends EventTarget {
   }
 
   stats() {
-    // Kennwerte bewusst aufs Programmfenster begrenzt: das Ausfahren danach
-    // wird aufgezeichnet (Samples/Chart), verzerrt aber NP/IF/TSS/avg nicht
-    const n = Math.min(this.count, this.programmEndeBei ?? this.count);
-    let sumW = 0, maxW = 0, sumRpm = 0, rpmN = 0;
-    for (let k = 0; k < n; k++) {
-      const w = this.samples[k * FIELDS + 1];
-      sumW += w; if (w > maxW) maxW = w;
-      const r = this.samples[k * FIELDS + 3];
-      if (r > 0) { sumRpm += r; rpmN++; }
-    }
-    return {
-      dauer: this.count,
-      ausgefahrenSek: Math.max(0, this.count - n),
-      avgW: n ? Math.round(sumW / n) : 0,
-      maxW,
-      kJ: Math.round(sumW / 1000),     // 1 Sample = 1 s → Watt·s/1000
-      avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
-      ...kennwerte(this.samples, n, this.settings.ftp),
-      // Distanz über die ganze Fahrt inkl. Ausrollen — konsistent zum
-      // TCX-Export; überschreibt bewusst das aufs Programmfenster begrenzte
-      // km aus kennwerte()
-      km: Math.round(distanzKm(this.samples, this.count) * 100) / 100,
-    };
+    return fahrtStats(this.samples, this.count, this.programmEndeBei, this.settings.ftp);
   }
 
   async save(final = false) {
@@ -215,6 +193,7 @@ export class Session extends EventTarget {
       fw: this.ftms.firmware ?? null,
       ftp: this.settings.ftp || null,
       akkuProStunde: this.akkuProStunde ?? null,
+      programmEndeBei: this.programmEndeBei,   // Detail-Graph: Ausfahr-Bereich absetzen
       final, ...this.stats(),
     });
   }

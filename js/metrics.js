@@ -35,6 +35,33 @@ export function distanzKm(samples, count) {
   return sum / 36000;
 }
 
+// Kennwerte einer Fahrt wie gespeichert (Session.stats() und Demo-Fahrten).
+// Bewusst aufs Programmfenster begrenzt: das Ausfahren danach wird
+// aufgezeichnet (Samples/Chart), verzerrt aber NP/IF/TSS/avg nicht.
+export function fahrtStats(samples, count, programmEndeBei, ftp) {
+  const n = Math.min(count, programmEndeBei ?? count);
+  let sumW = 0, maxW = 0, sumRpm = 0, rpmN = 0;
+  for (let k = 0; k < n; k++) {
+    const w = samples[k * FIELDS + 1];
+    sumW += w; if (w > maxW) maxW = w;
+    const r = samples[k * FIELDS + 3];
+    if (r > 0) { sumRpm += r; rpmN++; }
+  }
+  return {
+    dauer: count,
+    ausgefahrenSek: Math.max(0, count - n),
+    avgW: n ? Math.round(sumW / n) : 0,
+    maxW,
+    kJ: Math.round(sumW / 1000),     // 1 Sample = 1 s → Watt·s/1000
+    avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
+    ...kennwerte(samples, n, ftp),
+    // Distanz über die ganze Fahrt inkl. Ausrollen — konsistent zum
+    // TCX-Export; überschreibt bewusst das aufs Programmfenster begrenzte
+    // km aus kennwerte()
+    km: Math.round(distanzKm(samples, count) * 100) / 100,
+  };
+}
+
 // NP nach dem Standardverfahren: 30-s-gleitender Mittelwert der Leistung,
 // vierte Potenz, Mittel, vierte Wurzel. IF = NP/FTP, TSS = h·IF²·100.
 export function kennwerte(samples, count, ftp = 0) {

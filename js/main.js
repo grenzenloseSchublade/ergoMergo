@@ -1,9 +1,10 @@
 // Bootstrap und Screen-Routing.
 
 import { Session } from './state.js';
+import { esc } from './format.js';
 import { getSettings, setSetting, requestPersistence, listSessions, getSession } from './storage.js';
 import { RideScreen } from './ui/ride.js';
-import { renderList, renderDetail } from './ui/list.js';
+import { renderList, renderDetail, renderFahrten } from './ui/list.js';
 import { drawProfile } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError } from './logger.js';
@@ -11,11 +12,13 @@ import { geraeteManager } from './ble/geraete.js';
 import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
 import { openSettings } from './ui/settings.js';
-import { startDemo } from './demo.js';
+import { startDemo, beispielFahrt, beispielHistorie } from './demo.js';
 
 // Demo starten (Button auf Home + ?demo-Parameter) — durch denselben
 // Guard wie startRide: kein Doppelstart neben laufendem BLE-Connect
 async function demoStarten(variante) {
+  if (variante === 'fahrt') return beispielfahrtZeigen();
+  if (variante === 'fahrten') return beispielHistorieZeigen();
   if (startLaeuft || rideScreen) return;
   startLaeuft = true;
   try { await startDemo(variante, { betreteFahrt }); }
@@ -32,7 +35,7 @@ import { initAudio } from './signals.js';
 import { starteMessung } from './energie.js';
 
 const $ = s => document.querySelector(s);
-const screens = { home: $('#screen-home'), ride: $('#screen-ride'), detail: $('#screen-detail') };
+const screens = { home: $('#screen-home'), ride: $('#screen-ride'), detail: $('#screen-detail'), fahrten: $('#screen-fahrten') };
 
 function show(name) {
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
@@ -214,7 +217,7 @@ function startDialog(programm, settings = {}) {
       const blocks = baueBlocks(programm, opts, settings.ftp);
       const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
       zeigeGraphOverlay(c => drawProfile(c, blocks, settings.ftp || EFF_FTP_DEFAULT),
-        `${programm.name} <span>· ${min} min${settings.ftp ? '' : ` · FTP-Annahme ${EFF_FTP_DEFAULT} W`}</span>`);
+        programm.name, `${min} min${settings.ftp ? '' : ` · FTP-Annahme ${EFF_FTP_DEFAULT} W`}`);
     } catch { /* unvollständige Eingabe */ }
   };
 
@@ -249,7 +252,7 @@ async function renderProgrammTilesInner() {
     for (const p of list) {
       const btn = document.createElement('button');
       btn.className = 'tile';
-      btn.innerHTML = `<span class="tile-title">${p.name}</span><span class="tile-sub">${p.sub}</span>`;
+      btn.innerHTML = `<span class="tile-title">${esc(p.name)}</span><span class="tile-sub">${esc(p.sub)}</span>`;
       const mini = document.createElement('canvas');
       mini.className = 'tile-profile';
       mini.width = 220; mini.height = 36;
@@ -343,11 +346,14 @@ history.scrollRestoration = 'manual';
 const UISTATE_GUELTIG_MS = 30 * 60 * 1000;
 
 function speichereUiState() {
+  if (demoHistorie) return;          // Demo-Historie nie als App-Zustand merken
   try {
     localStorage.setItem('uiState', JSON.stringify({
-      screen: !screens.detail.hidden ? 'detail' : !screens.ride.hidden ? 'ride' : 'home',
+      screen: !screens.detail.hidden ? 'detail' : !screens.ride.hidden ? 'ride'
+        : !screens.fahrten.hidden ? 'fahrten' : 'home',
       detailId: aktuelleDetailId,
       scrollHome: screens.home.hidden ? 0 : Math.round(scrollY),
+      scrollFahrten: screens.fahrten.hidden ? fahrtenScroll : Math.round(scrollY),
       savedAt: Date.now(),
     }));
   } catch { /* localStorage optional */ }
@@ -358,9 +364,11 @@ document.addEventListener('visibilitychange', () => {
 });
 addEventListener('pagehide', speichereUiState);
 
-async function restoreUiState() {
+// roh: beim Boot VOR goHome() gelesen — goHome speichert selbst den
+// Home-Zustand und würde den gemerkten sonst überschreiben
+async function restoreUiState(roh) {
   try {
-    const s = JSON.parse(localStorage.getItem('uiState') ?? 'null');
+    const s = JSON.parse(roh ?? 'null');
     if (!s || Date.now() - s.savedAt > UISTATE_GUELTIG_MS) return false;
     if (s.screen === 'detail' && s.detailId) {
       const meta = await getSession(s.detailId);
@@ -369,6 +377,11 @@ async function restoreUiState() {
         await openDetail(meta, { push: false });
         return true;
       }
+    }
+    if (s.screen === 'fahrten') {
+      fahrtenScroll = s.scrollFahrten ?? 0;
+      await openFahrten({ scroll: fahrtenScroll });
+      return true;
     }
     // 'ride' wird bewusst nie restauriert (BLE-Session ist tot) → Home
     if (s.scrollHome) requestAnimationFrame(() => scrollTo(0, s.scrollHome));
@@ -385,7 +398,8 @@ addEventListener('popstate', () => {
     const dlg = $(id);
     if (dlg?.open) { dlg.close(); return; }
   }
-  if (!screens.detail.hidden) { goHome(); return; }
+  if (!screens.detail.hidden) { zurueckAusDetail(); return; }
+  if (!screens.fahrten.hidden) { goHome(); return; }
   if (!screens.ride.hidden) {
     if (Date.now() < backArmiertBis) {
       $('#btn-end').click();                 // sauber beenden + speichern
@@ -400,6 +414,7 @@ addEventListener('popstate', () => {
 
 async function goHome() {
   if (reloadAusstehend) { location.reload(); return; }
+  demoHistorie = null;                // Home verlässt die Demo-Historie
   renderProgrammTiles();          // „Zuletzt gefahren" sofort nachführen
   zeichneGeraeteLeiste();
   detailCleanup?.();
@@ -407,7 +422,7 @@ async function goHome() {
   aktuelleDetailId = null;
   show('home');
   speichereUiState();
-  await renderList($('#session-list'), openDetail);
+  await renderList($('#session-list'), openDetail, () => openFahrten());
   aktualisiereStatuszeile();
 }
 
@@ -423,18 +438,62 @@ async function aktualisiereStatuszeile() {
   } catch { /* Statuszeile ist nie kritisch */ }
 }
 
-async function openDetail(sessionMeta, { push = true } = {}) {
+// --- Fahrten-Historie: eigener Screen, Home zeigt nur die letzten Fahrten ---
+let fahrtenScroll = 0;
+let detailVonFahrten = false;   // Zurück aus der Detailansicht führt dorthin, woher man kam
+let demoHistorie = null;        // { sessions, daten } solange ?demo=fahrten angezeigt wird
+
+async function openFahrten({ push = true, scroll = 0 } = {}) {
+  detailCleanup?.();
+  detailCleanup = null;
+  aktuelleDetailId = null;
+  show('fahrten');
+  if (push) history.pushState({ screen: 'fahrten' }, '');
+  await renderFahrten(screens.fahrten, openDetail, { demo: demoHistorie?.sessions });
+  scrollTo(0, scroll);
+  speichereUiState();
+}
+
+function zurueckAusDetail() {
+  if (detailVonFahrten) openFahrten({ push: false, scroll: fahrtenScroll });
+  else goHome();
+}
+
+// Beispielfahrten (Button unter „Letzte Fahrten", Demo-Fahrbildschirm, ?demo=fahrten):
+// derselbe Fahrten-Screen und dieselbe Detailansicht wie für echte Fahrten
+async function beispielHistorieZeigen() {
+  demoHistorie = await beispielHistorie();
+  await openFahrten();
+}
+
+// Einzelne Beispielfahrt direkt in der Detailansicht (?demo=fahrt, UI-Arbeit)
+async function beispielfahrtZeigen() {
+  const { session, data } = await beispielFahrt();
   show('detail');
+  aktuelleDetailId = null;                 // nicht als UI-Zustand merken
+  history.pushState({ screen: 'detail' }, '');
+  detailVonFahrten = false;
+  detailCleanup = await renderDetail(screens.detail, session, goHome, { demo: data });
+}
+
+async function openDetail(sessionMeta, { push = true } = {}) {
+  detailVonFahrten = !screens.fahrten.hidden;
+  if (detailVonFahrten) fahrtenScroll = Math.round(scrollY);
+  show('detail');
+  scrollTo(0, 0);
   aktuelleDetailId = sessionMeta.id;
   if (push) history.pushState({ screen: 'detail' }, '');
   speichereUiState();
-  detailCleanup = await renderDetail(screens.detail, sessionMeta, goHome);
+  const demo = demoHistorie?.daten.get(sessionMeta.id) ?? null;
+  detailCleanup = await renderDetail(screens.detail, sessionMeta, zurueckAusDetail, { demo });
 }
 
 $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
+$('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
-$('#btn-back').addEventListener('click', goHome);
+$('#btn-back').addEventListener('click', zurueckAusDetail);
+$('#btn-back-fahrten').addEventListener('click', goHome);
 // Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —
 // sobald die App läuft, weg damit
 $('#seo-intro').hidden = true;
@@ -502,7 +561,11 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
 const demoParam = new URLSearchParams(location.search).get('demo');
 const dlgParam = new URLSearchParams(location.search).get('dlg');
 if (demoParam !== null) demoStarten(demoParam);
-else goHome().then(() => { if (!dlgParam) restoreUiState(); });
+else {
+  let gemerkt = null;
+  try { gemerkt = localStorage.getItem('uiState'); } catch { /* localStorage optional */ }
+  goHome().then(() => { if (!dlgParam) restoreUiState(gemerkt); });
+}
 // ?dlg=<id> — Startdialog für UI-Arbeit/Screenshots direkt öffnen
 if (dlgParam) {
   const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === dlgParam);
@@ -520,7 +583,6 @@ if (bigParam) {
   if (p) getSettings().then(s => {
     const blocks = baueBlocks(p, defaultOpts(p), s.ftp);
     const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
-    zeigeGraphOverlay(c => drawProfile(c, blocks, s.ftp || EFF_FTP_DEFAULT),
-      `${p.name} <span>· ${min} min</span>`);
+    zeigeGraphOverlay(c => drawProfile(c, blocks, s.ftp || EFF_FTP_DEFAULT), p.name, `${min} min`);
   });
 }

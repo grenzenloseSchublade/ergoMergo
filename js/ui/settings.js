@@ -3,6 +3,7 @@
 // FTP-Änderung) laufen über injizierte Callbacks.
 
 import { getSettings, setSetting, getLogs, clearLogs } from '../storage.js';
+import { esc } from '../format.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';
 import { tastenName } from '../ble/zwift-controller.js';
 import { tastenSymbol } from './tasten-symbol.js';
@@ -46,7 +47,7 @@ export async function openSettings({ nachSpeichern } = {}) {
     for (const [rolle, label] of rollen) {
       const eintraege = eintraegeVon(geraete, rolle);
       const li = document.createElement('li');
-      const namen = eintraege.map(e => `${e.name ?? e.id}${e.fw ? ` <span class="g-fw">FW ${e.fw}</span>` : ''}`).join(' + ');
+      const namen = eintraege.map(e => `${esc(e.name ?? e.id)}${e.fw ? ` <span class="g-fw">FW ${esc(e.fw)}</span>` : ''}`).join(' + ');
       li.innerHTML = `
         <span class="g-icon">${GL_ICONS[rolle]}</span>
         <span class="g-info">

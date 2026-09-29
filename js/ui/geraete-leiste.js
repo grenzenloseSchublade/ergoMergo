@@ -3,6 +3,7 @@
 
 import { geraeteManager, eintraegeVon, kannMerken } from '../ble/geraete.js';
 import { getSettings } from '../storage.js';
+import { esc } from '../format.js';
 import { toast, toastOk, toastErr } from './toast.js';
 import { logError } from '../logger.js';
 import { svgIcon } from './icons.js';
@@ -38,7 +39,7 @@ async function zeichneGeraeteLeisteInner() {
     const name = eintraege.length === 1 ? (eintraege[0].name ?? label)
       : eintraege.length === 2 ? `${label} (2 Pads)` : label;
     const anz = geraeteManager.clients(rolle).length;
-    btn.innerHTML = `${GL_ICONS[rolle]}<i class="dot"></i>${status === 'fehlt' ? `+ ${label}` : name}${eintraege.length === 2 && status === 'verbunden' && anz < 2 ? ' · 1/2' : ''}`;
+    btn.innerHTML = `${GL_ICONS[rolle]}<i class="dot"></i>${status === 'fehlt' ? `+ ${label}` : esc(name)}${eintraege.length === 2 && status === 'verbunden' && anz < 2 ? ' · 1/2' : ''}`;
     btn.title = { fehlt: `${label} koppeln`, gemerkt: `${name} verbinden`, verbindet: 'verbindet …', verbunden: `${name} trennen` }[status];
     btn.onclick = async () => {
       try {
