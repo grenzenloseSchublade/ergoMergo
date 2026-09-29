@@ -119,6 +119,8 @@ export async function openSettings({ nachSpeichern } = {}) {
   $('#set-max').value = s.maxWatt;
   $('#set-start').value = s.startWatt;
   $('#set-sprache').checked = s.sprachansagen;
+  $('#set-halten-tasten').checked = s.haltenTasten;
+  $('#set-halten-paddles').checked = s.haltenPaddles;
   $('#set-icukey').value = s.icuApiKey;
 
   // Sicherung: Export/Import der kompletten Datenbank
@@ -146,6 +148,10 @@ export async function openSettings({ nachSpeichern } = {}) {
     await setSetting('startWatt', Math.max(20, Number($('#set-start').value) || 100));
     await setSetting('sprachansagen', $('#set-sprache').checked);
     await setSetting('icuApiKey', $('#set-icukey').value.trim());
+    const halten = { tasten: $('#set-halten-tasten').checked, paddles: $('#set-halten-paddles').checked };
+    await setSetting('haltenTasten', halten.tasten);
+    await setSetting('haltenPaddles', halten.paddles);
+    geraeteManager.setzeHalten(halten);         // verbundene Pads sofort umstellen
     nachSpeichern?.();          // Zonenfarben/Profile an neue FTP anpassen
     toastOk('Einstellungen gespeichert');
   };

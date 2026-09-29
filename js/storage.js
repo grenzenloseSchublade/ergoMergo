@@ -58,6 +58,7 @@ export async function getSettings() {
   const defaults = {
     ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100,
     controllerMap: { plus: 4, minus: 0 },   // Ride-Tasten, per Lern-Modus belegbar
+    haltenTasten: true, haltenPaddles: true, // ±-Taste/Paddle halten = wiederholen
     sprachansagen: true, tonAn: true, icuApiKey: '',
   };
   return Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));

@@ -173,10 +173,16 @@ class GeraeteManager extends EventTarget {
     for (const c of this.#clients.controller) c.map = { plus: 4, minus: 0, ...map };
   }
 
+  // Halten-Verhalten (Einstellungen) ebenso sofort durchreichen
+  setzeHalten(halten) {
+    for (const c of this.#clients.controller) c.halten = { ...c.halten, ...halten };
+  }
+
   #neuerClient(rolle, settings) {
     if (rolle === 'trainer') return new FTMS();
     if (rolle === 'hr') return new HeartRate();
-    return new ZwiftController(settings.controllerMap);
+    return new ZwiftController(settings.controllerMap,
+      { tasten: settings.haltenTasten, paddles: settings.haltenPaddles });
   }
 
   // Chooser öffnen (braucht User-Geste), Gerät merken und direkt verbinden.

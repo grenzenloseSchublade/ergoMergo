@@ -4,8 +4,9 @@
 //
 // Click:  zwei Varint-Felder, Wert 0 = gedrückt (Feld 1 = plus, Feld 2 = minus)
 // Ride:   Feld 1 = 32-Bit-Bitmap, invertierte Logik (Bit 0 → Taste gedrückt);
-//         die orangen Paddles sind analog (−100…+100) und werden per Schwelle
-//         zu virtuellen Tasten (Bits laut zwift-ride-tasten.json).
+//         die orangen Paddles sind analog (−100…+100, Vorzeichen = Richtung)
+//         und werden per Schwelle zu virtuellen Tasten, je Richtung eine
+//         (Bits laut zwift-ride-tasten.json).
 //
 // UUID-Falle: Ride-Firmware bis ~1.2.x nutzt den 128-Bit-Service 00000001-19ca-…,
 // neuere Firmware (ab Jan 2025) stattdessen 0xFC82 — beide werden probiert.
@@ -25,11 +26,12 @@ export function tastenName(bit) {
   return zusatz.length ? `${t.label} (${zusatz.join(', ')})` : t.label;
 }
 
-// Paddle-Ort (0 = links, 1 = rechts) → virtuelles Bit. Schwelle mit
-// Hysterese: erst ab 40 gedrückt, erst unter 20 wieder losgelassen — sonst
-// feuert ein Paddle um die Schwelle herum mehrfach.
+// Paddles schlagen in beide Richtungen aus (Vorzeichen des Analogwerts);
+// je Paddle und Richtung eine virtuelle Taste: "Ort:Richtung" → Bit.
+// Schwelle mit Hysterese: erst ab 40 gedrückt, erst unter 20 wieder
+// losgelassen — sonst feuert ein Paddle um die Schwelle herum mehrfach.
 const PADDLE_BIT = new Map(RIDE_TASTEN.tasten
-  .filter(t => t.analogOrt !== undefined).map(t => [t.analogOrt, t.bit]));
+  .filter(t => t.analogOrt !== undefined).map(t => [`${t.analogOrt}:${t.richtung}`, t.bit]));
 const PADDLE_AN = 40;
 const PADDLE_AUS = 20;
 
@@ -48,17 +50,37 @@ const letzteFlanke = new Map();
 const PRELL_GLEICHE_QUELLE_MS = 50;    // Geräte-Prellen
 const PRELL_ANDERE_QUELLE_MS = 150;    // Relay-Doppel des zweiten Pads
 
+// Halten = Wiederholen, nur für die Watt-Aktionen — Block vor/zurück und
+// STOPP feuern bewusst nie doppelt. Tasten: fester Takt nach einer Pause;
+// Paddles: Takt folgt dem Druck (Schwelle → langsam, Vollausschlag → schnell).
+const WIEDERHOLBAR = new Set(['plus', 'minus']);
+const HALTEN_PAUSE_MS = 500;
+const HALTEN_TAKT_MS = 400;
+const PADDLE_TAKT_MS = { langsam: 600, schnell: 150 };
+const PADDLE_PAUSE_MIN_MS = 400;       // kurzes Antippen löst nur einmal aus
+// Sicherheitsgrenze: geht die Loslass-Meldung verloren (Funkloch), würde die
+// Wiederholung sonst endlos Watt hochzählen
+const HALTEN_MAX_MS = 10000;
+
+const paddleTakt = druck => {
+  const anteil = Math.min(1, Math.max(0, (druck - PADDLE_AN) / (100 - PADDLE_AN)));
+  return Math.round(PADDLE_TAKT_MS.langsam - anteil * (PADDLE_TAKT_MS.langsam - PADDLE_TAKT_MS.schnell));
+};
+
 export class ZwiftController extends EventTarget {
   #device = null;
   #clickState = { plus: false, minus: false };
   #rideBitmap = 0xffffffff;    // alle Bits 1 = nichts gedrückt
-  #paddleGedrueckt = new Map(); // Paddle-Ort → gedrückt (Hysterese-Zustand)
-  #paddleSpitze = new Map();    // Paddle-Ort → stärkster Rohwert des laufenden Drucks
+  #paddle = new Map();          // Paddle-Ort → {richtung, bit, spitze, eigen} des laufenden Drucks
+  #statusGeloggt = false;       // 0x2a-Statusmeldung nur einmal je Verbindung loggen
+  #gehalten = new Map();        // Taste (Bit bzw. 'plus'/'minus' beim Click) → {timer, druck, seit}
 
   // map: { plus, minus, skip, prev, stopp } → Bit-Indizes (per Lern-Modus belegt)
-  constructor(map = {}) {
+  // halten: { tasten, paddles } — Halten wiederholt ± (Einstellungen)
+  constructor(map = {}, halten = {}) {
     super();
     this.map = { plus: 4, minus: 0, ...map };
+    this.halten = { tasten: halten.tasten ?? true, paddles: halten.paddles ?? true };
   }
 
   get istRide() { return (this.#device?.name ?? '').includes('Ride'); }
@@ -68,6 +90,7 @@ export class ZwiftController extends EventTarget {
   async connect(device) {
     this.#device = device;                     // Chooser läuft in der Fassade
     const server = await this.#device.gatt.connect();
+    this.#statusGeloggt = false;
 
     let svc;
     try { svc = await server.getPrimaryService(SERVICE_ALT); }
@@ -100,6 +123,7 @@ export class ZwiftController extends EventTarget {
     // Benannter Listener: disconnect() räumt ihn ab — sonst loggt jede
     // frühere Instanz am selben (gemerkten) Gerät die Trennung erneut
     this.#onDisconnect = () => {
+      this.#loslassenAlle();
       logWarn('ctrl', 'Controller getrennt');
       this.dispatchEvent(new Event('disconnected'));
     };
@@ -122,25 +146,38 @@ export class ZwiftController extends EventTarget {
       return;
     }
     if (b[0] === 0x19 || b[0] === 0x15) return;      // Keepalive/Idle
+    if (b[0] === 0x2a) {                               // Status nach dem Verbinden, mehrfach
+      if (!this.#statusGeloggt) logInfo('ctrl', 'Statusmeldung', hex(b));
+      this.#statusGeloggt = true;
+      return;
+    }
     logInfo('ctrl', 'unbekanntes Paket', hex(b));
   }
 
   // Click: Feld 1 = Plus, Feld 2 = Minus; 0 = gedrückt (steigende Flanke feuert)
   #clickTasten(felder) {
     const state = { plus: felder[1] === 0, minus: felder[2] === 0 };
-    if (state.plus && !this.#clickState.plus) this.dispatchEvent(new Event('plus'));
-    if (state.minus && !this.#clickState.minus) this.dispatchEvent(new Event('minus'));
+    for (const aktion of ['plus', 'minus']) {
+      if (state[aktion] && !this.#clickState[aktion]) {
+        this.dispatchEvent(new Event(aktion));
+        this.#halteFest(aktion, aktion);
+      } else if (!state[aktion] && this.#clickState[aktion]) {
+        this.#loslassen(aktion);
+      }
+    }
     this.#clickState = state;
   }
 
-  // Ride: Feld 1 = Bitmap, Bit 0 → gedrückt. Neu gedrückte Bits = 1→0-Flanken.
+  // Ride: Feld 1 = Bitmap, Bit 0 → gedrückt. Gedrückt = 1→0-Flanke,
+  // losgelassen = 0→1-Flanke.
   #rideTasten(felder) {
     if (felder[1] === undefined) return;
     const cur = felder[1] >>> 0;
-    const neu = this.#rideBitmap & ~cur;              // Bits, die gerade auf 0 gingen
+    const neu = this.#rideBitmap & ~cur;
+    const los = ~this.#rideBitmap & cur;
     this.#rideBitmap = cur;
-    if (!neu) return;
     for (let bit = 0; bit < 32; bit++) {
+      if (los >>> bit & 1) this.#loslassen(bit);
       if (neu >>> bit & 1) this.#taste(bit);
     }
   }
@@ -156,41 +193,94 @@ export class ZwiftController extends EventTarget {
     for (const n of nachrichten) {
       const f = parseProto(n, 0).varints;
       const ort = f[1] ?? 0;
-      const bit = PADDLE_BIT.get(ort);
-      if (bit === undefined) continue;                // Ort 2/3: reserviert, immer 0
+      if (ort > 1) continue;                          // Ort 2/3: reserviert, immer 0
       const wert = zigzag(f[2] ?? 0);
       const betrag = Math.abs(wert);
-      if (!this.#paddleGedrueckt.get(ort)) {
-        if (betrag < PADDLE_AN) continue;
-        this.#paddleGedrueckt.set(ort, true);
-        this.#paddleSpitze.set(ort, wert);
-        this.#taste(bit, ` — Rohwert ${wert}`);
-      } else if (betrag < PADDLE_AUS) {
-        // Druckstärke fürs Log: Spitze des Drucks (Vorzeichen = Richtung)
-        this.#paddleGedrueckt.set(ort, false);
-        logInfo('ctrl', `Ride-Paddle ${ort ? 'rechts' : 'links'} losgelassen — Spitze ${this.#paddleSpitze.get(ort)}`);
-      } else if (betrag > Math.abs(this.#paddleSpitze.get(ort))) {
-        this.#paddleSpitze.set(ort, wert);
+      const richtung = Math.sign(wert);
+      const p = this.#paddle.get(ort);
+      if (p) {
+        // Losgelassen — oder in einem Zug auf die Gegenseite gekippt, ohne
+        // zwischen zwei Meldungen unter die Schwelle zu fallen
+        if (betrag >= PADDLE_AUS && richtung === p.richtung) {
+          if (betrag > Math.abs(p.spitze)) p.spitze = wert;
+          const h = this.#gehalten.get(p.bit);
+          if (h) h.druck = betrag;                    // Wiederholtakt folgt dem Druck
+          continue;
+        }
+        this.#paddleLos(ort, p);
       }
+      if (betrag < PADDLE_AN) continue;
+      const bit = PADDLE_BIT.get(`${ort}:${richtung}`);
+      // eigen = diese Verbindung hat den Druck gemeldet; das rechte Paddle
+      // kommt zusätzlich über das linke Pad an und würde sonst doppelt loggen
+      const eigen = this.#taste(bit, ` — Rohwert ${wert}`, betrag);
+      this.#paddle.set(ort, { richtung, bit, spitze: wert, eigen });
     }
   }
 
-  // Eine gedrückte Taste (echt oder virtuell): entprellen, loggen, melden
-  #taste(bit, logZusatz = '') {
+  #paddleLos(ort, p) {
+    this.#paddle.delete(ort);
+    this.#loslassen(p.bit);
+    // Druckstärke fürs Log: Spitze des Drucks (Vorzeichen = Richtung)
+    if (p.eigen) logInfo('ctrl', `Ride-Paddle ${ort ? 'rechts' : 'links'} losgelassen — Spitze ${p.spitze}`);
+  }
+
+  // Eine gedrückte Taste (echt oder virtuell): entprellen, loggen, melden.
+  // druck = Paddle-Betrag (40…100), null bei digitalen Tasten.
+  // Rückgabe: false, wenn die Entprellung den Druck verworfen hat.
+  #taste(bit, logZusatz = '', druck = null) {
     const jetzt = Date.now();
     const vorher = letzteFlanke.get(bit);
     const fenster = vorher?.quelle === this ? PRELL_GLEICHE_QUELLE_MS : PRELL_ANDERE_QUELLE_MS;
-    if (vorher && jetzt - vorher.t < fenster) return;
+    if (vorher && jetzt - vorher.t < fenster) return false;
     letzteFlanke.set(bit, { t: jetzt, quelle: this });
     logInfo('ctrl', `Ride-Taste Bit ${bit} gedrückt (laut Tabelle: ${TASTE_JE_BIT.get(bit)?.id ?? '?'})${logZusatz}`);
     this.dispatchEvent(new CustomEvent('button', { detail: bit }));
     for (const [aktion, b] of Object.entries(this.map)) {
-      if (b === bit) this.dispatchEvent(new Event(aktion));
+      if (b !== bit) continue;
+      this.dispatchEvent(new Event(aktion));
+      this.#halteFest(bit, aktion, druck);
     }
+    return true;
+  }
+
+  // Wiederholung starten, solange die Taste gehalten wird. Nur die Instanz,
+  // deren Flanke die Entprellung gewonnen hat, kommt hier an — ein zweites
+  // (relayendes) Pad wiederholt also nicht doppelt.
+  #halteFest(taste, aktion, druck = null) {
+    if (!WIEDERHOLBAR.has(aktion)) return;
+    if (!(druck === null ? this.halten.tasten : this.halten.paddles)) return;
+    this.#loslassen(taste);
+    const h = { timer: null, druck, seit: Date.now() };
+    const takt = () => (h.druck === null ? HALTEN_TAKT_MS : paddleTakt(h.druck));
+    const planen = ms => {
+      h.timer = setTimeout(() => {
+        if (Date.now() - h.seit > HALTEN_MAX_MS) {
+          logWarn('ctrl', `Halten nach ${HALTEN_MAX_MS / 1000} s abgebrochen (kein Loslassen empfangen)`);
+          this.#loslassen(taste);
+          return;
+        }
+        this.dispatchEvent(new Event(aktion));
+        planen(takt());
+      }, ms);
+    };
+    this.#gehalten.set(taste, h);
+    planen(druck === null ? HALTEN_PAUSE_MS : Math.max(PADDLE_PAUSE_MIN_MS, takt()));
+  }
+
+  #loslassen(taste) {
+    clearTimeout(this.#gehalten.get(taste)?.timer);
+    this.#gehalten.delete(taste);
+  }
+
+  #loslassenAlle() {
+    for (const taste of [...this.#gehalten.keys()]) this.#loslassen(taste);
+    this.#paddle.clear();
   }
 
   // gatt:false = nur Teardown — die physische Verbindung ist je device.id geteilt
   disconnect({ gatt = true } = {}) {
+    this.#loslassenAlle();
     if (this.#onDisconnect) this.#device?.removeEventListener('gattserverdisconnected', this.#onDisconnect);
     // Chrome liefert beim Reconnect dieselben Characteristic-Objekte —
     // ohne Abbau würde eine ersetzte Instanz weiter Notifications empfangen
