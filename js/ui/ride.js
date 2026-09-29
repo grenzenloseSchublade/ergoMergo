@@ -10,6 +10,14 @@ import { setSetting } from '../storage.js';
 import { beendeMessung } from '../energie.js';
 import { toast, toastErr } from './toast.js';
 
+// Geräte-Chip im Fahrbildschirm: Zustand als Klasse, Punkt und Rahmen per CSS
+// verbunden (grün) | verbindet (gelb, pulsiert) | fehler (rot) | fehlt (gestrichelt)
+const CHIP_ZUSTAENDE = ['verbunden', 'verbindet', 'fehler', 'fehlt'];
+function setzeChip(btn, zustand) {
+  btn.classList.remove(...CHIP_ZUSTAENDE);
+  btn.classList.add(zustand);
+}
+
 export class RideScreen {
   constructor(root, session, settings, onEnd, run = null) {
     this.root = root;
@@ -99,21 +107,35 @@ export class RideScreen {
     session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('target', () => this.render());
     session.addEventListener('error', e => this.#status(e.detail, 'err'));
-    this.#abo(session.ftms, 'connected', () => { this.#verbStatus = 'ok'; this.#status('verbunden', 'ok'); });
-    this.#abo(session.ftms, 'disconnected', () => { this.#verbStatus = 'reconnect'; this.#status('getrennt — verbinde neu …', 'err'); });
-    this.#abo(session.ftms, 'reconnected', () => { this.#verbStatus = 'ok'; this.#status('wieder verbunden', 'ok'); });
+    // Trainer-Verbindung zeigt der Trainer-Chip (Punkt grün/gelb/rot); die
+    // Statuszeile meldet nur Probleme und räumt sie beim Wiederverbinden ab
+    this.#abo(session.ftms, 'connected', () => { this.#verbStatus = 'ok'; this.#zeigeTrainer(); });
+    this.#abo(session.ftms, 'disconnected', () => {
+      this.#verbStatus = 'reconnect';
+      this.#zeigeTrainer();
+      this.#trainerStatus('Trainer getrennt — verbinde neu …');
+    });
+    this.#abo(session.ftms, 'reconnected', () => { this.#verbStatus = 'ok'; this.#zeigeTrainer(); });
     this.#abo(session.ftms, 'reconnectfehler', e => {
-      if (e.detail.versuch >= 3) this.#status('Trainer nicht erreichbar — eingeschaltet? Weiter wird versucht …', 'err');
+      if (e.detail.versuch >= 3) this.#trainerStatus('Trainer nicht erreichbar — eingeschaltet? Weiter wird versucht …');
     });
     this.#abo(session.ftms, 'aufgegeben', () => {
       this.#verbStatus = 'unerreichbar';
-      this.#status('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten', 'err');
+      this.#zeigeTrainer();
+      this.#trainerStatus('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten');
     });
     // Initialzustand ableiten statt aufs connected-Event zu warten — das ist
     // beim übernommenen Pool-Client längst gefeuert (Livetest: „verbinde …"
     // blieb die ganze Fahrt stehen)
-    if (session.ftms.connected) this.#status('verbunden', 'ok');
-    else this.#status('verbinde …');
+    this.#zeigeTrainer();
+    // Tap auf den Trainer-Chip löst nichts aus (mitten in der Fahrt), sagt
+    // nur, was los ist
+    this.$('#btn-trainer').onclick = () => {
+      const name = session.ftms.deviceName ?? 'Trainer';
+      if (session.ftms.connected) this.#status(`${name} verbunden`, 'ok');
+      else if (this.#verbStatus === 'unerreichbar') this.#trainerStatus('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten');
+      else this.#trainerStatus('Trainer getrennt — verbinde neu …');
+    };
     this.render();
   }
 
@@ -148,8 +170,9 @@ export class RideScreen {
         this.#uebernommen.add(hr);
         this.session.attachHR(hr);
       }
-      const on = geraeteManager.clients('hr').length > 0;
-      this.$('#btn-hr').classList.toggle('on', on);
+      // Demo: simulierter Gurt (die Demo-Daten liefern HF) gilt als verbunden
+      const on = geraeteManager.clients('hr').length > 0 || !!this.session.ftms.istDemo;
+      setzeChip(this.$('#btn-hr'), on ? 'verbunden' : 'fehlt');
       return on;
     };
     const uebernehmeCtrl = () => {
@@ -176,24 +199,25 @@ export class RideScreen {
         });
       }
       const on = geraeteManager.clients('controller').length > 0;
-      this.$('#btn-click').classList.toggle('on', on);
+      setzeChip(this.$('#btn-click'), on ? 'verbunden' : 'fehlt');
       return on;
     };
     const uebernehme = { hr: uebernehmeHR, controller: uebernehmeCtrl };
 
     // Manager-Änderungen (Trennung, Neu-Verbindung) in Chips spiegeln
     this.#abo(geraeteManager, 'change', () => {
-      this.$('#btn-hr').classList.toggle('on', geraeteManager.clients('hr').length > 0);
-      this.$('#btn-click').classList.toggle('on', geraeteManager.clients('controller').length > 0);
-      uebernehmeHR(); uebernehmeCtrl();          // frisch verbundene direkt verdrahten
+      uebernehmeHR(); uebernehmeCtrl();          // verdrahtet frisch verbundene und setzt die Chips
     });
 
     // Chip-Tap: verbinden (gemerkt) oder koppeln (Chooser), dann übernehmen
     const chip = (id, rolle) => {
       const btn = this.$(id);
-      btn.classList.remove('on');
+      setzeChip(btn, 'fehlt');
       btn.onclick = async () => {
-        const label = rolle === 'hr' ? 'Herzgurt' : 'Controller';
+        const label = rolle === 'hr' ? 'Herzgurt' : 'Lenker';
+        if (rolle === 'hr' && this.session.ftms.istDemo) { this.#status('Demo-Herzgurt verbunden', 'ok'); return; }
+        if (btn.classList.contains('verbindet')) return;
+        setzeChip(btn, 'verbindet');             // Punkt gelb, solange gesucht wird
         try {
           // Chooser nur mit frischer Geste — nach einem langen Verbindungs-
           // versuch wäre die Aktivierung verbraucht. Frisch: nichts gemerkt,
@@ -208,6 +232,7 @@ export class RideScreen {
           } else {
             const n = await geraeteManager.verbinde(rolle);
             if (!n) {
+              setzeChip(btn, 'fehlt');
               this.#koppelFallback[rolle] = Date.now() + 30000;
               this.#status(`${label} nicht erreichbar — Gerät wecken oder Chip erneut tippen für die Geräteauswahl`, 'err');
               return;
@@ -215,6 +240,7 @@ export class RideScreen {
           }
           uebernehme[rolle]();
         } catch (err) {
+          setzeChip(btn, geraeteManager.clients(rolle).length ? 'verbunden' : 'fehlt');
           if (err.name !== 'NotFoundError') this.#status(err.message, 'err');
         }
       };
@@ -405,10 +431,12 @@ export class RideScreen {
     // Merker — insbesondere wird ein Terminalzustand („aufgegeben") nicht
     // mehr mit „verbinde neu …" überschrieben
     this.#watchdog = setInterval(() => {
-      if (this.session.ftms.connected || this.session.status === 'done') return;
+      if (this.session.status === 'done') return;
+      this.#zeigeTrainer();
+      if (this.session.ftms.connected) return;
       if (this.#verbStatus === 'unerreichbar')
-        this.#status('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten', 'err');
-      else this.#status('Trainer getrennt — verbinde neu …', 'err');
+        this.#trainerStatus('Trainer nicht erreichbar — Fahrt beenden oder Trainer neu starten');
+      else this.#trainerStatus('Trainer getrennt — verbinde neu …');
     }, 5000);
   }
 
@@ -422,6 +450,23 @@ export class RideScreen {
   #statusTimer = null;
   #resizeObs = null;
   #resizeRaf = 0;
+
+  // Trainer-Chip aus dem echten Verbindungszustand; beim Wiederverbinden
+  // verschwindet eine noch stehende Trainer-Fehlermeldung (andere Meldungen,
+  // z. B. „gestoppt", bleiben unberührt)
+  #zeigeTrainer() {
+    const ok = this.session.ftms.connected;
+    setzeChip(this.$('#btn-trainer'), ok ? 'verbunden' : this.#verbStatus === 'unerreichbar' ? 'fehler' : 'verbindet');
+    const el = this.$('#m-status');
+    if (ok && this.#trainerText && el.textContent === this.#trainerText) el.hidden = true;
+    if (ok) this.#trainerText = null;
+  }
+
+  #trainerText = null;
+  #trainerStatus(text) {
+    this.#trainerText = text;
+    this.#status(text, 'err');
+  }
 
   // Erfolgsmeldungen verschwinden nach kurzer Zeit — dauerhaft sichtbar
   // bleiben nur Fehler (weniger Rauschen in der Sekundärzeile)

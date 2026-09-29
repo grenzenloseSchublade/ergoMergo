@@ -54,7 +54,8 @@ function einstiegVorWechsel(blocks) {
 export async function startDemo(variante, { betreteFahrt }) {
   const settings = await getSettings();
   const ftms = new EventTarget();
-  Object.assign(ftms, { connected: true, busy: false, setTargetPower: async () => {}, disconnect: () => {} });
+  Object.assign(ftms, { connected: true, busy: false, deviceName: 'Demo-Trainer',
+    setTargetPower: async () => {}, disconnect: () => {} });
   const session = new Session(ftms, settings);
   session.save = async () => {};   // Demo-Fahrten nicht in die echte Historie schreiben
   ftms.istDemo = true;             // u. a.: kein Auto-Connect echter Geräte im Demo
