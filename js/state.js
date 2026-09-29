@@ -17,6 +17,7 @@ export class Session extends EventTarget {
     this.ftms = ftms;
     this.settings = settings;
     this.programm = programm;                 // V2: Programm-Engine hängt sich hier ein
+    this.seed = null;                         // Startwert eines Zufallsprogramms (Fartlek)
     this.id = new Date().toISOString();
     this.start = Date.now();
     this.status = 'riding';                   // riding | paused | done
@@ -209,6 +210,7 @@ export class Session extends EventTarget {
       id: this.id, start: this.start,
       programm: this.programm?.name ?? 'Freies Fahren',
       programmId: this.programm?.id ?? null,
+      seed: this.seed,
       geraet: this.ftms.deviceName ?? null,
       fw: this.ftms.firmware ?? null,
       ftp: this.settings.ftp || null,

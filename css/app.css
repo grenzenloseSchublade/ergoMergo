@@ -103,6 +103,11 @@ details.rubrik[open] summary.listhead::before { transform: rotate(90deg); }
 .tile-x:hover { color: var(--danger); }
 .listhead .chip { margin-left: .6rem; vertical-align: middle; }
 #dlg-preview { width: 100%; height: 76px; display: block; margin: .2rem 0 .8rem; background: var(--surface2); border-radius: 8px; }
+/* Fartlek: Würfel-Button rechts in der Titelzeile des Startdialogs */
+.dlg-kopf { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .8rem; }
+.dlg-kopf h2 { margin: 0; }
+.dlg-wuerfeln { flex: 0 0 auto; width: 2.4rem; height: 2.4rem; padding: .45rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface2); color: var(--ink); cursor: pointer; }
+.dlg-wuerfeln svg { display: block; width: 100%; height: 100%; }
 
 dialog {
   background: var(--surface); color: var(--ink); border: 1px solid var(--line);

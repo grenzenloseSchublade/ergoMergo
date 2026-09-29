@@ -26,7 +26,7 @@ import { montiereIcons, svgIcon } from './ui/icons.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung } from './metrics.js';
-import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts } from './program.js';
+import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
 import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
 import { initAudio } from './signals.js';
 import { starteMessung } from './energie.js';
@@ -92,11 +92,12 @@ async function startRideInner(programm) {
   }
   const settings = await getSettings();
   initAudio();                              // braucht die User-Geste des Start-Taps
-  let run = null, blocks = null;
+  let run = null, blocks = null, seed = null;
   if (programm) {
     const opts = await startDialog(programm, settings);
     if (!opts) return;
     blocks = baueBlocks(programm, opts, settings.ftp);
+    seed = opts.seed ?? null;
   }
   // Vorabcheck: ist der Bluetooth-Adapter überhaupt verfügbar/an?
   if (await navigator.bluetooth.getAvailability?.() === false) {
@@ -139,6 +140,7 @@ async function startRideInner(programm) {
   logInfo('app', `Session-Start: ${programm?.name ?? 'Freies Fahren'}`);
   geraeteManager.starteSession();           // Trainer kämpft ab jetzt um die Verbindung
   const session = new Session(ftms, settings, programm);
+  session.seed = seed;                      // Zufallsprogramm exakt wiederholbar
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, programm.name, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
@@ -184,10 +186,13 @@ function startDialog(programm, settings = {}) {
 
   // Live-Vorschau des Intensitätsprofils, folgt den Eingaben
   const preview = $('#dlg-preview');
+  // Zufallsprogramme: gespeicherter Startwert — Vorschau = gefahrener Ablauf
+  let seed = programm.zufall ? holeSeed(programm.id) : undefined;
   const leseOpts = () => {
     const opts = {};
     for (const inp of fields.querySelectorAll('input'))
       opts[inp.name] = Math.min(inp.max, Math.max(inp.min, Number(inp.value) || 0));
+    if (seed !== undefined) opts.seed = seed;
     return opts;
   };
   const zeichne = () => {
@@ -195,6 +200,13 @@ function startDialog(programm, settings = {}) {
     catch { /* unvollständige Eingabe während des Tippens */ }
   };
   fields.oninput = zeichne;
+  const wuerfeln = $('#dlg-wuerfeln');
+  wuerfeln.hidden = !programm.zufall;
+  wuerfeln.onclick = () => {
+    seed = neuerSeed(programm.id);
+    zeichne();
+    renderProgrammTiles();                  // Kachel-Miniatur zeigt den neuen Ablauf
+  };
   // Tap auf die Vorschau: Vollbild mit gut lesbaren Klammern und Zeitachse
   preview.onclick = () => {
     try {
@@ -276,7 +288,14 @@ async function renderProgrammTilesInner() {
     $('#last-sub').textContent = new Date(letzte.start)
       .toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
     lastBtn.hidden = false;
-    lastBtn.onclick = () => startRide(letztesProgramm);
+    lastBtn.onclick = () => {
+      // Zufallsprogramm: den damals gefahrenen Ablauf wiederherstellen
+      if (letztesProgramm.zufall && letzte.seed != null) {
+        setzeSeed(letztesProgramm.id, letzte.seed);
+        renderProgrammTiles();
+      }
+      startRide(letztesProgramm);
+    };
   } else {
     lastBtn.hidden = true;
   }

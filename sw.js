@@ -2,13 +2,13 @@
 // offline startet. VERSION bei jedem Release hochzählen — alte Caches werden
 // beim Aktivieren entsorgt.
 
-const VERSION = 'v1.3';
+const VERSION = 'v1.4';
 const CACHE = `ergomergo-${VERSION}`;
 const SHELL = [
   '.', 'index.html', 'css/app.css', 'manifest.webmanifest',
   'js/main.js', 'js/version.js', 'js/state.js', 'js/storage.js', 'js/export.js', 'js/logger.js', 'js/metrics.js',
   'js/ble/geraete.js', 'js/backup.js', 'js/zwo.js',
-  'js/program.js', 'js/workouts.js', 'js/signals.js', 'js/ble/ftms.js', 'js/ble/hr.js', 'js/ble/zwift-controller.js',
+  'js/program.js', 'js/workouts.js', 'js/signals.js', 'js/ble/ftms.js', 'js/ble/hr.js', 'js/ble/zwift-controller.js', 'js/ble/zwift-ride-tasten.json',
   'js/ui/ride.js', 'js/ui/overlay.js', 'js/ui/toast.js', 'js/ui/chart.js', 'js/ui/list.js',
   'js/ansagen.js', 'js/ui/pip.js', 'js/energie.js',
   'js/ui/settings.js', 'js/ui/geraete-leiste.js', 'js/demo.js', 'js/format.js', 'js/ui/icons.js',

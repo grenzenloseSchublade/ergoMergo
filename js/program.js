@@ -59,15 +59,18 @@ export const PROGRAMME = [
     id: 'fartlek',
     name: 'Fartlek',
     sub: 'Zufällige Blöcke in gesetzten Grenzen',
+    // Zufall über gespeicherten Startwert: Kachel, Vorschau und Fahrt zeigen
+    // denselben Ablauf; neu gewürfelt wird nur per Button im Startdialog
+    zufall: true,
     optionen: { dauer: { label: 'Dauer (min)', min: 20, max: 90, default: 40 },
                 von: { label: 'Watt min', min: 50, max: 300, default: 100 },
                 bis: { label: 'Watt max', min: 80, max: 400, default: 220 } },
-    bauen: o => {
+    bauen: (o, rng) => {
       const blocks = [{ min: 5, watt: o.von }];
       let rest = o.dauer - 10;
       while (rest > 0) {
-        const m = Math.min(rest, 1 + Math.floor(Math.random() * 4));
-        blocks.push({ min: m, watt: o.von + Math.round(Math.random() * (o.bis - o.von) / 10) * 10 });
+        const m = Math.min(rest, 1 + Math.floor(rng() * 4));
+        blocks.push({ min: m, watt: o.von + Math.round(rng() * (o.bis - o.von) / 10) * 10 });
         rest -= m;
       }
       blocks.push({ min: 5, watt: o.von });
@@ -280,13 +283,53 @@ export class ProgramRun extends EventTarget {
   }
 }
 
-// Blockliste eines Programms für gegebene Optionen (Generator oder klassisch)
+// Blockliste eines Programms für gegebene Optionen (Generator oder klassisch).
+// Zufallsprogramme würfeln deterministisch aus opts.seed.
 export function baueBlocks(programm, opts, ftp) {
-  return programm.generieren
-    ? programm.generieren(opts, ftp)
-    : expand(programm.bauen(opts), ftp);
+  if (programm.generieren) return programm.generieren(opts, ftp);
+  const rng = programm.zufall ? mulberry32(opts.seed ?? holeSeed(programm.id)) : Math.random;
+  return expand(programm.bauen(opts, rng), ftp);
 }
 
 export function defaultOpts(programm) {
-  return Object.fromEntries(Object.entries(programm.optionen).map(([k, v]) => [k, v.default]));
+  const opts = Object.fromEntries(Object.entries(programm.optionen).map(([k, v]) => [k, v.default]));
+  if (programm.zufall) opts.seed = holeSeed(programm.id);
+  return opts;
+}
+
+// --- Startwerte für Zufallsprogramme ---
+// Liegen in localStorage und überleben so App-Neustarts. Die Map hält den
+// Wert zusätzlich im Speicher, falls localStorage nicht verfügbar ist.
+const seeds = new Map();
+const zufallsSeed = () => Math.floor(Math.random() * 2 ** 32);
+
+export function holeSeed(id) {
+  if (!seeds.has(id)) {
+    let s = null;
+    try { s = localStorage.getItem(`seed-${id}`); } catch { /* optional */ }
+    seeds.set(id, s !== null && Number.isFinite(Number(s)) ? Number(s) : null);
+    if (seeds.get(id) === null) setzeSeed(id, zufallsSeed());
+  }
+  return seeds.get(id);
+}
+
+export function setzeSeed(id, seed) {
+  seeds.set(id, seed >>> 0);
+  try { localStorage.setItem(`seed-${id}`, String(seed >>> 0)); } catch { /* optional */ }
+}
+
+export function neuerSeed(id) {
+  setzeSeed(id, zufallsSeed());
+  return seeds.get(id);
+}
+
+// Kleiner, schneller 32-Bit-PRNG: gleicher Startwert → gleiche Folge
+function mulberry32(a) {
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }

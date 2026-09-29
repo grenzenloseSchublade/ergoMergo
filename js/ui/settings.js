@@ -4,6 +4,7 @@
 
 import { getSettings, setSetting, getLogs, clearLogs } from '../storage.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';
+import { tastenName } from '../ble/zwift-controller.js';
 import { GL_ROLLEN, GL_ICONS } from './geraete-leiste.js';
 import { toast, toastOk, toastErr } from './toast.js';
 import { download } from '../export.js';
@@ -104,7 +105,7 @@ export async function openSettings({ nachSpeichern } = {}) {
   const zeigeMap = map => {
     const belegt = CONTROLLER_AKTIONEN.filter(([k]) => map?.[k] !== undefined && map[k] !== null);
     $('#ctrl-map-anzeige').textContent = belegt.length
-      ? 'Belegung: ' + belegt.map(([k, l]) => `${l} = Taste ${map[k]}`).join(' · ')
+      ? 'Belegung: ' + belegt.map(([k, l]) => `${l} = ${tastenName(map[k])}`).join(' · ')
       : 'Keine Tasten zugeordnet.';
   };
   zeigeMap(s.controllerMap);
@@ -201,12 +202,12 @@ async function lerneTasten(zeigeMap) {
     if (fertig || i >= schritte.length) return;
     const bit = e.detail;
     if (Object.values(map).includes(bit)) {
-      $('#map-status').textContent = `Taste ${bit} ist schon belegt — andere Taste drücken.`;
+      $('#map-status').textContent = `${tastenName(bit)} ist schon belegt — andere Taste drücken.`;
       return;
     }
     map[schritte[i][0]] = bit;
     tick();
-    $('#map-status').textContent = `Taste ${bit} zugeordnet.`;
+    $('#map-status').textContent = `${tastenName(bit)} zugeordnet.`;
     weiter();
   };
   dlg.showModal();

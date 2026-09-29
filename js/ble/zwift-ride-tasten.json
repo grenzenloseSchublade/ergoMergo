@@ -1,0 +1,223 @@
+{
+  "$kommentar": "Tastenbelegung Zwift Ride (Lenker-Pads links/rechts, BLE-Name 'Zwift SF2'). Bitmap = Feld 1 der Notification 0x23, invertiert: Bit 0 = gedrückt. Alle Tasten beider Pads kommen über EINE Verbindung (das linke Pad tunnelt das rechte). Genutzt von Lern-Modus und Belegungsanzeige (tastenName in zwift-controller.js). sicher = alle Quellen stimmen überein; bei sicher=false zeigt die App zusätzlich die Bit-Nummer. Die orangen Paddles sind analog und werden per Schwelle zu virtuellen Tasten (Bit 24/25, analogOrt = Paddle-Kennung). Stand 2026-09-29: Bits 7–15 und die Paddles noch nicht am eigenen Gerät verifiziert.",
+  "protokoll": {
+    "notification": "0x23",
+    "feld": 1,
+    "logik": "invertiert (Bit 0 = gedrückt, Ruhe = 0xFFFFFFFF)",
+    "firmware": "aktuelle Firmware (Service 0xFC82, ab Jan 2025)",
+    "paddles": "Analogwerte −100…+100 (sint32), je Paddle Kennung 0 = links, 1 = rechts (2/3 reserviert, immer 0). Ältere Firmware: gesammelt in Feld 2 (verschachtelt, je Paddle Feld 1); neuere Firmware: einzeln in Feld 3. Die App wertet beide aus; gedrückt ab Betrag 40, losgelassen unter 20."
+  },
+  "tasten": [
+    {
+      "bit": 0,
+      "maske": "0x00001",
+      "id": "LEFT_BTN",
+      "seite": "links",
+      "gruppe": "steuerkreuz",
+      "label": "Pfeil links",
+      "farbe": "schwarz",
+      "zwift": "lenken links",
+      "sicher": true
+    },
+    {
+      "bit": 1,
+      "maske": "0x00002",
+      "id": "UP_BTN",
+      "seite": "links",
+      "gruppe": "steuerkreuz",
+      "label": "Pfeil hoch",
+      "farbe": "schwarz",
+      "zwift": "hoch",
+      "sicher": true
+    },
+    {
+      "bit": 2,
+      "maske": "0x00004",
+      "id": "RIGHT_BTN",
+      "seite": "links",
+      "gruppe": "steuerkreuz",
+      "label": "Pfeil rechts",
+      "farbe": "schwarz",
+      "zwift": "lenken rechts",
+      "sicher": true
+    },
+    {
+      "bit": 3,
+      "maske": "0x00008",
+      "id": "DOWN_BTN",
+      "seite": "links",
+      "gruppe": "steuerkreuz",
+      "label": "Pfeil runter",
+      "farbe": "schwarz",
+      "zwift": "runter",
+      "sicher": true
+    },
+    {
+      "bit": 4,
+      "maske": "0x00010",
+      "id": "A_BTN",
+      "seite": "rechts",
+      "gruppe": "aktion",
+      "label": "A",
+      "farbe": "grün",
+      "lage": "rechts in der Raute",
+      "zwift": "auswählen",
+      "sicher": true
+    },
+    {
+      "bit": 5,
+      "maske": "0x00020",
+      "id": "B_BTN",
+      "seite": "rechts",
+      "gruppe": "aktion",
+      "label": "B",
+      "farbe": "pink",
+      "lage": "unten in der Raute",
+      "zwift": "zurück",
+      "sicher": true
+    },
+    {
+      "bit": 6,
+      "maske": "0x00040",
+      "id": "Y_BTN",
+      "seite": "rechts",
+      "gruppe": "aktion",
+      "label": "Y",
+      "farbe": "blau",
+      "lage": "oben in der Raute",
+      "zwift": "Menü",
+      "sicher": true
+    },
+    {
+      "bit": 7,
+      "maske": "0x00080",
+      "id": "Z_BTN",
+      "seite": "rechts",
+      "gruppe": "aktion",
+      "label": "Z",
+      "farbe": "orange",
+      "lage": "links in der Raute",
+      "zwift": "Ride On",
+      "sicher": false
+    },
+    {
+      "bit": 8,
+      "maske": "0x00100",
+      "id": "SHFT_UP_L_BTN",
+      "seite": "links",
+      "gruppe": "schalten",
+      "label": "Schalten hoch links",
+      "zwift": "Gang leichter",
+      "sicher": false
+    },
+    {
+      "bit": 9,
+      "maske": "0x00200",
+      "id": "SHFT_DN_L_BTN",
+      "seite": "links",
+      "gruppe": "schalten",
+      "label": "Schalten runter links",
+      "zwift": "Gang leichter",
+      "sicher": false
+    },
+    {
+      "bit": 10,
+      "maske": "0x00400",
+      "id": "POWERUP_L_BTN",
+      "seite": "links",
+      "gruppe": "zusatz",
+      "label": "Zusatztaste links",
+      "lage": "am Bremshebel",
+      "zwift": "Power-up",
+      "sicher": false
+    },
+    {
+      "bit": 11,
+      "maske": "0x00800",
+      "id": "ONOFF_L_BTN",
+      "seite": "links",
+      "gruppe": "system",
+      "label": "Ein/Aus links",
+      "sicher": false
+    },
+    {
+      "bit": 12,
+      "maske": "0x01000",
+      "id": "SHFT_UP_R_BTN",
+      "seite": "rechts",
+      "gruppe": "schalten",
+      "label": "Schalten hoch rechts",
+      "zwift": "Gang schwerer",
+      "sicher": false
+    },
+    {
+      "bit": 13,
+      "maske": "0x02000",
+      "id": "SHFT_DN_R_BTN",
+      "seite": "rechts",
+      "gruppe": "schalten",
+      "label": "Schalten runter rechts",
+      "zwift": "Gang schwerer",
+      "sicher": false
+    },
+    {
+      "bit": 14,
+      "maske": "0x04000",
+      "id": "POWERUP_R_BTN",
+      "seite": "rechts",
+      "gruppe": "zusatz",
+      "label": "Zusatztaste rechts",
+      "lage": "am Bremshebel",
+      "zwift": "Power-up",
+      "sicher": false
+    },
+    {
+      "bit": 15,
+      "maske": "0x08000",
+      "id": "ONOFF_R_BTN",
+      "seite": "rechts",
+      "gruppe": "system",
+      "label": "Ein/Aus rechts",
+      "sicher": false
+    },
+    {
+      "bit": 24,
+      "maske": "virtuell",
+      "id": "PADDLE_L",
+      "seite": "links",
+      "gruppe": "paddle",
+      "label": "Paddle links",
+      "farbe": "orange",
+      "lage": "Schulter, orange",
+      "analogOrt": 0,
+      "zwift": "lenken/bremsen",
+      "sicher": false
+    },
+    {
+      "bit": 25,
+      "maske": "virtuell",
+      "id": "PADDLE_R",
+      "seite": "rechts",
+      "gruppe": "paddle",
+      "label": "Paddle rechts",
+      "farbe": "orange",
+      "lage": "Schulter, orange",
+      "analogOrt": 1,
+      "zwift": "lenken/bremsen",
+      "sicher": false
+    }
+  ],
+  "abweichungen": [
+    "Makinolo (2024, ohne eigenes Gerät geschrieben) und die davon kopierten .proto-Dateien (qdomyos-zwift, incyclist) haben Lücken: Z = Bit 8, SHFT_UP_L = 9, SHFT_DN_L = 10, POWERUP_L = 11, ONOFF_L = 12, SHFT_UP_R = 13, SHFT_DN_R = 14, POWERUP_R = 16, ONOFF_R = 17. A–Y und das Steuerkreuz (Bits 0–6) stimmen in allen Quellen überein.",
+    "Die obige Belegung mit durchgehenden Bits 0–15 stammt aus BikeControl und RideToWoosh (beide am Gerät ermittelt) sowie aus den Testdaten in qdomyos-zwift (Mitschnitte vom Mai).",
+    "Ein/Aus-Tasten: RideToWoosh sieht Bit 11 nie; qdomyos nennt Bit 15 ein 'firmwareabhängiges' Bit für rechts Ein/Aus.",
+    "Paddles: angenommen wird nur EINE Druckrichtung (Betrag ≥ 40 = gedrückt, Vorzeichen egal). RideToWoosh unterscheidet zwei Richtungen je Paddle, BikeControl nur eine. Das Log zeigt den Rohwert mit Vorzeichen."
+  ],
+  "quellen": [
+    "https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/",
+    "https://github.com/OpenBikeControl/bikecontrol/blob/main/lib/bluetooth/devices/zwift/zwift_ride.dart",
+    "https://github.com/OpenBikeControl/bikecontrol/blob/main/lib/bluetooth/devices/zwift/constants.dart",
+    "https://github.com/TheInGoF/RideToWoosh/blob/main/RideToWooshHID.ino",
+    "https://github.com/cagnulein/qdomyos-zwift/blob/master/tst/Devices/TestZwiftRideController.cpp"
+  ]
+}

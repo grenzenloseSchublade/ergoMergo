@@ -37,5 +37,17 @@ ohne Berührung bleiben Töne stumm, bis einmal getippt wurde (Autoplay-Policy).
 Einstellungen (⚙) → Geräte → „Tasten zuordnen": der Lern-Modus verbindet den
 Controller und fragt Aktion für Aktion (+/−, Block vor/zurück, STOPP) eine
 Taste ab — die Belegung landet als `controllerMap` in den Einstellungen.
-Zur Diagnose erscheint weiterhin jede gedrückte Taste im Diagnose-Log als
-`Ride-Taste Bit <n> gedrückt`.
+Lern-Modus und Belegungsanzeige nennen die Tasten im Klartext („A (grün)",
+„Pfeil links"); die Zuordnung Bit → Taste steht in
+`js/ble/zwift-ride-tasten.json`. Bits, bei denen sich die Quellen
+widersprechen (`"sicher": false`, derzeit Bit 7–15), zeigen zusätzlich die
+Bit-Nummer. Zur Diagnose erscheint jede gedrückte Taste im Diagnose-Log als
+`Ride-Taste Bit <n> gedrückt (laut Tabelle: <ID>)` — damit lässt sich die
+Tabelle am Gerät prüfen und bei Bedarf `sicher` auf `true` setzen.
+
+Die orangen Schulter-Paddles sind analog (−100…+100). Die App macht aus
+ihnen virtuelle Tasten (Bit 24 = links, Bit 25 = rechts; gedrückt ab
+Betrag 40, losgelassen unter 20), die sich wie jede andere Taste im
+Lern-Modus belegen lassen. Das Log zeigt beim Drücken den Rohwert und beim
+Loslassen die Spitze (`Ride-Paddle links losgelassen — Spitze -87`); am
+Vorzeichen sieht man, ob ein Paddle nur in eine Richtung ausschlägt.
