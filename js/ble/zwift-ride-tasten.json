@@ -110,8 +110,10 @@
       "id": "SHFT_UP_L_BTN",
       "seite": "links",
       "gruppe": "schalten",
-      "label": "Schalten hoch links",
+      "label": "Schalttaste links oben",
       "symbol": "schaltenHoch",
+      "farbe": "orange",
+      "lage": "Lenkerende, obere Taste",
       "zwift": "Gang leichter",
       "sicher": true
     },
@@ -121,8 +123,10 @@
       "id": "SHFT_DN_L_BTN",
       "seite": "links",
       "gruppe": "schalten",
-      "label": "Schalten runter links",
+      "label": "Schalttaste links unten",
       "symbol": "schaltenRunter",
+      "farbe": "orange",
+      "lage": "Lenkerende, untere Taste",
       "zwift": "Gang leichter",
       "sicher": true
     },
@@ -154,8 +158,10 @@
       "id": "SHFT_UP_R_BTN",
       "seite": "rechts",
       "gruppe": "schalten",
-      "label": "Schalten hoch rechts",
+      "label": "Schalttaste rechts oben",
       "symbol": "schaltenHoch",
+      "farbe": "orange",
+      "lage": "Lenkerende, obere Taste",
       "zwift": "Gang schwerer",
       "sicher": true
     },
@@ -165,8 +171,10 @@
       "id": "SHFT_DN_R_BTN",
       "seite": "rechts",
       "gruppe": "schalten",
-      "label": "Schalten runter rechts",
+      "label": "Schalttaste rechts unten",
       "symbol": "schaltenRunter",
+      "farbe": "orange",
+      "lage": "Lenkerende, untere Taste",
       "zwift": "Gang schwerer",
       "sicher": true
     },
@@ -252,13 +260,15 @@
   "abweichungen": [
     "Makinolo (2024, ohne eigenes Gerät geschrieben) und die davon kopierten .proto-Dateien (qdomyos-zwift, incyclist) haben Lücken: Z = Bit 8, SHFT_UP_L = 9, SHFT_DN_L = 10, POWERUP_L = 11, ONOFF_L = 12, SHFT_UP_R = 13, SHFT_DN_R = 14, POWERUP_R = 16, ONOFF_R = 17. Am eigenen Gerät widerlegt: Bits liegen lückenlos wie in BikeControl/RideToWoosh.",
     "Ein/Aus-Tasten: RideToWoosh sieht Bit 11 nie; qdomyos nennt Bit 15 ein 'firmwareabhängiges' Bit für rechts Ein/Aus. Am eigenen Gerät nicht geprüft.",
-    "Paddles: BikeControl wertet nur den Betrag aus (eine Taste je Paddle), RideToWoosh beide Richtungen. Am eigenen Gerät bestätigt: beide Richtungen, Werte bis ±100."
+    "Paddles: BikeControl wertet nur den Betrag aus (eine Taste je Paddle), RideToWoosh beide Richtungen. Am eigenen Gerät bestätigt: beide Richtungen, Werte bis ±100.",
+    "Lage der Schalttasten (hoch = obere, runter = untere Taste) aus ZwiftBridge übernommen, am eigenen Gerät noch nicht einzeln geprüft."
   ],
   "quellen": [
     "https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/",
     "https://github.com/OpenBikeControl/bikecontrol/blob/main/lib/bluetooth/devices/zwift/zwift_ride.dart",
     "https://github.com/OpenBikeControl/bikecontrol/blob/main/lib/bluetooth/devices/zwift/constants.dart",
     "https://github.com/TheInGoF/RideToWoosh/blob/main/RideToWooshHID.ino",
-    "https://github.com/cagnulein/qdomyos-zwift/blob/master/tst/Devices/TestZwiftRideController.cpp"
+    "https://github.com/cagnulein/qdomyos-zwift/blob/master/tst/Devices/TestZwiftRideController.cpp",
+    "https://github.com/amirlagasse/ZwiftBridge/blob/main/src/zwiftbridge/labels.py"
   ]
 }

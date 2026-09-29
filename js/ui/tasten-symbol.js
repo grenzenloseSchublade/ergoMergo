@@ -15,11 +15,12 @@ export function tastenSymbol(bit) {
       return `<span class="ts">${svgIcon(t.symbol)}</span>`;
     case 'aktion':                                   // farbige Rundtaste wie am Lenker
       return `<span class="ts ts-rund ${FARBKLASSE[t.farbe] ?? ''}">${t.label}</span>`;
-    case 'schalten':
-    case 'zusatz':
-      return `<span class="ts ts-pill">${svgIcon(t.symbol)}${seite}</span>`;
-    case 'paddle':
-      return `<span class="ts ts-pill ts-paddle">${t.richtung > 0 ? '+' : '−'}${seite}</span>`;
+    case 'schalten':                                 // klein und orange wie am Lenkerende
+      return `<span class="ts ts-pill ts-klein ts-orange-rand">${svgIcon(t.symbol)}<span>${seite}</span></span>`;
+    case 'zusatz':                                   // kleiner Knopf am Bremshebel
+      return `<span class="ts ts-pill ts-klein">${svgIcon(t.symbol)}<span>${seite}</span></span>`;
+    case 'paddle':                                   // großer Hebel
+      return `<span class="ts ts-orange-rand ts-paddle"><span>${t.richtung > 0 ? '+' : '−'}</span><span>${seite}</span></span>`;
     default:                                         // unbekannt/ungeprüft: Bit-Nummer
       return `<span class="ts ts-pill">${bit}</span>`;
   }

@@ -15,14 +15,15 @@ import { logInfo, logWarn, hex } from '../logger.js';
 import RIDE_TASTEN from './zwift-ride-tasten.json' with { type: 'json' };
 
 // Klartextname einer Ride-Taste für Lern-Modus und Belegungsanzeige.
-// Bits, bei denen sich die Quellen widersprechen (sicher: false), zeigen
-// zusätzlich die Bit-Nummer — so fällt eine falsche Zuordnung am Gerät auf.
+// Die Farbe steht nur bei A/B/Y/Z im Namen — nur dort ist sie eindeutig
+// (orange tragen auch Z, Schalttasten und Paddles). Ungeprüfte Tasten
+// (sicher: false) zeigen zusätzlich die Bit-Nummer.
 const TASTE_JE_BIT = new Map(RIDE_TASTEN.tasten.map(t => [t.bit, t]));
 export const tasteInfo = bit => TASTE_JE_BIT.get(bit) ?? null;
 export function tastenName(bit) {
   const t = TASTE_JE_BIT.get(bit);
   if (!t) return `Taste ${bit}`;
-  const farbe = t.farbe !== 'schwarz' && t.farbe;
+  const farbe = t.gruppe === 'aktion' && t.farbe;
   const zusatz = [farbe, !t.sicher && `Bit ${bit}`].filter(Boolean);
   return zusatz.length ? `${t.label} (${zusatz.join(', ')})` : t.label;
 }

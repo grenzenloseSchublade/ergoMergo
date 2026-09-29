@@ -178,13 +178,20 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
   font-size: .72rem; font-weight: 700; line-height: 1;
 }
 .ts svg { width: 14px; height: 14px; }
-.ts-pill { border-radius: 999px; padding: 0 .45rem 0 .3rem; }
+/* Pillen: gleicher Innenabstand links/rechts, fester Abstand Symbol ↔ L/R */
+.ts-pill { border-radius: 999px; padding: 0 .5rem; gap: .25rem; }
+.ts-pill svg { width: 13px; height: 13px; }
 .ts-rund { border-radius: 50%; width: 1.5rem; padding: 0; border: none; color: var(--bg); font-size: .8rem; }
 .ts-gruen { background: #4cc76e; }
 .ts-magenta { background: #e0489a; }
 .ts-blau { background: #4a9bd8; }
 .ts-orange { background: #f0892f; }
-.ts-paddle { border-color: #f0892f; color: #f0892f; padding: 0 .45rem; }
+.ts-orange-rand { border-color: #f0892f; color: #f0892f; }
+/* Größe folgt dem Lenker: das Paddle ist ein großer Hebel, die Schalttasten
+   und Zusatzknöpfe sind kleine Knöpfe */
+.ts-paddle { gap: .3rem; min-width: 3.4rem; height: 1.6rem; border-width: 2px; border-radius: 8px; font-size: .78rem; }
+.ts-klein { height: 1.2rem; padding: 0 .4rem; gap: .2rem; font-size: .65rem; }
+.ts-klein svg { width: 11px; height: 11px; }
 #map-status .ts { margin-right: .2rem; }
 .geraete { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .45rem; font-size: .85rem; }
 .geraete li {
