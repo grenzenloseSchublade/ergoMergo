@@ -24,7 +24,7 @@ const ICONS = {
           'M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15',
           'M18 5m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0'],
   // Lucide chevron-* (Pfeiltasten), arrow-up/-down (Schalttasten), circle-dot
-  // (Zusatzknopf): Tastensymbole des Zwift-Lenkers
+  // (Drop-Taste): Tastensymbole des Zwift-Lenkers
   pfeilLinks: ['m15 18-6-6 6-6'],
   pfeilHoch: ['m18 15-6-6-6 6'],
   pfeilRechts: ['m9 18 6-6-6-6'],

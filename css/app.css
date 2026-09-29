@@ -15,6 +15,8 @@
   /* Powerzonen (Zwift-Konvention, 6 Zonen) */
   --z1: #8a9aa0; --z2: #4a9bd8; --z3: #5fc98d;
   --z4: #e3c63f; --z5: #e8913f; --z6: #ef6b5e;
+  /* Tastenfarben des Zwift-Lenkers (Symbole + Lenkeransicht) */
+  --taste-gruen: #4cc76e; --taste-magenta: #e0489a; --taste-blau: #4a9bd8; --taste-orange: #f0892f;
   --power-line: #ecf3f5;
   --target-fill: rgba(69, 199, 212, .18);
 }
@@ -182,17 +184,71 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .ts-pill { border-radius: 999px; padding: 0 .5rem; gap: .25rem; }
 .ts-pill svg { width: 13px; height: 13px; }
 .ts-rund { border-radius: 50%; width: 1.5rem; padding: 0; border: none; color: var(--bg); font-size: .8rem; }
-.ts-gruen { background: #4cc76e; }
-.ts-magenta { background: #e0489a; }
-.ts-blau { background: #4a9bd8; }
-.ts-orange { background: #f0892f; }
-.ts-orange-rand { border-color: #f0892f; color: #f0892f; }
-/* Größe folgt dem Lenker: das Paddle ist ein großer Hebel, die Schalttasten
-   und Zusatzknöpfe sind kleine Knöpfe */
+.ts-gruen { background: var(--taste-gruen); }
+.ts-magenta { background: var(--taste-magenta); }
+.ts-blau { background: var(--taste-blau); }
+.ts-orange { background: var(--taste-orange); }
+.ts-orange-rand { border-color: var(--taste-orange); color: var(--taste-orange); }
+/* Größe folgt dem Lenker: das Paddle ist die große Hebel-Vorderseite, die Schalttasten
+   und Drop-Tasten sind kleine Knöpfe */
 .ts-paddle { gap: .3rem; min-width: 3.4rem; height: 1.6rem; border-width: 2px; border-radius: 8px; font-size: .78rem; }
 .ts-klein { height: 1.2rem; padding: 0 .4rem; gap: .2rem; font-size: .65rem; }
 .ts-klein svg { width: 11px; height: 11px; }
 #map-status .ts { margin-right: .2rem; }
+/* Lenkeransicht: Seite links | Zone (Piktogramm) | Seite rechts */
+.lk-karte {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  column-gap: .5rem; row-gap: .7rem; margin-top: .5rem;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px; padding: .6rem .5rem .7rem;
+}
+.lk-kopf { font-size: .7rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
+.lk-kopf:first-child { justify-self: end; }
+/* Mittelspalte schmal halten: Zonenname darf zweizeilig werden */
+.lk-zone { display: grid; justify-items: center; gap: .1rem; max-width: 4.6rem; }
+.lk-zone small { font-size: .62rem; line-height: 1.15; color: var(--ink3); text-align: center; }
+.lk-pikto { width: 48px; height: 48px; }
+.lk-pikto .lk-form { fill: var(--bg); stroke: var(--ink2); stroke-width: 1.5; stroke-linejoin: round; }
+.lk-pikto .lk-lenker { fill: none; stroke: var(--ink3); stroke-width: 3; stroke-linecap: round; opacity: .55; }
+.lk-pikto .lk-an { fill: var(--taste-orange); }
+.lk-pikto .lk-an-linie { fill: none; stroke: var(--taste-orange); stroke-width: 3.2; stroke-linecap: round; }
+.lk-gruppe { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.lk-links { justify-content: flex-end; }
+.lk-rechts { justify-content: flex-start; }
+/* Kreuz/Raute bzw. Schalttasten übereinander: festes Raster aus der Tabelle */
+.lk-raster { display: grid; grid-auto-columns: 1.55rem; grid-auto-rows: 1.55rem; gap: .25rem; place-items: center; }
+.lk-links.lk-raster { justify-content: end; }
+.lk-rechts.lk-raster { justify-content: start; }
+.lk-raster .ts:not(.ts-pill) { width: 1.5rem; padding: 0; }   /* Pfeile quadratisch */
+/* Belegt = volle Deckkraft + Aktionsmarke seitlich außen; unbelegt gedimmt.
+   Außen liegt im Kreuz/in der Raute immer ein freies Feld — keine Überdeckung */
+.lk-taste { position: relative; display: inline-flex; opacity: .35; }
+.lk-taste.belegt { opacity: 1; }
+.lk-taste .lk-marke { position: absolute; top: 50%; transform: translateY(-50%); }
+.lk-links .lk-marke { right: calc(100% + .15rem); }
+.lk-rechts .lk-marke { left: calc(100% + .15rem); }
+.lk-marke {
+  display: inline-block; min-width: 1rem; height: 1rem; padding: 0 .2rem; box-sizing: border-box;
+  border-radius: 999px; background: var(--accent); color: var(--bg);
+  font-size: .6rem; line-height: 1rem; text-align: center; font-weight: 700;
+}
+.lk-taste.blink { animation: lk-blink .9s ease-out 2; opacity: 1; }
+@keyframes lk-blink { 0% { filter: drop-shadow(0 0 0 var(--accent)); transform: scale(1.25); } 100% { filter: none; transform: scale(1); } }
+.lk-legende {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem .8rem;
+  margin-top: .2rem; padding-top: .55rem; border-top: 1px solid var(--line); font-size: .7rem; color: var(--ink2);
+}
+.lk-legende span { display: inline-flex; align-items: center; gap: .3rem; }
+/* Schmale Geräte (≤ 380 px): Kreuz/Raute etwas kleiner, damit die seitlichen
+   Marken innerhalb der Karte bleiben */
+@media (max-width: 380px) {
+  .lk-karte { column-gap: .35rem; padding-inline: .4rem; }
+  .lk-zone { max-width: 4.1rem; }
+  .lk-raster { grid-auto-columns: 1.4rem; grid-auto-rows: 1.4rem; gap: .2rem; }
+  .lk-raster .ts:not(.ts-pill) { width: 1.35rem; height: 1.35rem; min-width: 0; }
+}
+.belegung-details { margin-top: .5rem; }
+.belegung-details summary { cursor: pointer; font-size: .75rem; color: var(--ink3); }
+#map-karte { margin-top: .6rem; }
 .geraete { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .45rem; font-size: .85rem; }
 .geraete li {
   display: flex; align-items: center; gap: .7rem;

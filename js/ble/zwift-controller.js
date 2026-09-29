@@ -20,6 +20,7 @@ import RIDE_TASTEN from './zwift-ride-tasten.json' with { type: 'json' };
 // (sicher: false) zeigen zusätzlich die Bit-Nummer.
 const TASTE_JE_BIT = new Map(RIDE_TASTEN.tasten.map(t => [t.bit, t]));
 export const tasteInfo = bit => TASTE_JE_BIT.get(bit) ?? null;
+export const alleTasten = () => RIDE_TASTEN.tasten;
 export function tastenName(bit) {
   const t = TASTE_JE_BIT.get(bit);
   if (!t) return `Taste ${bit}`;

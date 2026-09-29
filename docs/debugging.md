@@ -34,7 +34,13 @@ ohne Berührung bleiben Töne stumm, bis einmal getippt wurde (Autoplay-Policy).
 
 ## 5. Zwift-Ride-Tasten belegen
 
-Einstellungen (⚙) → Geräte → „Tasten zuordnen": der Lern-Modus verbindet den
+Einstellungen (⚙) → Geräte zeigt die Belegung als Lenkeransicht
+(`js/ui/lenker-karte.js`): je Griffzone (Griff oben, Hebel vorne, Hebel
+außen, Außen unten) eine Zeile mit Seitenansichts-Piktogramm, links/rechts
+die Tastensymbole; belegte Tasten tragen die Aktion als Marke, unbelegte sind
+gedimmt. Zone und Anordnung stehen je Taste in `zwift-ride-tasten.json`
+(`zone`, `raster`), die Aktionen zentral in `js/ui/controller-aktionen.js`.
+„Tasten zuordnen" startet den Lern-Modus: er verbindet den
 Controller und fragt Aktion für Aktion (+/−, Block vor/zurück, STOPP) eine
 Taste ab — die Belegung landet als `controllerMap` in den Einstellungen.
 Lern-Modus und Belegungsanzeige nennen die Tasten im Klartext („A (grün)",

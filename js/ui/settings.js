@@ -6,6 +6,8 @@ import { getSettings, setSetting, getLogs, clearLogs } from '../storage.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';
 import { tastenName } from '../ble/zwift-controller.js';
 import { tastenSymbol } from './tasten-symbol.js';
+import { lenkerKarte } from './lenker-karte.js';
+import { CONTROLLER_AKTIONEN, istBelegt } from './controller-aktionen.js';
 import { GL_ROLLEN, GL_ICONS } from './geraete-leiste.js';
 import { toast, toastOk, toastErr } from './toast.js';
 import { download } from '../export.js';
@@ -15,11 +17,6 @@ import { initAudio, tick } from '../signals.js';
 
 const $ = s => document.querySelector(s);
 
-// Controller-Aktionen: EINE Quelle für Belegungsanzeige und Lern-Modus
-const CONTROLLER_AKTIONEN = [
-  ['plus', 'Watt hoch (+)'], ['minus', 'Watt runter (−)'],
-  ['skip', 'Block vor (⏭)'], ['prev', 'Block zurück (⏮)'], ['stopp', 'STOPP / WEITER'],
-];
 
 
 export async function openSettings({ nachSpeichern } = {}) {
@@ -104,9 +101,10 @@ export async function openSettings({ nachSpeichern } = {}) {
 
   // Tastenbelegung des Controllers: Anzeige + Lern-Modus
   const zeigeMap = map => {
-    const belegt = CONTROLLER_AKTIONEN.filter(([k]) => map?.[k] !== undefined && map[k] !== null);
+    $('#ctrl-map-karte').innerHTML = lenkerKarte(map ?? {});
+    const belegt = CONTROLLER_AKTIONEN.filter(a => istBelegt(map, a.key));
     $('#ctrl-map-anzeige').innerHTML = belegt.length
-      ? belegt.map(([k, l]) => `<li>${l}<span class="belegung-taste">${tastenSymbol(map[k])}<small>${tastenName(map[k])}</small></span></li>`).join('')
+      ? belegt.map(a => `<li>${a.label}<span class="belegung-taste">${tastenSymbol(map[a.key])}<small>${tastenName(map[a.key])}</small></span></li>`).join('')
       : '<li class="leer">Keine Tasten zugeordnet.</li>';
   };
   zeigeMap(s.controllerMap);
@@ -173,8 +171,10 @@ async function lerneTasten(zeigeMap) {
   let fertig = false;
   initAudio();                                   // Klick kam per Geste — Audio freischalten
   const zeigeSchritt = () => {
-    $('#map-schritt').textContent = `Drücke die Taste für: ${schritte[i][1]}`;
+    $('#map-schritt').textContent = `Drücke die Taste für: ${schritte[i].label}`;
   };
+  // Lenkeransicht: zeigt die bisher gelernten Tasten, die zuletzt gedrückte blinkt
+  const zeigeKarte = (blink = null) => { $('#map-karte').innerHTML = lenkerKarte(map, { blink }); };
   let lauscher = [];                             // [client, fn] — beim Ende abbauen
   const ende = () => {
     fertig = true;
@@ -200,7 +200,7 @@ async function lerneTasten(zeigeMap) {
   };
   $('#btn-map-skip').onclick = () => {
     if (fertig || i >= schritte.length) return;
-    map[schritte[i][0]] = null;
+    map[schritte[i].key] = null;
     weiter();
   };
   const onButton = e => {
@@ -209,16 +209,19 @@ async function lerneTasten(zeigeMap) {
     if (fertig || i >= schritte.length) return;
     const bit = e.detail;
     if (Object.values(map).includes(bit)) {
+      zeigeKarte(bit);
       $('#map-status').innerHTML = `${tastenSymbol(bit)} ${tastenName(bit)} ist schon belegt — andere Taste drücken.`;
       return;
     }
-    map[schritte[i][0]] = bit;
+    map[schritte[i].key] = bit;
+    zeigeKarte(bit);
     tick();
     $('#map-status').innerHTML = `${tastenSymbol(bit)} ${tastenName(bit)} zugeordnet.`;
     weiter();
   };
   dlg.showModal();
   zeigeSchritt();
+  zeigeKarte();
   try {
     if ((await geraeteManager.gemerkte('controller')).length === 0) {
       await geraeteManager.koppel('controller');   // frische Geste → Chooser ok
