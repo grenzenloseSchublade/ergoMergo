@@ -186,8 +186,9 @@
     <details class="diagnose">
       <summary>Erweitert</summary>
       <div class="dlg-fields" style="margin-top:.5rem">
-        <label style="flex-direction:row;display:flex;align-items:center;gap:.5rem">
-          <input type="checkbox" id="set-sprache" style="width:auto"> Sprachansagen bei Blockwechsel
+        <label class="schalter-zeile">
+          <span class="schalter-text">Sprachansagen<small>bei jedem Blockwechsel Dauer und Watt ansagen</small></span>
+          <input type="checkbox" class="schalter" id="set-sprache">
         </label>
         <label>intervals.icu API-Key (leer = aus)<input type="text" id="set-icukey" autocomplete="off"></label>
       </div>
@@ -209,16 +210,21 @@
         — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
       <p class="hint">Zwift-Lenker: linkes und rechtes Pad sind eigene Geräte — beim Koppeln den Eintrag „Zwift Ride" wählen (kryptische Namen sind Nebenkanäle), danach „+ 2. Pad" für die andere Seite.</p>
       <ul id="geraete-liste" class="geraete"></ul>
-      <p class="hint" id="ctrl-map-anzeige"></p>
+      <p class="gruppe-titel belegung-titel">Tastenbelegung</p>
+      <ul id="ctrl-map-anzeige" class="belegung"></ul>
       <div class="dlg-actions" style="margin-top:.5rem">
         <button type="button" id="btn-map-lernen">Tasten zuordnen</button>
       </div>
-      <div class="dlg-fields" style="margin-top:.5rem">
-        <label style="flex-direction:row;display:flex;align-items:center;gap:.5rem">
-          <input type="checkbox" id="set-halten-tasten" style="width:auto"> ±-Taste halten wiederholt (fester Takt)
+      <div class="einstell-gruppe">
+        <p class="gruppe-titel">Gedrückt halten</p>
+        <p class="hint">Gilt für die Tasten, die mit „Watt hoch" und „Watt runter" belegt sind: Halten ändert die Leistung fortlaufend statt nur einmal.</p>
+        <label class="schalter-zeile">
+          <span class="schalter-text">Tasten<small>ein Wattschritt alle 0,4 s</small></span>
+          <input type="checkbox" class="schalter" id="set-halten-tasten">
         </label>
-        <label style="flex-direction:row;display:flex;align-items:center;gap:.5rem">
-          <input type="checkbox" id="set-halten-paddles" style="width:auto"> ±-Paddle halten wiederholt (Tempo nach Druck)
+        <label class="schalter-zeile">
+          <span class="schalter-text">Orange Paddles<small>Tempo nach Druck: leicht langsam, fest schnell</small></span>
+          <input type="checkbox" class="schalter" id="set-halten-paddles">
         </label>
       </div>
     </details>

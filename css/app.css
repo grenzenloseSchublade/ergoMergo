@@ -138,6 +138,54 @@ dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
   white-space: pre-wrap; word-break: break-word; margin: .5rem 0 0;
 }
 .diagnose button { background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .9rem; }
+/* Ein/Aus-Einstellungen als Zeile: Titel + Erklärung links, Schiebeschalter rechts */
+.einstell-gruppe { margin-top: .9rem; display: grid; gap: .45rem; }
+/* Abschnittsbeschriftung wie .g-rolle (TRAINER/LENKER darüber) */
+.gruppe-titel { margin: 0; font-size: .7rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .06em; }
+.einstell-gruppe .hint { margin: 0 0 .15rem; }
+.schalter-zeile {
+  display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px;
+  padding: .55rem .7rem; cursor: pointer;
+}
+.dlg-fields .schalter-zeile { display: flex; gap: .8rem; color: var(--ink); }
+.schalter-text { display: grid; gap: .1rem; font-size: .85rem; color: var(--ink); }
+.schalter-text small { font-size: .75rem; color: var(--ink3); }
+input.schalter {
+  appearance: none; -webkit-appearance: none; flex: 0 0 auto; margin: 0; padding: 0;
+  width: 2.6rem; height: 1.5rem; border-radius: 999px; position: relative; cursor: pointer;
+  background: var(--line); border: 1px solid var(--ink3); transition: background .15s, border-color .15s;
+}
+input.schalter::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: calc(1.5rem - 6px); height: calc(1.5rem - 6px);
+  border-radius: 50%; background: var(--ink2); transition: transform .15s, background .15s;
+}
+input.schalter:checked { background: var(--accent); border-color: var(--accent); }
+input.schalter:checked::after { transform: translateX(1.1rem); background: var(--bg); }
+input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Tastenbelegung: Aktion links, Tastensymbol + Name rechts */
+.belegung-titel { margin-top: .8rem; }
+.belegung { list-style: none; margin: .35rem 0 0; padding: 0; display: grid; gap: .35rem; font-size: .85rem; }
+.belegung li { display: flex; align-items: center; justify-content: space-between; gap: .6rem; color: var(--ink2); }
+.belegung-taste { display: inline-flex; align-items: center; gap: .45rem; }
+.belegung-taste small { font-size: .75rem; color: var(--ink3); }
+.belegung .leer { font-size: .75rem; color: var(--ink3); }
+/* Tastensymbole, dem Zwift-Lenker nachempfunden (tasten-symbol.js) */
+.ts {
+  display: inline-flex; align-items: center; justify-content: center; gap: .1rem; flex: 0 0 auto;
+  height: 1.5rem; min-width: 1.5rem; padding: 0 .3rem; box-sizing: border-box; vertical-align: middle;
+  border-radius: 6px; border: 1px solid var(--ink3); background: var(--bg); color: var(--ink);
+  font-size: .72rem; font-weight: 700; line-height: 1;
+}
+.ts svg { width: 14px; height: 14px; }
+.ts-pill { border-radius: 999px; padding: 0 .45rem 0 .3rem; }
+.ts-rund { border-radius: 50%; width: 1.5rem; padding: 0; border: none; color: var(--bg); font-size: .8rem; }
+.ts-gruen { background: #4cc76e; }
+.ts-magenta { background: #e0489a; }
+.ts-blau { background: #4a9bd8; }
+.ts-orange { background: #f0892f; }
+.ts-paddle { border-color: #f0892f; color: #f0892f; padding: 0 .45rem; }
+#map-status .ts { margin-right: .2rem; }
 .geraete { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .45rem; font-size: .85rem; }
 .geraete li {
   display: flex; align-items: center; gap: .7rem;

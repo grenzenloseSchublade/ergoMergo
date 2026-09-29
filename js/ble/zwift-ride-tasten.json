@@ -1,5 +1,5 @@
 {
-  "$kommentar": "Tastenbelegung Zwift Ride (Lenker-Pads links/rechts, BLE-Name 'Zwift SF2'). Bitmap = Feld 1 der Notification 0x23, invertiert: Bit 0 = gedrückt. Alle Tasten beider Pads kommen über EINE Verbindung (das linke Pad tunnelt das rechte). Genutzt von Lern-Modus und Belegungsanzeige (tastenName in zwift-controller.js). sicher = am eigenen Gerät bestätigt; bei sicher=false zeigt die App zusätzlich die Bit-Nummer. Die orangen Paddles sind analog und schlagen in beide Richtungen aus; je Paddle und Richtung eine virtuelle Taste (analogOrt = Paddle-Kennung, richtung = Vorzeichen des Analogwerts). Stand 2026-09-29: alle Tasten außer Ein/Aus am Gerät bestätigt (Log 11:56–11:58).",
+  "$kommentar": "Tastenbelegung Zwift Ride (Lenker-Pads links/rechts, BLE-Name 'Zwift SF2'). Bitmap = Feld 1 der Notification 0x23, invertiert: Bit 0 = gedrückt. Alle Tasten beider Pads kommen über EINE Verbindung (das linke Pad tunnelt das rechte). Genutzt von Lern-Modus und Belegungsanzeige (tastenName in zwift-controller.js). sicher = am eigenen Gerät bestätigt; bei sicher=false zeigt die App zusätzlich die Bit-Nummer. Die orangen Paddles sind analog und schlagen in beide Richtungen aus; je Paddle und Richtung eine virtuelle Taste (analogOrt = Paddle-Kennung, richtung = Vorzeichen des Analogwerts). Stand 2026-09-29: alle Tasten außer Ein/Aus am Gerät bestätigt (Log 11:56–11:58). symbol = Icon-Name aus icons.js für das Tastensymbol (tasten-symbol.js).",
   "protokoll": {
     "notification": "0x23",
     "feld": 1,
@@ -15,6 +15,7 @@
       "seite": "links",
       "gruppe": "steuerkreuz",
       "label": "Pfeil links",
+      "symbol": "pfeilLinks",
       "farbe": "schwarz",
       "zwift": "lenken links",
       "sicher": true
@@ -26,6 +27,7 @@
       "seite": "links",
       "gruppe": "steuerkreuz",
       "label": "Pfeil hoch",
+      "symbol": "pfeilHoch",
       "farbe": "schwarz",
       "zwift": "hoch",
       "sicher": true
@@ -37,6 +39,7 @@
       "seite": "links",
       "gruppe": "steuerkreuz",
       "label": "Pfeil rechts",
+      "symbol": "pfeilRechts",
       "farbe": "schwarz",
       "zwift": "lenken rechts",
       "sicher": true
@@ -48,6 +51,7 @@
       "seite": "links",
       "gruppe": "steuerkreuz",
       "label": "Pfeil runter",
+      "symbol": "pfeilRunter",
       "farbe": "schwarz",
       "zwift": "runter",
       "sicher": true
@@ -107,6 +111,7 @@
       "seite": "links",
       "gruppe": "schalten",
       "label": "Schalten hoch links",
+      "symbol": "schaltenHoch",
       "zwift": "Gang leichter",
       "sicher": true
     },
@@ -117,6 +122,7 @@
       "seite": "links",
       "gruppe": "schalten",
       "label": "Schalten runter links",
+      "symbol": "schaltenRunter",
       "zwift": "Gang leichter",
       "sicher": true
     },
@@ -127,6 +133,7 @@
       "seite": "links",
       "gruppe": "zusatz",
       "label": "Zusatztaste links",
+      "symbol": "knopf",
       "lage": "kleiner Knopf am Bremshebel",
       "zwift": "Power-up",
       "sicher": true
@@ -148,6 +155,7 @@
       "seite": "rechts",
       "gruppe": "schalten",
       "label": "Schalten hoch rechts",
+      "symbol": "schaltenHoch",
       "zwift": "Gang schwerer",
       "sicher": true
     },
@@ -158,6 +166,7 @@
       "seite": "rechts",
       "gruppe": "schalten",
       "label": "Schalten runter rechts",
+      "symbol": "schaltenRunter",
       "zwift": "Gang schwerer",
       "sicher": true
     },
@@ -168,6 +177,7 @@
       "seite": "rechts",
       "gruppe": "zusatz",
       "label": "Zusatztaste rechts",
+      "symbol": "knopf",
       "lage": "kleiner Knopf am Bremshebel",
       "zwift": "Power-up",
       "sicher": true

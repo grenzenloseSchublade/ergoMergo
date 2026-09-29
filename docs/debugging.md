@@ -38,7 +38,9 @@ Einstellungen (⚙) → Geräte → „Tasten zuordnen": der Lern-Modus verbinde
 Controller und fragt Aktion für Aktion (+/−, Block vor/zurück, STOPP) eine
 Taste ab — die Belegung landet als `controllerMap` in den Einstellungen.
 Lern-Modus und Belegungsanzeige nennen die Tasten im Klartext („A (grün)",
-„Pfeil links"); die Zuordnung Bit → Taste steht in
+„Pfeil links") und zeigen ein dem Lenker nachempfundenes Symbol
+(`js/ui/tasten-symbol.js`, Icon je Taste im Feld `symbol`); die Zuordnung
+Bit → Taste steht in
 `js/ble/zwift-ride-tasten.json`. Alle Tasten außer Ein/Aus sind am eigenen
 Lenker bestätigt; ungeprüfte Einträge (`"sicher": false`, derzeit nur
 Ein/Aus, Bit 11/15) zeigen zusätzlich die Bit-Nummer. Zur Diagnose erscheint jede gedrückte Taste im Diagnose-Log als

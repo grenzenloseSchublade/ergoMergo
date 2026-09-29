@@ -23,6 +23,14 @@ const ICONS = {
   route: ['M6 19m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
           'M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15',
           'M18 5m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0'],
+  // Lucide chevrons / circle-dot: Tastensymbole des Zwift-Lenkers
+  pfeilLinks: ['m15 18-6-6 6-6'],
+  pfeilHoch: ['m18 15-6-6-6 6'],
+  pfeilRechts: ['m9 18 6-6-6-6'],
+  pfeilRunter: ['m6 9 6 6 6-6'],
+  schaltenHoch: ['m17 11-5-5-5 5', 'm17 18-5-5-5 5'],
+  schaltenRunter: ['m7 6 5 5 5-5', 'm7 13 5 5 5-5'],
+  knopf: ['M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0', 'M12 12m-10 0a10 10 0 1 0 20 0a10 10 0 1 0-20 0'],
   // Lucide „dices": Fartlek neu würfeln
   wuerfel: ['M4 10h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z',
             'm17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6',

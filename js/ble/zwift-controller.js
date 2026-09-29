@@ -18,6 +18,7 @@ import RIDE_TASTEN from './zwift-ride-tasten.json' with { type: 'json' };
 // Bits, bei denen sich die Quellen widersprechen (sicher: false), zeigen
 // zusätzlich die Bit-Nummer — so fällt eine falsche Zuordnung am Gerät auf.
 const TASTE_JE_BIT = new Map(RIDE_TASTEN.tasten.map(t => [t.bit, t]));
+export const tasteInfo = bit => TASTE_JE_BIT.get(bit) ?? null;
 export function tastenName(bit) {
   const t = TASTE_JE_BIT.get(bit);
   if (!t) return `Taste ${bit}`;
