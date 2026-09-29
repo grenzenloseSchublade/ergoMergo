@@ -48,8 +48,9 @@ Lern-Modus und Belegungsanzeige nennen die Tasten im Klartext („A (grün)",
 (`js/ui/tasten-symbol.js`, Icon je Taste im Feld `symbol`); die Zuordnung
 Bit → Taste steht in
 `js/ble/zwift-ride-tasten.json`. Alle Tasten außer Ein/Aus sind am eigenen
-Lenker bestätigt; ungeprüfte Einträge (`"sicher": false`, derzeit nur
-Ein/Aus, Bit 11/15) zeigen zusätzlich die Bit-Nummer. Zur Diagnose erscheint jede gedrückte Taste im Diagnose-Log als
+Lenker bestätigt, auch Ein/Aus (Bit 11/15; halten schaltet das Pad aus,
+daher in der Lenkeransicht ausgeblendet). Ungeprüfte Einträge
+(`"sicher": false`) würden zusätzlich die Bit-Nummer zeigen. Zur Diagnose erscheint jede gedrückte Taste im Diagnose-Log als
 `Ride-Taste Bit <n> gedrückt (laut Tabelle: <ID>)` — damit lässt sich die
 Tabelle am Gerät prüfen und bei Bedarf `sicher` auf `true` setzen.
 
@@ -59,8 +60,9 @@ virtuelle Tasten (Bit 24/25 = links +/−, Bit 26/27 = rechts +/−; gedrückt
 ab Betrag 40, losgelassen unter 20 oder beim Kippen auf die Gegenseite),
 die sich wie jede andere Taste im Lern-Modus belegen lassen. Das Log zeigt
 beim Drücken den Rohwert und beim Loslassen die Spitze
-(`Ride-Paddle links losgelassen — Spitze -87`). Welche physische Richtung
-(innen/außen) „+" ist, steht noch aus.
+(`Ride-Paddle links losgelassen — Spitze -87`). Das Vorzeichen ist die
+absolute Richtung (+ = nach rechts): links innen = Bit 24, links außen = 25,
+rechts außen = 26, rechts innen = 27 (am Gerät bestätigt).
 
 Halten wiederholt ± (Einstellungen → Geräte, beides abschaltbar): Tasten nach
 500 ms Pause alle 400 ms; Paddles nach mindestens 400 ms im Takt nach Druck

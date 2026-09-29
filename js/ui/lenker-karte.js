@@ -1,6 +1,6 @@
 // Lenkeransicht der Zwift-Ride-Tasten: je Griffzone eine Zeile, in der Mitte
-// ein kleines Seitenansichts-Piktogramm (Griff + Hebel) mit der Zone orange
-// hervorgehoben, links/rechts die Tastensymbole der jeweiligen Lenkerseite.
+// ein kleines Seitenansichts-Piktogramm (Griff + Hebel) mit der Zone in der
+// Akzentfarbe hervorgehoben, links/rechts die Tastensymbole der jeweiligen Lenkerseite.
 // Belegte Tasten tragen die Aktion als Marke. Zone und Anordnung kommen aus
 // der Tastentabelle (Felder zone/raster), die Symbole aus tasten-symbol.js.
 

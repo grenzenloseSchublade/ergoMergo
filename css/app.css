@@ -209,8 +209,9 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .lk-pikto { width: 48px; height: 48px; }
 .lk-pikto .lk-form { fill: var(--bg); stroke: var(--ink2); stroke-width: 1.5; stroke-linejoin: round; }
 .lk-pikto .lk-lenker { fill: none; stroke: var(--ink3); stroke-width: 3; stroke-linecap: round; opacity: .55; }
-.lk-pikto .lk-an { fill: var(--taste-orange); }
-.lk-pikto .lk-an-linie { fill: none; stroke: var(--taste-orange); stroke-width: 3.2; stroke-linecap: round; }
+/* Zonenmarkierung in Akzentfarbe — Orange steht für orange Tasten */
+.lk-pikto .lk-an { fill: var(--accent); }
+.lk-pikto .lk-an-linie { fill: none; stroke: var(--accent); stroke-width: 3.2; stroke-linecap: round; }
 .lk-gruppe { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .lk-links { justify-content: flex-end; }
 .lk-rechts { justify-content: flex-start; }
