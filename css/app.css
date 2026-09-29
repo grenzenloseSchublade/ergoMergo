@@ -359,7 +359,14 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
      (kleines Handy, drei Chip-Zeilen), schrumpft der Graph — −10/+10/STOPP
      bleiben immer im Bild */
   grid-template-rows: 1fr auto minmax(60px, clamp(90px, 22vh, 180px)) auto;
+  /* Benannte Bereiche: blendet ein Fokus-Modus die Chips aus (display:none),
+     rutschen die übrigen Kinder sonst eine Zeile nach oben */
+  grid-template-areas: "metrics" "chips" "chart" "controls";
 }
+.ride-grid > .metrics { grid-area: metrics; }
+.ride-grid > .row-actions { grid-area: chips; }
+.ride-grid > #live-chart { grid-area: chart; }
+.ride-grid > .controls { grid-area: controls; }
 .metrics {
   display: grid; align-content: center; justify-items: center;
   grid-template-columns: 1fr 1fr;
