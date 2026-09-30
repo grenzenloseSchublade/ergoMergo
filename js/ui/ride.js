@@ -13,18 +13,18 @@ import { setSetting } from '../storage.js';
 import { beendeMessung } from '../energie.js';
 import { effektiveFtp, kadenzBereich } from '../metrics.js';
 import { logError } from '../logger.js';
-import { toast, toastErr } from './toast.js';
+import { toastErr } from './toast.js';   // nur fürs Fahrtende — danach ist die LED-Zeile weg
+
 import { geraeteHinweis } from './geraete-leiste.js';
 import { LedZeile } from './led-zeile.js';
 
 const STOPP_SPERRE_MS = 3000;     // Panik-Schutz nach Not-Stopp
 const HALTEN_PAUSE_MS = 500;      // ±-Knopf halten: erste Wiederholung
 const HALTEN_TAKT_MS = 300;       //   … danach im Takt
-const INFO_MS = 4000;             // kurze Rückmeldungen in der Statuszeile
-const FEHLER_INFO_MS = 8000;      // einmalige Fehler (z. B. ein Write) verschwinden wieder
-
-// Dauerhafte Zustände der Statuszeile, nach Priorität. Kurze Infos
-// überblenden sie für ein paar Sekunden, danach kommt der Zustand zurück.
+// Statuszeile (LED-Laufschrift): dauerhafte Zustände nach Priorität laufen,
+// solange sie bestehen. Einmalige Meldungen laufen zweimal durch und
+// überblenden den Zustand so lange — grüne Infos entfallen, solange ein
+// Problem (rot) ansteht: Probleme gehen immer vor.
 const STATUS_PRIO = ['trainer', 'stopp', 'geraet', 'ausfahren'];
 
 // Geräte-Chip: Zustand als data-Attribut, Punkt und Rahmen per CSS (gleiche
@@ -67,7 +67,9 @@ export class RideScreen {
     // weiter — deren Listener MÜSSEN in destroy() wieder abgebaut werden
     session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('target', () => { this.render(); this.#pip?.update(); });
-    session.addEventListener('error', e => this.#info(e.detail, 'err', FEHLER_INFO_MS));
+    session.addEventListener('error', e => this.#info(e.detail, 'err'));
+    // Startmeldung: zeigt, womit gefahren wird — und dass die Tafel lebt
+    if (session.ftms.connected) this.#info(`${session.ftms.deviceName ?? 'Trainer'} verbunden`);
     this.render();
   }
 
@@ -89,8 +91,7 @@ export class RideScreen {
   #geraetZustand = { hr: null, controller: null };
   #cursorBlinkBis = 0;
   #zustaende = new Map();     // Statuszeile: art → { text, cls }
-  #infoMeldung = null;
-  #statusTimer = null;
+  #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
   #abmelden = null;           // Resize-Beobachtung des Charts
   #rpmAbweichSeit = 0;
 
@@ -118,17 +119,29 @@ export class RideScreen {
     this.#zeigeStatus();
   }
 
-  #info(text, cls = 'ok', ms = INFO_MS) {
-    this.#infoMeldung = { text, cls };
-    clearTimeout(this.#statusTimer);
-    this.#statusTimer = setTimeout(() => { this.#infoMeldung = null; this.#zeigeStatus(); }, ms);
+  // Einmalige Meldung (läuft zweimal durch). Öffentlich als melde() für main.js.
+  #info(text, cls = 'ok') {
+    this.#infoMeldung = { text, cls, neu: true };
     this.#zeigeStatus();
   }
 
+  melde(text, cls = 'ok') { this.#info(text, cls); }
+
   #zeigeStatus() {
     // Die Mulde bleibt immer stehen (feste Höhe) — nur die LED-Schrift wechselt
-    const m = this.#infoMeldung ?? STATUS_PRIO.map(a => this.#zustaende.get(a)).find(Boolean);
-    this.#led.setze(m?.text ?? '', m?.cls ?? '');
+    const zustand = STATUS_PRIO.map(a => this.#zustaende.get(a)).find(Boolean);
+    let m = this.#infoMeldung;
+    if (m && m.cls !== 'err' && zustand?.cls === 'err') { m = null; this.#infoMeldung = null; }
+    if (m) {
+      const neu = m.neu;
+      m.neu = false;
+      this.#led.setze(m.text, m.cls, {
+        neu,
+        fertig: () => { if (this.#infoMeldung === m) { this.#infoMeldung = null; this.#zeigeStatus(); } },
+      });
+      return;
+    }
+    this.#led.setze(zustand?.text ?? '', zustand?.cls ?? '', { durchlaeufe: Infinity });
   }
 
   // --- Programm: Ansagen, Töne, Programmende --------------------------------
@@ -216,6 +229,9 @@ export class RideScreen {
     this.#geraetZustand[rolle] = zustand;
     setzeChip(btn, zustand, `${ROLLEN_LABEL[rolle]}: ${ZUSTAND_TEXT[zustand]}`);
     const verloren = ['verbunden', 'teilweise'].includes(vorher) && ['gemerkt', 'fehlt'].includes(zustand);
+    // Neu verbunden (nicht schon beim Fahrtstart): kurz bestätigen
+    if (vorher && !['verbunden', 'teilweise'].includes(vorher) && zustand === 'verbunden')
+      this.#info(`${ROLLEN_LABEL[rolle]} verbunden`);
     if (verloren) this.#setzeZustand('geraet', `${ROLLEN_LABEL[rolle]} getrennt — Chip tippen zum Neuverbinden`);
     else if (['verbunden', 'teilweise'].includes(zustand) && this.#zustaende.get('geraet')?.text.startsWith(ROLLEN_LABEL[rolle]))
       this.#setzeZustand('geraet', null);
@@ -285,10 +301,10 @@ export class RideScreen {
             // Zweiter Tap innerhalb von 30 s öffnet die Geräteauswahl —
             // so ist ein in der Fahrt verlorenes Pad wieder einfangbar
             this.#koppelFallback[rolle] = Date.now() + 30000;
-            this.#info(`${label} nicht erreichbar — Gerät wecken oder Chip erneut tippen für die Geräteauswahl`, 'err', FEHLER_INFO_MS);
+            this.#info(`${label} nicht erreichbar — Gerät wecken oder Chip erneut tippen für die Geräteauswahl`, 'err');
           }
         } catch (err) {
-          this.#info(`${label}: ${err.message}`, 'err', FEHLER_INFO_MS);
+          this.#info(`${label}: ${err.message}`, 'err');
         }
         rolle === 'hr' ? this.#uebernehmeHR() : this.#uebernehmeCtrl();
       };
@@ -397,7 +413,7 @@ export class RideScreen {
       try {
         const an = await this.#pip.toggle(daten);
         pipBtn.classList.toggle('on', an);
-      } catch (err) { toastErr('Bild-in-Bild nicht möglich: ' + err.message); }
+      } catch (err) { this.#info('Bild-in-Bild nicht möglich: ' + err.message, 'err'); }
     };
   }
 
@@ -470,17 +486,17 @@ export class RideScreen {
 
   #skip() {
     if (!this.run || this.run.vorbei) return;
-    if (this.run.skip()) { this.render(); toast('Block übersprungen'); }
+    if (this.run.skip()) { this.render(); this.#info('Block übersprungen'); }
   }
 
   #zurueck() {
     if (!this.run || this.run.vorbei) return;
     const art = this.run.zurueck();
-    if (art) { this.render(); toast(art === 'anfang' ? 'Blockanfang' : 'Vorheriger Block'); }
+    if (art) { this.render(); this.#info(art === 'anfang' ? 'Blockanfang' : 'Vorheriger Block'); }
   }
 
   #verlaengern() {
-    if (this.run?.verlaengern(30)) { this.render(); toast('Block +30 s'); }
+    if (this.run?.verlaengern(30)) { this.render(); this.#info('Block +30 s'); }
   }
 
   // Halten = Wiederholen, mit eigenem Timer je Knopf: zwei Finger (+ und −
@@ -696,7 +712,6 @@ export class RideScreen {
     removeEventListener('keydown', this.#keys);
     clearInterval(this.#watchdog);
     clearTimeout(this.#stopSperre);
-    clearTimeout(this.#statusTimer);
     clearTimeout(this.#endArm);
     // Nur die Verdrahtung dieser Fahrt lösen — die Verbindungen leben im
     // Pool weiter (Trennen macht der Nutzer über die Geräte-Leiste)

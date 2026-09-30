@@ -1,11 +1,11 @@
 // Statuszeile im LED-Punktmatrix-Look: der Text wird in ein grobes Raster
 // gerechnet (Systemschrift, Schwellwert) und jede Zelle als LED-Punkt
 // gezeichnet, unbeleuchtete Punkte schwach sichtbar wie auf einer
-// Anzeigetafel. Der Text läuft immer von rechts nach links: eine neue
-// Meldung beginnt am linken Rand (sofort lesbar), läuft hinaus und kommt
-// rechts wieder herein. Bei „Bewegung reduzieren" steht er links still.
-// Der echte Text steht für Screenreader im DOM (sr-Span), das Canvas ist
-// aria-hidden.
+// Anzeigetafel. Der Text läuft von rechts herein, durch und links hinaus —
+// standardmäßig zweimal, dann ist die Tafel wieder dunkel (fertig-Callback);
+// anhaltende Zustände laufen endlos. Bei „Bewegung reduzieren" steht er
+// links still, genauso lange. Der echte Text steht für Screenreader im DOM
+// (sr-Span), das Canvas ist aria-hidden.
 
 const ZEILEN = 11;              // Punktzeilen (Schrift ≈ 8 hoch + Unterlänge)
 const TEMPO = 24;               // Punkte pro Sekunde
@@ -66,15 +66,34 @@ export class LedZeile {
     this.#zeichne();
   };
 
-  // text leer = Tafel aus; art: 'err' | 'ok' | ''
-  setze(text, art = '') {
-    if (text === this.text && art === this.art) return;
+  // text leer = Tafel aus; art: 'err' | 'ok' | ''. durchlaeufe: wie oft der
+  // Text durchläuft (Infinity = solange er gesetzt ist), fertig: danach.
+  // Derselbe Text läuft ungestört weiter — außer neu=true (z. B. zweimal
+  // hintereinander „Block übersprungen").
+  setze(text, art = '', { durchlaeufe = 2, fertig = null, neu = false } = {}) {
+    if (!neu && text === this.text && art === this.art) return;
     this.text = text;
     this.art = art;
+    this.durchlaeufe = durchlaeufe;
+    this.fertig = fertig;
     this.sr.textContent = text;
     this.bild = text ? raster(text) : null;
     this.start = performance.now();
+    clearTimeout(this.#stillTimer);
     this.#zeichne();
+  }
+
+  #stillTimer = null;
+
+  // Durchläufe erledigt: Tafel aus, Aufrufer benachrichtigen (entkoppelt —
+  // der Callback setzt meist gleich den nächsten Text)
+  #beende() {
+    const f = this.fertig;
+    this.bild = null;
+    this.text = '';
+    this.fertig = null;
+    this.sr.textContent = '';
+    if (f) queueMicrotask(f);
   }
 
   #zeichne = () => {
@@ -104,15 +123,20 @@ export class LedZeile {
     ctx.fill();
     if (!this.bild) return;
 
-    // Lage des Texts: startet am linken Rand, läuft nach links hinaus und
-    // kommt rechts wieder herein (immer nur ein Exemplar sichtbar)
+    // Lage des Texts: kommt vom rechten Rand herein, läuft links hinaus;
+    // ein Durchlauf = Textbreite + Tafelbreite (nur ein Exemplar sichtbar)
     const { r, breite } = this.bild;
     const laeuft = !wenigBewegung();
+    const zyklus = breite + spalten;
     let versatz = 0;
     if (laeuft) {
-      const zyklus = breite + spalten;
-      versatz = -Math.floor((performance.now() - this.start) / 1000 * TEMPO) % zyklus;
-      if (versatz < -breite) versatz += zyklus;
+      const weg = Math.floor((performance.now() - this.start) / 1000 * TEMPO);
+      if (weg >= zyklus * this.durchlaeufe) { this.#beende(); this.#zeichne(); return; }
+      versatz = spalten - weg % zyklus;
+    } else if (Number.isFinite(this.durchlaeufe) && !this.#stillTimer) {
+      // Ohne Bewegung: links stehen, so lange wie die Durchläufe dauerten
+      this.#stillTimer = setTimeout(() => { this.#stillTimer = null; this.#beende(); this.#zeichne(); },
+        zyklus * this.durchlaeufe / TEMPO * 1000);
     }
     const farbe = css.getPropertyValue(this.art === 'err' ? '--danger' : this.art === 'ok' ? '--ok' : '--ink2').trim();
     const zeichneText = dx => {
@@ -147,6 +171,7 @@ export class LedZeile {
 
   destroy() {
     cancelAnimationFrame(this.raf);
+    clearTimeout(this.#stillTimer);
     this.ro.disconnect();
     document.removeEventListener('visibilitychange', this.#sichtbar);
   }
