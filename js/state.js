@@ -20,6 +20,7 @@ export class Session extends EventTarget {
     this.settings = settings;
     this.programm = programm;                 // Programm-Definition (Name/id für die gespeicherte Fahrt)
     this.seed = null;                         // Startwert eines Zufallsprogramms (Fartlek)
+    this.planRef = null;                      // Einheit des Trainingsplans (plan:JJJJ-MM-TT)
     this.id = new Date().toISOString();
     this.start = Date.now();
     this.status = 'riding';                   // riding | paused | done
@@ -228,6 +229,7 @@ export class Session extends EventTarget {
       programm: this.programm?.name ?? 'Freies Fahren',
       programmId: this.programm?.id ?? null,
       seed: this.seed,
+      planRef: this.planRef,
       geraet: this.ftms.deviceName ?? null,
       fw: this.ftms.firmware ?? null,
       ftp: this.settings.ftp || null,

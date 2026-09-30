@@ -120,6 +120,37 @@
     <button class="ctl ctl-end armiert">Sicher?</button>
   </div>
 
+  <h2>Trainingsplan</h2>
+  <p class="einl">Wochenstreifen: Balken in der Zonenfarbe der Einheit, Höhe = Dauer. Zustände:
+    frei, geplant (blass), erledigt (✓), verpasst (gestrichelt), hierher verschoben (↷), heute (Akzent).</p>
+  <div class="spalte">
+    <ol class="plan-woche">
+      <li class="plan-tag" data-status="frei"><i></i>Mo</li>
+      <li class="plan-tag" data-status="erledigt"><i style="--farbe: var(--z5); --hoehe: 17px"></i>Di ✓</li>
+      <li class="plan-tag heute" data-status="geplant"><i style="--farbe: var(--z2); --hoehe: 17px"></i>Mi</li>
+      <li class="plan-tag" data-status="verpasst"><i style="--farbe: var(--z1); --hoehe: 13px"></i>Do</li>
+      <li class="plan-tag" data-status="geplant"><i style="--farbe: var(--z4); --hoehe: 16px"></i>Fr ↷</li>
+      <li class="plan-tag" data-status="frei"><i></i>Sa</li>
+      <li class="plan-tag" data-status="geplant"><i style="--farbe: var(--z2); --hoehe: 24px"></i>So</li>
+    </ol>
+    <div class="tag-wahl">
+      <label><input type="checkbox" checked>Mo</label><label><input type="checkbox">Di</label><label><input type="checkbox" checked>Mi</label>
+      <label><input type="checkbox">Do</label><label><input type="checkbox" checked>Fr</label><label><input type="checkbox">Sa</label><label><input type="checkbox">So</label>
+    </div>
+    <div class="segment"><label><input type="radio" name="sg-d">30 min</label><label><input type="radio" name="sg-d" checked>45 min</label><label><input type="radio" name="sg-d">60 min</label></div>
+    <div class="ziel-wahl"><label><input type="radio" name="sg-z" checked><span class="schalter-text">Auswahl-Zeile<small>eine Option aus mehreren</small></span></label></div>
+  </div>
+
+  <h3 class="gruppe-titel">Blatt „Einheit ändern" · Zieltage</h3>
+  <div class="spalte">
+    <div class="ziel-tage">
+      <button disabled data-ziel="gesperrt"><span>Heute</span><small>gesperrt</small></button>
+      <button data-ziel="frei"><span>Do</span><small>frei</small></button>
+      <button data-ziel="tausch"><span>So</span><small>Tausch</small></button>
+    </div>
+    <div class="toast zeig ok mit-aktion">Auf Do verschoben <button class="toast-aktion">Rückgängig</button></div>
+  </div>
+
   <h2>LED-Statuszeile</h2>
   <p class="einl">Live mit <code>js/ui/led-zeile.js</code>: neutral, OK, Fehler.</p>
   <div class="spalte">

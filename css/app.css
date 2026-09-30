@@ -23,15 +23,15 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
   text-transform: uppercase; letter-spacing: var(--sperrung-versal);
 }
 /* Karte: eigenständiger Block auf dem Hintergrund */
-.tile, .bilanz, .sessions li, .compliance, dialog {
+.tile, .plan-karte, .bilanz, .sessions li, .compliance, dialog {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m);
 }
 /* Zeile: Eintrag auf einer Karte oder in einem Panel */
-.schalter-zeile, .fo-zeile, .geraete li, .lk-karte, .toast, .d-actions button, .diagnose button {
+.schalter-zeile, .fo-zeile, .ziel-wahl label, .geraete li, .lk-karte, .toast, .d-actions button, .diagnose button {
   background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius-m);
 }
 /* Listenzeilen (Schalter, Geräte, Panel): gleicher Innenabstand, Höhe über min-height */
-.schalter-zeile, .fo-zeile, .geraete li { padding: var(--abstand-15) var(--abstand-3); }
+.schalter-zeile, .fo-zeile, .ziel-wahl label, .geraete li { padding: var(--abstand-15) var(--abstand-3); }
 
 /* ---------- Start ---------- */
 .brand { display: flex; align-items: baseline; gap: var(--abstand-3); margin-bottom: var(--abstand-4); }
@@ -67,7 +67,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 .demo-link {
   background: none; border: none; color: var(--ink3);
   font-size: var(--text-sm); padding: var(--abstand-15) var(--abstand-2); margin: var(--abstand-05) auto var(--abstand-1);
-  display: block; text-align: center; cursor: pointer;
+  display: block; min-height: var(--tippflaeche); text-align: center; cursor: pointer;
 }
 .demo-link span { color: var(--ink3); opacity: .75; }
 .demo-link:hover { border-color: var(--accent); color: var(--accent); }
@@ -76,7 +76,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 details.rubrik { border: 0; }
 details.rubrik summary.listhead {
   cursor: pointer; list-style: none; user-select: none; margin: var(--abstand-15) 0 var(--abstand-2);
-  padding: var(--abstand-2) 0;   /* Tippfläche ≥ 44 px */
+  min-height: var(--tippflaeche); display: flex; align-items: center;
 }
 details.rubrik summary.listhead::-webkit-details-marker { display: none; }
 details.rubrik summary.listhead::before {
@@ -287,7 +287,7 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .dlg-actions .ghost { background: none; color: var(--ink2); }
 .dlg-actions .primary { background: var(--accent); color: var(--auf-accent); }
 
-.listhead-zusatz { text-transform: none; letter-spacing: 0; opacity: .8; }
+.listhead-zusatz { text-transform: none; letter-spacing: 0; opacity: .8; margin-left: var(--abstand-1); }   /* Summary ist flex: Leerzeichen davor fällt weg */
 .listhead { font-size: var(--text-sm); margin: var(--abstand-6) 0 var(--abstand-2); }
 .bilanz {
   padding: var(--abstand-2) var(--abstand-4) var(--abstand-25); margin: 0 0 var(--abstand-2); font-size: var(--text-md);
@@ -321,7 +321,7 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .sessions li.kurz { opacity: .55; }
 /* Home: Sprung in die Fahrten-Historie */
 .alle-fahrten {
-  display: block; width: 100%; margin: var(--abstand-2) 0 0; padding: var(--abstand-25) var(--abstand-4); text-align: center;
+  display: block; width: 100%; min-height: var(--tippflaeche); margin: var(--abstand-2) 0 0; padding: var(--abstand-25) var(--abstand-4); text-align: center;
   background: none; border: 1px solid var(--line); border-radius: var(--radius-m); color: var(--accent); font-size: var(--text-md);
 }
 #wochenbilanz { cursor: pointer; }
@@ -353,6 +353,75 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .woche .w-titel i { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink3); }
 .woche .w-summe { font-size: var(--text-sm); color: var(--ink3); }
 .sessions .empty { border-style: dashed; color: var(--ink3); cursor: default; justify-content: center; }
+
+/* ---------- Trainingsplan ---------- */
+/* Karte oben auf Home: heutige Einheit (tippbar), Wochenstreifen, Hinweis */
+.plan-karte { display: grid; gap: var(--abstand-2); padding: var(--abstand-2) var(--abstand-4) var(--abstand-4); border-color: var(--accent); border-radius: var(--radius-l); }
+.plan-kopf { display: flex; align-items: center; justify-content: space-between; margin-right: calc(-1 * var(--abstand-3)); }
+.plan-mehr { flex: none; width: var(--tippflaeche); height: var(--tippflaeche); background: none; color: var(--ink3); display: grid; place-items: center; }
+.plan-mehr svg { width: var(--icon-l); height: var(--icon-l); }
+.plan-heute { display: grid; gap: var(--abstand-05); padding: 0; background: none; text-align: left; }
+.plan-heute:disabled { opacity: 1; }
+.plan-karte .tile-title { font-size: var(--text-lg); }
+/* Wochenstreifen: je Tag ein Balken in der Zonenfarbe, Höhe = Dauer */
+/* 7 Spalten lückenlos: bei 360 px sind die Zellen ~42 px breit (Ausnahme, docs/stil.md) */
+.plan-woche { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: end; }
+.plan-tag { display: grid; justify-items: center; gap: var(--abstand-1); font-size: var(--text-2xs); color: var(--ink3); }
+/* Tage mit Einheit sind Knöpfe (öffnen das Blatt „Einheit ändern"), Tippfläche 44 px */
+.plan-tag button {
+  width: 100%; min-height: var(--tippflaeche); padding: 0; background: none; color: inherit; font: inherit;
+  display: grid; justify-items: center; align-content: end; gap: var(--abstand-1);
+}
+.plan-tag[data-status="ausgelassen"] i { opacity: .2; }
+.plan-tag[data-status="ausgelassen"] span { text-decoration: line-through; }
+.plan-tag i { display: block; width: 100%; max-width: 2rem; height: var(--hoehe, 2px); border-radius: var(--radius-xs); background: var(--farbe, var(--line)); }
+.plan-tag[data-status="geplant"] i { opacity: .5; }
+.plan-tag[data-status="verpasst"] i { background: none; border: 1px dashed var(--ink3); opacity: .7; }
+.plan-tag[data-status="erledigt"] { color: var(--ok); }
+.plan-tag.heute { color: var(--accent); font-weight: 600; }
+.plan-tag.heute i { opacity: 1; }
+.plan-hinweis { margin: 0; font-size: var(--text-xs); color: var(--ink2); }
+/* Dialog: Wochentage und Dauer als Umschalter, Ziel als Zeilen */
+#dlg-plan { width: min(30rem, 92vw); }
+.plan-form { display: grid; gap: var(--abstand-2); }
+.plan-form .gruppe-titel { margin-top: var(--abstand-2); }
+.tag-wahl { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--abstand-05); }
+.segment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--abstand-1); }
+.tag-wahl label, .segment label {
+  position: relative; min-height: var(--tippflaeche); display: grid; place-items: center; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius-s);
+  color: var(--ink2); font-size: var(--text-sm);
+}
+.tag-wahl input, .segment input, .ziel-wahl input { position: absolute; opacity: 0; pointer-events: none; }
+.tag-wahl label:has(:checked), .segment label:has(:checked), .ziel-wahl label:has(:checked) {
+  border-color: var(--accent); background: var(--accent-flaeche); color: var(--ink);
+}
+.tag-wahl label:has(:focus-visible), .segment label:has(:focus-visible), .ziel-wahl label:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ziel-wahl { display: grid; gap: var(--abstand-15); }
+.ziel-wahl label { position: relative; display: flex; align-items: center; min-height: var(--tippflaeche-zeile); cursor: pointer; }
+.plan-vorschau { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--abstand-1); font-size: var(--text-md); }
+.plan-vorschau li { display: flex; align-items: center; gap: var(--abstand-2); }
+.plan-vorschau i { flex: none; width: var(--abstand-2); height: var(--abstand-2); border-radius: 50%; background: var(--farbe); }
+.plan-vorschau b { min-width: 2.2ch; color: var(--ink2); font-weight: 600; }
+.dlg-actions .danger { color: var(--danger); margin-right: auto; }
+/* Blatt von unten (Einheit ändern): volle Breite, am unteren Rand */
+dialog.sheet {
+  margin: auto auto 0; width: min(32rem, 100vw); max-width: 100vw;
+  border-radius: var(--radius-l) var(--radius-l) 0 0; border-bottom: 0;
+  padding-bottom: max(var(--abstand-5), env(safe-area-inset-bottom));
+}
+.ein-aktionen { display: grid; gap: var(--abstand-15); margin-top: var(--abstand-3); }
+.ein-aktionen .fo-zeile:disabled { opacity: .5; }
+.ein-ziele { margin-top: var(--abstand-3); display: grid; gap: var(--abstand-2); }
+.ziel-tage { display: grid; grid-template-columns: repeat(auto-fill, minmax(3.6rem, 1fr)); gap: var(--abstand-1); }
+.ziel-tage button {
+  min-height: var(--tippflaeche-zeile); padding: var(--abstand-1); display: grid; place-items: center; gap: 0;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius-s);
+  color: var(--ink); font-size: var(--text-sm);
+}
+.ziel-tage small { font-size: var(--text-2xs); color: var(--ink3); }
+.ziel-tage [data-ziel="tausch"] { border-color: var(--accent); }
+.ziel-tage button:disabled { opacity: .4; }
 
 /* ---------- Fahrt ---------- */
 #screen-ride { padding: 0; max-width: none; overflow: hidden; }
@@ -474,6 +543,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .chip {
   background: none; border: 1px solid var(--line); color: var(--ink3);
   border-radius: var(--radius-pill); padding: var(--abstand-05) var(--abstand-25); font-size: var(--text-sm);
+  min-height: var(--tippflaeche); display: inline-flex; align-items: center; justify-content: center;
 }
 /* Aktions-Chips in eigener Zeile, fahrtauglich groß. Abstände und Polster so
    knapp, dass die vier Chips (3 Block-Aktionen + ⋯) auch bei 360 px in EINE
@@ -725,6 +795,9 @@ body:has(#screen-ride:not([hidden])) .toasts { bottom: auto; top: calc(.5rem + e
 .toast.zeig { opacity: 1; transform: none; }
 .toast.ok { border-left-color: var(--ok); }
 .toast.err { border-left-color: var(--danger); }
+/* Toast mit Aktion („Rückgängig"): tippbar, Knopf rechts */
+.toast.mit-aktion { pointer-events: auto; display: flex; align-items: center; justify-content: space-between; gap: var(--abstand-3); padding-block: 0; padding-right: var(--abstand-1); }
+.toast-aktion { background: none; color: var(--accent); font-weight: 600; min-height: var(--tippflaeche); padding: 0 var(--abstand-3); }
 
 /* Weniger Bewegung: Übergänge und Animationen aus — nur das kurze
    Aufblitzen des Zielwerts bleibt (einzige Rückmeldung eines Lenker-Drucks) */

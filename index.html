@@ -48,6 +48,21 @@
     <span id="db-status"></span>
   </p>
   <div class="tiles">
+    <!-- Trainingsplan: heutige Einheit + Wochenstreifen (js/ui/plan-ui.js) -->
+    <section class="plan-karte" id="plan-karte" hidden aria-label="Trainingsplan">
+      <div class="plan-kopf">
+        <span class="tile-kicker" id="plan-kicker"></span>
+        <button type="button" class="plan-mehr" id="btn-plan" data-icon="mehr" aria-label="Plan ändern" title="Plan ändern"></button>
+      </div>
+      <button type="button" class="plan-heute" id="plan-heute">
+        <span class="tile-title" id="plan-titel"></span>
+        <span class="tile-sub" id="plan-sub"></span>
+        <canvas class="tile-profile" id="plan-profil"></canvas>
+      </button>
+      <ol class="plan-woche" id="plan-woche" aria-label="Diese Woche"></ol>
+      <p class="plan-hinweis" id="plan-info" hidden></p>
+      <p class="plan-hinweis" id="plan-hinweis" hidden><span id="plan-hinweis-text"></span> <button type="button" class="chip" id="plan-neustart">Plan neu beginnen</button></p>
+    </section>
     <div class="top-tiles">
       <button class="tile tile-primary" id="start-free">
         <span class="tile-kicker">Sofort los</span>
@@ -60,6 +75,7 @@
         <span class="tile-sub" id="last-sub"></span>
       </button>
     </div>
+    <button type="button" class="alle-fahrten" id="plan-anlegen" hidden>Trainingsplan anlegen ›</button>
     <button type="button" class="demo-link" id="btn-demo">▶ Demo ansehen <span>· Fahrbildschirm ohne Trainer</span></button>
     <!-- Geräte-Leiste: koppeln/verbinden VOR der Fahrt, Verbindungen bleiben
          über Fahrten bestehen (Fassade: js/ble/geraete.js GeraeteManager) -->
@@ -227,6 +243,56 @@
            Reihenfolge dreht das CSS (row-reverse). -->
       <button value="ok" class="primary">Los</button>
       <button value="cancel" formnovalidate class="ghost">Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ TRAININGSPLAN ANLEGEN/ÄNDERN ============ -->
+<dialog id="dlg-plan">
+  <form method="dialog">
+    <h2>Trainingsplan</h2>
+    <p class="hint">Wähle deine Trainingstage — die App stellt jede Woche zusammen:
+      höchstens zwei harte Einheiten mit Ruhetag dazwischen, jede vierte Woche leicht
+      mit FTP-Test. Verpasste Einheiten werden nicht nachgeholt.</p>
+    <div class="plan-form">
+      <p class="gruppe-titel">Trainingstage</p>
+      <div class="tag-wahl" id="plan-tage"></div>
+      <p class="gruppe-titel">Dauer pro Einheit</p>
+      <div class="segment" id="plan-dauer"></div>
+      <p class="gruppe-titel">Ziel</p>
+      <div class="ziel-wahl" id="plan-ziel"></div>
+      <label class="schalter-zeile">
+        <span class="schalter-text">Einsteiger oder Wiedereinstieg<small>Startet sanfter; ohne FTP erst eine Woche locker, dann der Test</small></span>
+        <input type="checkbox" class="schalter" id="plan-einsteiger">
+      </label>
+      <p class="gruppe-titel" id="plan-vorschau-titel">Erste Woche</p>
+      <ol class="plan-vorschau" id="plan-vorschau"></ol>
+      <p class="hint" id="plan-umfang"></p>
+      <p class="hint">Bei Herz-Kreislauf-Erkrankungen, Brustschmerz, Schwindel oder nach
+        langer Pause vorher ärztlich abklären. Bei Fieber oder Infekt pausieren.</p>
+    </div>
+    <div class="dlg-actions">
+      <button value="ok" class="primary" id="plan-ok">Plan starten</button>
+      <button value="cancel" formnovalidate class="ghost">Abbrechen</button>
+      <button value="beenden" formnovalidate class="ghost danger" id="plan-beenden" hidden>Plan beenden</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ PLAN-EINHEIT ÄNDERN (Blatt von unten) ============ -->
+<dialog id="dlg-einheit" class="sheet" aria-labelledby="ein-titel">
+  <form method="dialog">
+    <h2 id="ein-titel"></h2>
+    <p class="hint" id="ein-sub"></p>
+    <div class="ein-aktionen" id="ein-aktionen"></div>
+    <div class="ein-ziele" id="ein-ziele" hidden>
+      <p class="gruppe-titel">Verschieben auf</p>
+      <div class="ziel-tage" id="ein-ziel-tage"></div>
+      <p class="hint" id="ein-gruende"></p>
+    </div>
+    <div class="dlg-actions">
+      <button value="cancel" class="ghost">Schließen</button>
+      <button type="button" class="ghost" id="ein-zuruecksetzen" hidden>Woche zurücksetzen</button>
     </div>
   </form>
 </dialog>

@@ -160,12 +160,13 @@ export const WORKOUTS = [
       dauer: { label: 'Dauer (min)', min: 20, max: 90, default: 45 },
       intensitaet: { label: 'Intensität (%)', min: 70, max: 120, default: 100 },
     },
-    // Z2-Basis @ 67 %, ab 24 min Hauptteil: 8-min-Tempo-Blöcke @ 80 % mit 4 min Z2
+    // Z2-Basis @ 67 %, ab 24 min Hauptteil: 8-min-Tempo-Blöcke @ 80 % mit 4 min Z2.
+    // tempo: false (nur der Trainingsplan) = reine Grundlage ohne Tempo-Blöcke
     generieren(o, ftp) {
       const f = eff(ftp, o);
       const { wu, cd, main } = rahmen(o.dauer);
       const blocks = rampe(wu, 0.45, 0.65, f);
-      if (main >= 24) {
+      if (main >= 24 && o.tempo !== false) {
         const n = Math.min(4, Math.floor(main / 12));
         const serie = [];
         for (let r = 0; r < n; r++) {

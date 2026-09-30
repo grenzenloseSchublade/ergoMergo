@@ -22,4 +22,17 @@ export function toast(msg, art = 'info', dauer = 3200) {
 }
 
 export const toastOk = msg => toast(msg, 'ok');
+
+// Meldung mit „Rückgängig" (6 s) — statt einer Rückfrage vor der Aktion
+export function toastRueckgaengig(msg, rueckgaengig) {
+  toast(msg, 'ok', 6000);
+  const t = wrap.lastElementChild;
+  t.classList.add('mit-aktion');
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'toast-aktion';
+  b.textContent = 'Rückgängig';
+  b.onclick = () => { t.remove(); rueckgaengig(); };
+  t.append(b);
+}
 export const toastErr = msg => toast(msg, 'err', 5000);

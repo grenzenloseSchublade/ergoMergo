@@ -71,7 +71,9 @@ Rollen:
 - Alles Tippbare mindestens `--tippflaeche` (44 px), Zeilen in Panels und
   Dialogen `--tippflaeche-zeile` (48 px), die Bedienleiste `--bedien-hoehe`
   (64 px). Einzige Ausnahme: die Kopfzeilen-Symbole quer (38 px hoch, 44 px
-  breit) — dort zählt jede Zeile für den Graphen.
+  breit) — dort zählt jede Zeile für den Graphen — und Wochentag-Reihen mit
+  7 Spalten (Wochenstreifen, Tagewahl): lückenlos, 44 px hoch, bei 360 px
+  knapp 40 px breit.
 - Symbole: `--icon-xs` 12 · `--icon-s` 14 · `--icon-m` 18 · `--icon-l` 20.
 
 ## Bausteine
@@ -85,6 +87,9 @@ Rollen:
 | Chip | `.chip`, `.chip-fahrt` | Aktionen in einer Leiste |
 | Bedientaste | `.ctl` | nur −10/+10/STOPP/Beenden |
 | Geräte-Zustand | `[data-zustand]` | Home-Leiste, Kopfzeile, Panel — eine Regel für alle |
+| Blatt von unten | `dialog.sheet` | Aktionen zu einem Eintrag (Plan-Einheit ändern); Aktionen als Aktions-Zeilen |
+| Auswahl | `.tag-wahl`, `.segment`, `.ziel-wahl` | Wochentage, Dauer, Ziel — gewählt = Akzentrahmen + `--accent-flaeche` |
+| Wochenstreifen | `.plan-woche` / `.plan-tag` | Balken in Zonenfarbe, Höhe = Dauer; Tage mit Einheit sind Knöpfe |
 
 ## Rückmeldungen
 
@@ -93,6 +98,8 @@ Rollen:
 | LED-Zeile (Fahrt) | alles während der Fahrt: Zustände dauerhaft, Infos zweimal durchlaufend |
 | Hinweiszeile im Panel | Rückmeldung auf einen Tipp im Panel |
 | Toast | außerhalb der Fahrt; in der Fahrt nur „Nochmal Zurück“ und Fahrtende |
+| Toast mit „Rückgängig“ | nach jeder umkehrbaren Änderung (6 s) — **statt** einer Rückfrage vorher |
+| Rückfrage (`confirm`) | nur bei Unumkehrbarem: Fahrt/Programm löschen, Plan beenden, Sicherung einspielen |
 
 ## Texte
 

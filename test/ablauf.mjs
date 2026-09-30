@@ -62,6 +62,46 @@ try {
   await zurueck(600);
   soll('FTP bleibt 248', await ftp(), 248);
 
+  // --- Trainingsplan: anlegen, heutige Einheit, Start vorbelegt, ändern, beenden ---
+  soll('Ohne Plan: Anlegen-Knopf', await b.ev(`!document.querySelector('#plan-anlegen').hidden`), true);
+  await b.klick('#plan-anlegen', 700);
+  // heute + drei Tage später wählen (Wochentag-unabhängig; ≥ 48 h Abstand)
+  await b.ev(`(() => { const heute = (new Date().getDay() + 6) % 7, tage = [heute, (heute + 3) % 7].map(String);
+    for (const i of document.querySelectorAll('#plan-tage input')) i.checked = tage.includes(i.value);
+    document.querySelector('.plan-form').dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(200);
+  soll('Vorschau zeigt zwei Einheiten', await b.ev(`document.querySelectorAll('#plan-vorschau li').length`), n => n >= 1 && n <= 2);
+  await b.ev(`document.querySelector('#plan-ok').click()`); await sleep(1200);
+  soll('Plan-Karte sichtbar', await b.ev(`!document.querySelector('#plan-karte').hidden && document.querySelector('#plan-anlegen').hidden`), true);
+  soll('Heute steht eine Einheit an', await b.ev(`document.querySelector('#plan-titel').textContent`), t => t.startsWith('Heute: '));
+  soll('Wochenstreifen hat 7 Tage', await b.ev(`document.querySelectorAll('#plan-woche li').length`), 7);
+  const planTitel = await b.ev(`document.querySelector('#plan-titel').textContent`);
+  await b.klick('#plan-heute', 800);
+  soll('Startdialog aus dem Plan', await b.ev(`document.querySelector('#dlg-start').open`), true);
+  soll('… mit Namen der Einheit', await b.ev(`document.querySelector('#dlg-title').textContent`), t => t.length > 0 && planTitel.includes(t));
+  await b.ev(`document.querySelector('#dlg-start').close()`); await sleep(400);
+  // Tippflächen (docs/stil.md): alles Tippbare ≥ 44 px; Ausnahme 7-Spalten-Reihen (Breite)
+  const tippflaechen = () => b.ev(`[...document.querySelectorAll('button, summary, label:has(input)')]
+    .filter(e => e.offsetParent && !e.closest('[hidden]'))
+    .map(e => ({ e, r: e.getBoundingClientRect() }))
+    .filter(({ e, r }) => r.height < 43.5 || (r.width < 43.5 && !e.closest('.plan-woche, .tag-wahl')))
+    .map(({ e, r }) => (e.id || e.className || e.tagName) + ' ' + Math.round(r.width) + '×' + Math.round(r.height))`);
+  soll('Tippflächen auf Home', await tippflaechen(), l => l.length === 0);
+
+  // Blatt „Einheit ändern": heutige Einheit auslassen, rückgängig machen
+  await b.ev(`document.querySelector('.plan-tag.heute button').click()`); await sleep(600);
+  soll('Blatt für heute offen', await b.ev(`document.querySelector('#dlg-einheit').open`), true);
+  soll('Tippflächen im Blatt', await tippflaechen(), l => l.length === 0);
+  await b.ev(`[...document.querySelectorAll('#ein-aktionen button')].find(x => x.textContent.startsWith('Auslassen')).click()`); await sleep(900);
+  soll('Heute ausgelassen', await b.ev(`document.querySelector('.plan-tag.heute').dataset.status`), 'ausgelassen');
+  soll('Rückgängig angeboten', await b.ev(`!!document.querySelector('.toast.mit-aktion .toast-aktion')`), true);
+  await b.ev(`document.querySelector('.toast-aktion').click()`); await sleep(900);
+  soll('Rückgängig stellt her', await b.ev(`document.querySelector('.plan-tag.heute').dataset.status`), 'geplant');
+  await b.klick('#btn-plan', 700);
+  soll('Ändern-Dialog', await b.ev(`document.querySelector('#plan-ok').textContent + '|' + !document.querySelector('#plan-beenden').hidden`), 'Übernehmen|true');
+  await b.ev(`window.confirm = () => true; document.querySelector('#plan-beenden').click()`); await sleep(1000);
+  soll('Plan beendet', await b.ev(`document.querySelector('#plan-karte').hidden && !document.querySelector('#plan-anlegen').hidden`), true);
+
   // --- Freie Demo-Fahrt: Halten, Not-Stopp, Sperre, Fokus, Doppel-Zurück ---
   await b.ev(`import('./js/storage.js').then(async m => { await m.setSetting('ftp', 200); await m.setSetting('wattSchritt', 10); })`);
   await b.geh(srv.url + '?demo', 2500);

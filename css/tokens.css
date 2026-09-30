@@ -24,6 +24,7 @@
   --danger-aktiv: #c94f44;    /* STOPP gedrückt */
   --ok-aktiv: #4aa974;        /* WEITER gedrückt */
   --warn-flaeche: rgba(227, 198, 63, .16);
+  --accent-flaeche: rgba(69, 199, 212, .14);   /* gewählte Option */
 
   /* Powerzonen (Zwift-Konvention, 6 Zonen) */
   --z1: #8a9aa0; --z2: #4a9bd8; --z3: #5fc98d;

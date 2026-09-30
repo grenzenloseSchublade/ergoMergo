@@ -34,6 +34,7 @@ import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung, effektiveFtp, FTP_ANNAHME } from './metrics.js';
 import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
 import { WORKOUTS } from './workouts.js';
+import { renderPlan, oeffnePlanDialog } from './ui/plan-ui.js';
 import { initAudio } from './signals.js';
 import { starteMessung } from './energie.js';
 
@@ -89,17 +90,18 @@ function verlasseFahrt() {
   eintragAbbauen();
 }
 
-async function startRide(programm = null) {
+// plan: { vorgaben, planRef } — Start aus dem Trainingsplan (Dialog vorbelegt)
+async function startRide(programm = null, plan = null) {
   if (startLaeuft || rideScreen) return;
   startLaeuft = true;
   try {
-    await startRideInner(programm);
+    await startRideInner(programm, plan);
   } finally {
     startLaeuft = false;
   }
 }
 
-async function startRideInner(programm) {
+async function startRideInner(programm, plan = null) {
   // Ohne Web Bluetooth (Brave/Firefox/iOS) kann keine Fahrt starten — der
   // Tap bleibt möglich, damit der Nutzer den Grund erfährt statt eines
   // stumm toten Buttons
@@ -113,7 +115,7 @@ async function startRideInner(programm) {
   initAudio();                              // braucht die User-Geste des Start-Taps
   let run = null, blocks = null, seed = null;
   if (programm) {
-    const opts = await startDialog(programm, settings);
+    const opts = await startDialog(programm, settings, plan?.vorgaben);
     if (!opts) return;
     blocks = baueBlocks(programm, opts, settings.ftp);
     seed = opts.seed ?? null;
@@ -151,6 +153,7 @@ async function startRideInner(programm) {
   geraeteManager.starteSession();           // Trainer kämpft ab jetzt um die Verbindung
   const session = new Session(ftms, settings, programm);
   session.seed = seed;                      // Zufallsprogramm exakt wiederholbar
+  session.planRef = plan?.planRef ?? null;   // Trainingsplan: diese Einheit gilt als gefahren
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
@@ -174,8 +177,10 @@ async function startRideInner(programm) {
   }, run);
 }
 
-// Startdialog: Optionsfelder aus der Programmdefinition
-function startDialog(programm, settings = {}) {
+// Startdialog: Optionsfelder aus der Programmdefinition. vorgaben: Werte
+// aus dem Trainingsplan — Felder vorbelegt, Zusätze ohne Feld (z. B.
+// tempo: false) gehen unverändert mit
+function startDialog(programm, settings = {}, vorgaben = null) {
   const dlg = $('#dlg-start');
   $('#dlg-title').textContent = programm.name;
   const hint = $('#dlg-hint');
@@ -194,7 +199,7 @@ function startDialog(programm, settings = {}) {
     const label = document.createElement('label');
     label.textContent = o.label;
     const input = document.createElement('input');
-    Object.assign(input, { type: 'number', min: o.min, max: o.max, value: o.default, name: key });
+    Object.assign(input, { type: 'number', min: o.min, max: o.max, value: vorgaben?.[key] ?? o.default, name: key });
     label.append(input);
     fields.append(label);
   }
@@ -203,8 +208,9 @@ function startDialog(programm, settings = {}) {
   const preview = $('#dlg-preview');
   // Zufallsprogramme: gespeicherter Startwert — Vorschau = gefahrener Ablauf
   let seed = programm.zufall ? holeSeed(programm.id) : undefined;
+  const zusaetze = Object.fromEntries(Object.entries(vorgaben ?? {}).filter(([k]) => !(k in programm.optionen)));
   const leseOpts = () => {
-    const opts = {};
+    const opts = { ...zusaetze };
     for (const inp of fields.querySelectorAll('input'))
       opts[inp.name] = Math.min(inp.max, Math.max(inp.min, Number(inp.value) || 0));
     if (seed !== undefined) opts.seed = seed;
@@ -447,6 +453,7 @@ async function goHome() {
   // Demo-Parameter aus der Adresse: Reload/Update landet sonst wieder in der Demo
   if (new URLSearchParams(location.search).has('demo')) history.replaceState(history.state, '', location.pathname);
   renderProgrammTiles();          // „Zuletzt gefahren" sofort nachführen
+  renderPlan({ starte: startRide });
   zeichneGeraeteLeiste();
   detailCleanup?.();
   detailCleanup = null;
@@ -537,6 +544,10 @@ $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
+// Trainingsplan anlegen bzw. ändern — danach die Karte neu aufbauen
+const planDialog = () => oeffnePlanDialog().then(geaendert => { if (geaendert) renderPlan({ starte: startRide }); });
+$('#plan-anlegen').addEventListener('click', planDialog);
+$('#btn-plan').addEventListener('click', planDialog);
 $('#btn-back').addEventListener('click', () => zurueck(zurueckAusDetail));
 $('#btn-back-fahrten').addEventListener('click', () => zurueck(zurueckAusFahrten));
 $('#btn-demo-zur-fahrt').addEventListener('click', () => zurDemoFahrt(demoHistorie?.vonFahrt ?? 'vo2max'));
