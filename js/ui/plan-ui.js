@@ -6,7 +6,8 @@
 import { getSettings, setSetting, listSessions } from '../storage.js';
 import { planAnlegen, wocheAb, wocheWirksam, naechsteEinheit, wochenMinuten, titel, programmFuer,
   verschiebeZiele, mitAnpassung, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart,
-  tagIso, montag, WOCHENTAGE, DAUERN, ZIELE } from '../plan.js';
+  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg,
+  tagIso, montag, WOCHENTAGE, DAUERN, LAENGEN, ZIELE } from '../plan.js';
 import { baueBlocks } from '../program.js';
 import { drawProfile, beobachte } from './chart.js';
 import { effektiveFtp } from '../metrics.js';
@@ -15,7 +16,7 @@ import { toastOk, toastRueckgaengig } from './toast.js';
 
 const $ = s => document.querySelector(s);
 const TAG_MS = 864e5;
-const LANGE_PAUSE_TAGE = 14;
+const HINWEIS_NACH_TAGEN = 7;              // ohne Fahrt → Wiedereinstieg anbieten
 const minutenText = m => m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`;
 const wochentagLang = iso => new Date(iso + 'T12:00').toLocaleDateString('de-DE', { weekday: 'short' });
 
@@ -35,6 +36,54 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
 
   const ftp = settings.ftp;
   const heuteIso = tagIso(heute);
+  const neuZeichnen = () => renderPlan({ starte, heute });
+  const speichern = async (neu, meldung) => {
+    await setSetting('plan', neu);
+    neuZeichnen();
+    toastRueckgaengig(meldung, async () => { await setSetting('plan', plan); neuZeichnen(); });
+  };
+  const hinweis = (text, aktion, aktion2 = null) => {
+    $('#plan-hinweis').hidden = !text && !aktion;
+    $('#plan-hinweis-text').hidden = !text;
+    $('#plan-hinweis-text').textContent = text ?? '';
+    const [a, b] = [$('#plan-aktion'), $('#plan-aktion-2')];
+    a.textContent = aktion?.label ?? ''; a.onclick = aktion?.fn ?? null; a.hidden = !aktion;
+    b.textContent = aktion2?.label ?? ''; b.onclick = aktion2?.fn ?? null; b.hidden = !aktion2;
+  };
+  const sonderzustand = (kicker, titelText, sub) => {
+    $('#plan-kicker').textContent = kicker;
+    $('#plan-titel').textContent = titelText;
+    $('#plan-sub').textContent = sub;
+    $('#plan-heute').disabled = true;
+    $('#plan-heute').onclick = null;
+    $('#plan-profil').hidden = true;
+    $('#plan-woche').hidden = true;
+    $('#plan-info').hidden = true;
+  };
+  $('#plan-woche').hidden = false;
+
+  // Pausiert: keine Einheiten, nichts wird verpasst; Fortsetzen nach Pausenlänge
+  if (plan.pause) {
+    const vorschau = wiedereinstieg(plan, plan.pause.seit, heute);
+    sonderzustand('Trainingsplan · pausiert', `Pausiert seit ${datumLang(plan.pause.seit)}`,
+      `Fortsetzen heute nach ${vorschau.tage} ${vorschau.tage === 1 ? 'Tag' : 'Tagen'}: ${vorschau.text}.`);
+    hinweis('', { label: 'Fortsetzen', fn: () => speichern(vorschau.plan, `Plan läuft wieder — ${vorschau.text}`) });
+    return;
+  }
+  // Abgeschlossen: Bilanz, dann weiter (+4 Wochen) oder neuer Plan
+  if (istAbgeschlossen(plan, heute)) {
+    const bilanz = planBilanz(plan, sessions, heute);
+    sonderzustand('Trainingsplan · abgeschlossen', 'Plan geschafft ✓',
+      `${bilanz.gefahren} Trainingstage in ${plan.laenge} Wochen (${bilanz.geplant} Einheiten geplant)`
+      + (plan.ftp && ftp ? ` · FTP ${plan.ftp} → ${ftp} W` : ftp ? ` · FTP jetzt ${ftp} W` : ''));
+    const ende = tagIso(new Date(planEnde(plan).getTime() + TAG_MS));
+    hinweis('', {
+      label: '4 Wochen weiter',
+      fn: () => { const w = wiedereinstieg({ ...plan, laenge: plan.laenge + 4 }, ende, heute);
+        speichern(w.plan, `Plan verlängert — ${w.text}`); },
+    }, { label: 'Neuer Plan', fn: () => oeffnePlanDialog({ heute, neu: true }).then(g => g && neuZeichnen()) });
+    return;
+  }
   // Die Woche, wie sie wirklich läuft: verpasste harte Einheiten sind schon verschoben
   const woche = wocheWirksam(plan, heute, sessions, heute, ftp);
   const heuteTag = woche.find(t => t.datum === heuteIso);
@@ -43,11 +92,9 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
   const naechste = woche.find(t => t.datum > heuteIso && t.einheit)?.einheit
     ?? naechsteEinheit(plan, montagPlus(heute, 7), ftp);
 
-  // Kopf: Woche im Block, Erholungswoche benannt
-  const bezug = e ?? naechste;
-  $('#plan-kicker').textContent = bezug
-    ? `Trainingsplan · Woche ${bezug.blockWoche + 1} von 4${bezug.blockWoche === 3 ? ' · leicht' : ''}`
-    : 'Trainingsplan';
+  // Kopf: Planwoche (von Länge), leichte Woche benannt
+  const pw = Math.max(0, planWoche(plan, heute));
+  $('#plan-kicker').textContent = `Trainingsplan · Woche ${pw + 1}${plan.laenge ? ` von ${plan.laenge}` : ''}${pw % 4 === 3 ? ' · leichte Woche' : ''}`;
 
   // Heute
   const knopf = $('#plan-heute');
@@ -113,25 +160,30 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
   $('#plan-info').hidden = false;
   $('#plan-info').textContent = info.length ? info.join(' · ') : 'Tag antippen: verschieben, kürzer, leichter oder auslassen';
 
-  // Lange Pause: anbieten, ab dieser Woche neu zu beginnen (nichts nachholen)
-  const letzteFahrt = sessions.reduce((a, s) => Math.max(a, s.start), 0);
-  const seit = Math.floor((heute - Math.max(letzteFahrt, new Date(plan.angelegt + 'T00:00').getTime())) / TAG_MS);
-  const hinweis = $('#plan-hinweis');
-  hinweis.hidden = seit < LANGE_PAUSE_TAGE;
-  $('#plan-hinweis-text').textContent = `${seit} Tage ohne Fahrt — lieber ab dieser Woche neu aufbauen?`;
-  $('#plan-neustart').onclick = async () => {
-    await setSetting('plan', { ...plan, start: tagIso(montag(heute)), angelegt: tagIso(heute), ftp });
-    toastOk('Plan beginnt diese Woche neu');
-    renderPlan({ starte, heute });
-  };
+  // Länger nicht gefahren (ohne Pause-Knopf): Wiedereinstieg nach denselben Stufen anbieten
+  const bezugTag = new Date((plan.aktivAb ?? plan.angelegt) + 'T00:00').getTime();
+  // zählt wie überall im Plan: Fahrt aus dem Plan oder ≥ 15 min (keine Probefahrten)
+  const letzteFahrt = sessions.filter(f => f.planRef || (f.dauer ?? 0) >= 900).reduce((a, f) => Math.max(a, f.start), 0);
+  const letzteAktiv = Math.max(letzteFahrt, bezugTag - TAG_MS);
+  const seit = Math.floor((new Date(heuteIso + 'T00:00') - new Date(tagIso(new Date(letzteAktiv)) + 'T00:00')) / TAG_MS) - 1;
+  if (seit >= HINWEIS_NACH_TAGEN) {
+    const ab = tagIso(new Date(letzteAktiv + TAG_MS));
+    const w = wiedereinstieg(plan, ab, heute);
+    hinweis(`${seit} Tage ohne Fahrt — Wiedereinstieg: ${w.text}.`,
+      { label: 'Übernehmen', fn: () => speichern(w.plan, `Wiedereinstieg — ${w.text}`) });
+  } else hinweis('');
 }
 
+const datumLang = iso => new Date(iso + 'T12:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
 // Dialog: anlegen (kein Plan) oder ändern (Plan vorhanden). Liefert true, wenn sich etwas geändert hat.
-export async function oeffnePlanDialog({ heute = new Date() } = {}) {
+export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {}) {
   const settings = await getSettings();
-  const alt = settings.plan;
+  const alt = neu ? null : settings.plan;
   const dlg = $('#dlg-plan');
-  const wahl = { tage: alt?.tage ?? [1, 3, 5], dauer: alt?.dauer ?? 45, ziel: alt?.ziel ?? 'fitness', einsteiger: alt?.einsteiger ?? false };
+  const vorlage = alt ?? settings.plan;          // „Neuer Plan": Einstellungen des alten übernehmen
+  const wahl = { tage: vorlage?.tage ?? [1, 3, 5], dauer: vorlage?.dauer ?? 45, ziel: vorlage?.ziel ?? 'fitness',
+    einsteiger: vorlage?.einsteiger ?? false, laenge: vorlage && 'laenge' in vorlage ? vorlage.laenge : 8 };
 
   // Wochentage als Umschalter
   const tageEl = $('#plan-tage');
@@ -145,6 +197,11 @@ export async function oeffnePlanDialog({ heute = new Date() } = {}) {
     l.innerHTML = `<input type="radio" name="plan-dauer" value="${d}"${d === wahl.dauer ? ' checked' : ''}>${d} min`;
     return l;
   }));
+  $('#plan-laenge').replaceChildren(...LAENGEN.map(l => {
+    const el = document.createElement('label');
+    el.innerHTML = `<input type="radio" name="plan-laenge" value="${l ?? ''}"${l === wahl.laenge ? ' checked' : ''}>${l ? `${l} Wochen` : 'Fortlaufend'}`;
+    return el;
+  }));
   $('#plan-ziel').replaceChildren(...Object.entries(ZIELE).map(([id, z]) => {
     const l = document.createElement('label');
     l.innerHTML = `<input type="radio" name="plan-ziel" value="${id}"${id === wahl.ziel ? ' checked' : ''}>
@@ -153,12 +210,14 @@ export async function oeffnePlanDialog({ heute = new Date() } = {}) {
   }));
   $('#plan-einsteiger').checked = wahl.einsteiger;
   $('#plan-beenden').hidden = !alt;
+  $('#plan-pausieren').hidden = !alt || !!alt.pause;
   $('#plan-ok').textContent = alt ? 'Übernehmen' : 'Plan starten';
 
   const lies = () => ({
     tage: [...tageEl.querySelectorAll('input:checked')].map(i => +i.value),
     dauer: +dlg.querySelector('[name="plan-dauer"]:checked').value,
     ziel: dlg.querySelector('[name="plan-ziel"]:checked').value,
+    laenge: +dlg.querySelector('[name="plan-laenge"]:checked').value || null,
     einsteiger: $('#plan-einsteiger').checked,
   });
   // Vorschau: erste bzw. aktuelle Woche mit Farbpunkt, Tag, Einheit; Umfang
@@ -181,7 +240,10 @@ export async function oeffnePlanDialog({ heute = new Date() } = {}) {
       liste.append(li);
     }
     const min = wochenMinuten(plan, heute, settings.ftp);
-    $('#plan-umfang').textContent = `≈ ${minutenText(min)} in dieser Woche · steigt in den Wochen 2 und 3, Woche 4 ist leicht.`
+    const ende = planEnde(alt ? { ...plan, start: alt.start } : plan);
+    $('#plan-umfang').textContent = `≈ ${minutenText(min)} in dieser Woche · jeder 4-Wochen-Block steigt 3 Wochen, die 4. ist leicht mit FTP-Test.`
+      + (ende ? ` Endet ${datumLang(tagIso(ende))}` : ' Läuft fortlaufend weiter.')
+      + (alt && w.laenge && planWoche({ ...alt, laenge: w.laenge }, heute) >= w.laenge ? ' — damit ist der Plan schon abgeschlossen.' : '')
       + (settings.ftp ? '' : ' Ohne FTP beginnt der Plan mit dem Rampentest.');
   };
   dlg.querySelector('.plan-form').oninput = vorschau;
@@ -192,9 +254,14 @@ export async function oeffnePlanDialog({ heute = new Date() } = {}) {
       if (dlg.returnValue === 'ok') {
         const w = lies();
         // Ändern behält den Start (Woche im Block läuft weiter); neu = diese Woche
-        const neu = planAnlegen({ ...w, ftp: settings.ftp, heute });
-        await setSetting('plan', alt ? { ...neu, start: alt.start, angelegt: alt.angelegt, ftp: alt.ftp } : neu);
+        const neuPlan = planAnlegen({ ...w, ftp: settings.ftp, heute });
+        await setSetting('plan', alt ? { ...alt, ...neuPlan, start: alt.start, angelegt: alt.angelegt, ftp: alt.ftp } : neuPlan);
         toastOk(alt ? 'Plan geändert' : 'Plan angelegt — los geht’s');
+        resolve(true);
+      } else if (dlg.returnValue === 'pausieren') {
+        await setSetting('plan', pausieren(alt, heute));
+        toastRueckgaengig('Plan pausiert — beim Fortsetzen richtet sich der Einstieg nach der Pausenlänge',
+          async () => { await setSetting('plan', alt); document.dispatchEvent(new Event('plan-geaendert')); });
         resolve(true);
       } else if (dlg.returnValue === 'beenden') {
         if (confirm('Trainingsplan beenden? Gefahrene Einheiten bleiben in den Fahrten.')) {

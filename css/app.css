@@ -380,13 +380,14 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .plan-tag[data-status="erledigt"] { color: var(--ok); }
 .plan-tag.heute { color: var(--accent); font-weight: 600; }
 .plan-tag.heute i { opacity: 1; }
-.plan-hinweis { margin: 0; font-size: var(--text-xs); color: var(--ink2); }
+.plan-hinweis { margin: 0; font-size: var(--text-xs); color: var(--ink2); display: grid; gap: var(--abstand-2); }
+.plan-knoepfe { display: flex; flex-wrap: wrap; gap: var(--abstand-2); }
 /* Dialog: Wochentage und Dauer als Umschalter, Ziel als Zeilen */
 #dlg-plan { width: min(30rem, 92vw); }
 .plan-form { display: grid; gap: var(--abstand-2); }
 .plan-form .gruppe-titel { margin-top: var(--abstand-2); }
 .tag-wahl { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--abstand-05); }
-.segment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--abstand-1); }
+.segment { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); gap: var(--abstand-1); }
 .tag-wahl label, .segment label {
   position: relative; min-height: var(--tippflaeche); display: grid; place-items: center; cursor: pointer;
   background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius-s);
@@ -403,7 +404,9 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .plan-vorschau li { display: flex; align-items: center; gap: var(--abstand-2); }
 .plan-vorschau i { flex: none; width: var(--abstand-2); height: var(--abstand-2); border-radius: 50%; background: var(--farbe); }
 .plan-vorschau b { min-width: 2.2ch; color: var(--ink2); font-weight: 600; }
-.dlg-actions .danger { color: var(--danger); margin-right: auto; }
+.plan-verwalten { display: flex; flex-wrap: wrap; gap: var(--abstand-2); margin-top: var(--abstand-4); }
+.plan-verwalten:not(:has(> :not([hidden]))) { display: none; }
+.chip.danger { color: var(--danger); border-color: var(--danger); }
 /* Blatt von unten (Einheit ändern): volle Breite, am unteren Rand */
 dialog.sheet {
   margin: auto auto 0; width: min(32rem, 100vw); max-width: 100vw;

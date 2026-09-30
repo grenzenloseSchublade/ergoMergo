@@ -18,6 +18,7 @@ import { effektiveFtp } from './metrics.js';
 export const PLAN_VERSION = 1;
 export const WOCHENTAGE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 export const DAUERN = [30, 45, 60];
+export const LAENGEN = [4, 8, 12, null];              // Wochen; null = fortlaufend
 export const ZIELE = {
   fitness: { name: 'Fitness', sub: 'Ausgewogen: Intervalle, Schwelle, Grundlage' },
   leistung: { name: 'Leistung', sub: 'Mehr Intensität für eine höhere FTP' },
@@ -142,27 +143,35 @@ const rampentest = plan => ({ typ: 'T', programmId: 'rampentest',
 
 // Plan anlegen. tage: Wochentag-Indizes (Mo = 0), dauer: 30/45/60,
 // ftp: bekannte FTP oder 0 (dann beginnt der Plan mit dem Test)
-export function planAnlegen({ tage, dauer = 45, ziel = 'fitness', einsteiger = false, ftp = 0, heute = new Date() }) {
+export function planAnlegen({ tage, dauer = 45, ziel = 'fitness', einsteiger = false, ftp = 0, laenge = 8, heute = new Date() }) {
   return {
     version: PLAN_VERSION,
     tage: [...new Set(tage)].sort((a, b) => a - b),
     dauer, ziel, einsteiger,
+    laenge,                               // Wochen (4/8/12) oder null = fortlaufend
     ftp,                                  // FTP beim Anlegen (0 = unbekannt)
-    start: tagIso(montag(heute)),
+    start: tagIso(montag(heute)),         // Montag der Planwoche 1 (Pausen verschieben ihn)
     angelegt: tagIso(heute),
   };
 }
+
+// Planwoche (0 = erste) eines Datums — Pausen sind über plan.start herausgerechnet
+export const planWoche = (plan, datum) => Math.floor(Math.round((montag(datum) - ausIso(plan.start)) / TAG_MS) / 7);
+export const planEnde = plan => plan.laenge ? plusTage(ausIso(plan.start), plan.laenge * 7 - 1) : null;
+export const istAbgeschlossen = (plan, heute) => !!plan.laenge && planWoche(plan, heute) >= plan.laenge;
 
 // Die Einheit eines Tages oder null (Ruhetag, vor dem Start).
 // ftpJetzt: aktuelle FTP aus den Einstellungen — solange sie fehlt, fährt
 // der Plan nicht hart (Ziele wären nur geschätzt)
 export function einheitAm(plan, datum, ftpJetzt = plan.ftp) {
   const tag = new Date(datum.getFullYear(), datum.getMonth(), datum.getDate());
-  const start = ausIso(plan.start);
-  if (tag < ausIso(plan.angelegt ?? plan.start)) return null;
-  const woche = Math.floor(Math.round((montag(tag) - start) / TAG_MS) / 7);
+  // vor dem Start bzw. vor dem Wiedereinstieg, während einer Pause, nach dem Ende: nichts
+  if (tag < ausIso(plan.aktivAb ?? plan.angelegt ?? plan.start)) return null;
+  if (plan.pause && tag >= ausIso(plan.pause.seit)) return null;
+  const woche = planWoche(plan, tag);
   const wt = wochentag(tag);
   if (woche < 0 || !plan.tage.includes(wt)) return null;
+  if (plan.laenge && woche >= plan.laenge) return null;
   const blockNr = Math.floor(woche / 4), blockWoche = woche % 4;
   const rolle = rollen(plan.tage, plan.ziel);
   let e;
@@ -189,7 +198,61 @@ export function einheitAm(plan, datum, ftpJetzt = plan.ftp) {
     else if (plan.einsteiger && woche === 0 && TYPEN[e.typ].art === 'hart') e = grundlage(plan);
   }
   if (!ftpJetzt && TYPEN[e.typ].art === 'hart') e = grundlage(plan);
+  // Wiedereinstieg nach einer Pause: harte Einheiten sanfter, die erste locker
+  const ein = plan.einstieg;
+  if (ein && tagIso(tag) >= ein.ab && tagIso(tag) <= ein.bis && TYPEN[e.typ].art === 'hart') {
+    const ersterPlantag = [...Array(7).keys()].map(i => plusTage(ausIso(ein.ab), i)).find(d => plan.tage.includes(wochentag(d)));
+    if (ein.lockerZuerst && ersterPlantag && tagIso(ersterPlantag) === tagIso(tag)) e = grundlage(plan);
+    else e = { ...e, opts: { ...e.opts, intensitaet: Math.min(e.opts.intensitaet ?? 100, ein.intensitaet ?? 100) } };
+  }
   return { ...e, ...TYPEN[e.typ], datum: tagIso(tag), woche, blockNr, blockWoche, ref: `plan:${tagIso(tag)}` };
+}
+
+// --- Pause und Wiedereinstieg ---
+// Stufen nach Pausenlänge (Grund egal; docs/trainingsplan.md):
+//   ≤ 6 Tage  nahtlos weiter an derselben Stelle im Block
+//   7–13      unterbrochene Woche wiederholen, erste Einheit locker, harte mit 95 %
+//   14–27     leichte Woche mit FTP-Test, danach neuer Block
+//   ≥ 28      wie 14–27, der neue Block beginnt mit 95 %
+export function wiedereinstieg(plan, pauseAb, heute = new Date()) {
+  const ab = ausIso(pauseAb);
+  const heuteT = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate());
+  const tage = Math.max(0, Math.round((heuteT - ab) / TAG_MS));
+  const unterbrochen = Math.max(0, planWoche(plan, ab));
+  const mo = montag(heuteT), so = plusTage(mo, 6);
+  let ziel = unterbrochen, einstieg = null, text;
+  if (tage <= 6) text = 'weiter wie geplant';
+  else if (tage <= 13) {
+    einstieg = { ab: tagIso(heuteT), bis: tagIso(so), lockerZuerst: true, intensitaet: 95 };
+    text = 'die unterbrochene Woche wird wiederholt, zum Einstieg locker';
+  } else {
+    ziel = Math.floor(unterbrochen / 4) * 4 + 3;
+    if (plan.laenge) ziel = Math.min(ziel, plan.laenge - 1);
+    if (tage >= 28) einstieg = { ab: tagIso(plusTage(mo, 7)), bis: tagIso(plusTage(mo, 13)), intensitaet: 95 };
+    text = tage >= 28 ? 'Neubeginn: leichte Woche mit FTP-Test, danach ein sanfter Block'
+      : 'leichte Woche mit FTP-Test, danach ein neuer Block';
+  }
+  // Nahtlos: dieselbe Planwoche gilt jetzt für die laufende Kalenderwoche
+  const start = tagIso(plusTage(mo, -7 * ziel));
+  const anpassungen = start === plan.start ? plan.anpassungen : undefined;   // alte Zuordnung passt nicht mehr
+  const neu = { ...plan, start, aktivAb: tagIso(heuteT), pause: null, einstieg, anpassungen };
+  if (!neu.anpassungen) delete neu.anpassungen;
+  if (!neu.einstieg) delete neu.einstieg;
+  return { plan: neu, tage, text };
+}
+export const pausieren = (plan, heute = new Date()) => ({ ...plan, pause: { seit: tagIso(heute) } });
+
+// Bilanz am Planende: Trainingstage (Fahrt aus dem Plan oder ≥ 15 min) vom
+// Anlegen bis heute bzw. Planende — über Pausen und Wiedereinstiege hinweg —
+// gegen die geplanten Einheiten (Länge × Tage pro Woche)
+export function planBilanz(plan, sessions, heute = new Date()) {
+  const ende = planEnde(plan);
+  const bis = tagIso(ende && ende < heute ? ende : heute);
+  const tage = new Set(sessions
+    .filter(f => f.planRef || (f.dauer ?? 0) >= 900)
+    .map(f => tagIso(new Date(f.start)))
+    .filter(d => d >= plan.angelegt && d <= bis));
+  return { gefahren: tage.size, geplant: (plan.laenge ?? 0) * plan.tage.length };
 }
 
 // Sieben Tage ab dem Montag der Woche von datum

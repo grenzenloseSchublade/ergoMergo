@@ -97,6 +97,14 @@ try {
   soll('Rückgängig angeboten', await b.ev(`!!document.querySelector('.toast.mit-aktion .toast-aktion')`), true);
   await b.ev(`document.querySelector('.toast-aktion').click()`); await sleep(900);
   soll('Rückgängig stellt her', await b.ev(`document.querySelector('.plan-tag.heute').dataset.status`), 'geplant');
+  soll('Kopf zeigt die Plan-Länge', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => /Woche 1 von 8/.test(t));
+  // Pausieren und Fortsetzen
+  await b.klick('#btn-plan', 700);
+  await b.ev(`document.querySelector('#plan-pausieren').click()`); await sleep(1000);
+  soll('Plan pausiert', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => t.includes('pausiert'));
+  soll('… ohne Wochenstreifen', await b.ev(`document.querySelector('#plan-woche').hidden`), true);
+  await b.klick('#plan-aktion', 1000);
+  soll('Fortsetzen', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => !t.includes('pausiert') && t.includes('Woche'));
   await b.klick('#btn-plan', 700);
   soll('Ändern-Dialog', await b.ev(`document.querySelector('#plan-ok').textContent + '|' + !document.querySelector('#plan-beenden').hidden`), 'Übernehmen|true');
   await b.ev(`window.confirm = () => true; document.querySelector('#plan-beenden').click()`); await sleep(1000);

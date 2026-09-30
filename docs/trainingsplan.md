@@ -26,6 +26,28 @@ direkte Daten; einiges ist übertragen oder folgt der Praxis gängiger Apps.
 | Intervall-Typ wechselt je Block (4×4 → 40/20 → 30/30) | Abwechslung bei gleicher Wirkung; 2 Einheiten 4×4/Woche reichen für VO2max-Zuwächse [8][9]. |
 | Gesundheitshinweis beim Anlegen | Kurzfassung der ACSM-Empfehlung zur Voruntersuchung und des PAR-Q+ [19][20]; bei Infekt pausieren [22]. |
 
+## Länge, Pause und Wiedereinstieg
+
+Der Plan läuft 4, 8 oder 12 Wochen (1–3 Blöcke, Standard 8) oder fortlaufend.
+Am Ende steht eine Bilanz (gefahrene von geplanten Einheiten, FTP vorher →
+jetzt) mit „4 Wochen weiter“ oder „Neuer Plan“.
+
+Pausieren geht ohne Grund und ohne Enddatum (Plan ändern → Pausieren).
+Während der Pause gibt es keine Einheiten und nichts gilt als verpasst. Beim
+Fortsetzen richtet sich der Einstieg nur nach der Pausenlänge — dieselben
+Stufen gelten, wenn man ohne Pause-Knopf ≥ 7 Tage nicht fährt (die Karte
+bietet dann „Wiedereinstieg“ an):
+
+| Pause | Einstieg | Begründung |
+|---|---|---|
+| ≤ 6 Tage | nahtlos an derselben Stelle im Block | eine Woche kostet kaum Form [24] |
+| 7–13 Tage | unterbrochene Woche wiederholen, erste Einheit locker, harte mit 95 % | leichter Formverlust, erst anlaufen |
+| 14–27 Tage | leichte Woche mit FTP-Test, danach neuer Block | VO2max sinkt nach 2–4 Wochen messbar [24]; alte FTP zu hoch — TrainerRoad testet ab ~14 Tagen neu |
+| ≥ 28 Tage | wie 14–27, der neue Block beginnt mit 95 % | faktisch ein Neubeginn |
+
+Die Grenzen sind Praxiswerte aus Trainings-Apps und Coaching-Quellen, keine
+harten Studienzahlen — für Freizeitfahrer eher vorsichtig gewählt.
+
 Ein eigenes Ziel „Abnehmen“ gibt es nicht: HIIT und moderates
 Dauertraining senken Körperfett etwa gleich stark [25]; es fällt unter
 „Fitness“.
@@ -69,4 +91,5 @@ senkt die Intensität um 5 %.
 20. PAR-Q+ — https://eparmedx.com/par-q/
 21. Verpasste Einheiten — https://www.trainerroad.com/blog/how-to-adjust-your-training-plan-when-you-miss-workouts/
 22. Training bei Erkältung (Mayo Clinic) — https://www.mayoclinic.org/healthy-lifestyle/fitness/expert-answers/exercise/faq-20058494
+24. Mujika & Padilla 2000, Detraining — https://pubmed.ncbi.nlm.nih.gov/10999420/
 25. Wewege et al. 2017 — https://onlinelibrary.wiley.com/doi/abs/10.1111/obr.12532

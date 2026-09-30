@@ -61,7 +61,8 @@
       </button>
       <ol class="plan-woche" id="plan-woche" aria-label="Diese Woche"></ol>
       <p class="plan-hinweis" id="plan-info" hidden></p>
-      <p class="plan-hinweis" id="plan-hinweis" hidden><span id="plan-hinweis-text"></span> <button type="button" class="chip" id="plan-neustart">Plan neu beginnen</button></p>
+      <div class="plan-hinweis" id="plan-hinweis" hidden><span id="plan-hinweis-text"></span>
+        <span class="plan-knoepfe"><button type="button" class="chip chip-fahrt" id="plan-aktion"></button><button type="button" class="chip" id="plan-aktion-2" hidden></button></span></div>
     </section>
     <div class="top-tiles">
       <button class="tile tile-primary" id="start-free">
@@ -259,6 +260,8 @@
       <div class="tag-wahl" id="plan-tage"></div>
       <p class="gruppe-titel">Dauer pro Einheit</p>
       <div class="segment" id="plan-dauer"></div>
+      <p class="gruppe-titel">Länge des Plans</p>
+      <div class="segment" id="plan-laenge"></div>
       <p class="gruppe-titel">Ziel</p>
       <div class="ziel-wahl" id="plan-ziel"></div>
       <label class="schalter-zeile">
@@ -271,10 +274,14 @@
       <p class="hint">Bei Herz-Kreislauf-Erkrankungen, Brustschmerz, Schwindel oder nach
         langer Pause vorher ärztlich abklären. Bei Fieber oder Infekt pausieren.</p>
     </div>
+    <!-- Plan verwalten (nur beim Ändern): eigene Zeile, damit die Hauptknöpfe nie umbrechen -->
+    <div class="plan-verwalten">
+      <button value="pausieren" formnovalidate class="chip" id="plan-pausieren" hidden>Pausieren</button>
+      <button value="beenden" formnovalidate class="chip danger" id="plan-beenden" hidden>Plan beenden</button>
+    </div>
     <div class="dlg-actions">
       <button value="ok" class="primary" id="plan-ok">Plan starten</button>
       <button value="cancel" formnovalidate class="ghost">Abbrechen</button>
-      <button value="beenden" formnovalidate class="ghost danger" id="plan-beenden" hidden>Plan beenden</button>
     </div>
   </form>
 </dialog>

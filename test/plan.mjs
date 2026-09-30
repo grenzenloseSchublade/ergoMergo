@@ -10,7 +10,8 @@
 // Aufruf: node test/plan.mjs   (reines Node, kein Browser)
 
 import { planAnlegen, einheitAm, wocheAb, wocheWirksam, wocheMitAnpassungen, verschiebeZiele, mitAnpassung, ohneLetzteAnpassung,
-  kuerzerDauer, istHart, tagIso, WOCHENTAGE, DAUERN, ZIELE, TYPEN, programmFuer } from '../js/plan.js';
+  kuerzerDauer, istHart, tagIso, planWoche, pausieren, wiedereinstieg, istAbgeschlossen, planBilanz,
+  WOCHENTAGE, DAUERN, ZIELE, TYPEN, programmFuer } from '../js/plan.js';
 
 const fehler = [];
 const START = new Date(2026, 9, 5);          // ein Montag
@@ -24,7 +25,7 @@ for (let maske = 0; maske < 128; maske++) {
   for (const ziel of Object.keys(ZIELE))
     for (const dauer of DAUERN)
       for (const [ftp, einsteiger] of [[220, false], [220, true], [0, false], [0, true]]) {
-        const plan = planAnlegen({ tage, dauer, ziel, einsteiger, ftp, heute: START });
+        const plan = planAnlegen({ tage, dauer, ziel, einsteiger, ftp, laenge: null, heute: START });
         const name = `${tage.map(t => WOCHENTAGE[t]).join('')} ${ziel} ${dauer}′ ftp${ftp}${einsteiger ? ' einst.' : ''}`;
         let letzteHart = null, vorigeMinuten = null, testGesehen = false, vorwocheTest = false;
         for (let w = 0; w < 12; w++) {
@@ -72,7 +73,7 @@ for (let maske = 0; maske < 128; maske++) {
   const tage = WOCHENTAGE.map((_, i) => i).filter(i => maske & (1 << i));
   if (tage.length < 2 || tage.length > 6) continue;
   for (const ziel of Object.keys(ZIELE)) {
-    const plan = planAnlegen({ tage, dauer: 45, ziel, ftp: 220, heute: START });
+    const plan = planAnlegen({ tage, dauer: 45, ziel, ftp: 220, laenge: null, heute: START });
     for (const w of [1, 3]) {                                   // Aufbau- und Erholungswoche
       const mo = tag(w * 7), so = tag(w * 7 + 6);
       const heute = tag(w * 7 + 7);                             // Woche vorbei: alles bewertet
@@ -111,7 +112,7 @@ console.log(`Verschieben: ${wochenGeprueft} Wochen mit Verpass-Mustern geprüft`
 // Harte Fahrt außerhalb des Plans: ersetzt die verpasste harte Einheit und
 // sperrt den Tag danach (Mo verpasst, Di hart gefahren → Mi bleibt locker)
 {
-  const plan = planAnlegen({ tage: [0, 2, 4], dauer: 45, ziel: 'fitness', ftp: 220, heute: START });
+  const plan = planAnlegen({ tage: [0, 2, 4], dauer: 45, ziel: 'fitness', ftp: 220, laenge: null, heute: START });
   const di = tag(8);                                       // Woche 2
   const sessions = [{ start: di.getTime() + 18 * 36e5, dauer: 2700, np: 200, ftp: 220 }];
   const woche = wocheWirksam(plan, tag(7), sessions, tag(9), 220);
@@ -136,7 +137,7 @@ for (let maske = 0; maske < 128; maske++) {
   const tage = WOCHENTAGE.map((_, i) => i).filter(i => maske & (1 << i));
   if (tage.length < 2 || tage.length > 6) continue;
   for (const ziel of Object.keys(ZIELE)) {
-    const plan = planAnlegen({ tage, dauer: 45, ziel, ftp: 220, heute: START });
+    const plan = planAnlegen({ tage, dauer: 45, ziel, ftp: 220, laenge: null, heute: START });
     for (const w of [1, 3]) {
       const mo = tag(w * 7), heute = mo;                   // Montag: alle Tage der Woche erreichbar
       const basis = wocheWirksam(plan, mo, [], heute, 220);
@@ -178,6 +179,48 @@ for (let maske = 0; maske < 128; maske++) {
   }
 }
 console.log(`Eigene Änderungen: ${verschiebungen} Verschiebungen geprüft`);
+
+// --- Länge, Pause, Wiedereinstieg ---
+for (const laenge of [4, 8, 12]) {
+  const plan = planAnlegen({ tage: [1, 3, 5], dauer: 45, ftp: 220, laenge, heute: START });
+  const letzte = [...Array(laenge * 7 + 14).keys()].map(tag).filter(d => einheitAm(plan, d, 220)).at(-1);
+  if (planWoche(plan, letzte) !== laenge - 1) fehler.push(`Länge ${laenge}: letzte Einheit in Woche ${planWoche(plan, letzte) + 1}`);
+  if (einheitAm(plan, letzte, 220).typ !== 'T') fehler.push(`Länge ${laenge}: endet nicht mit dem FTP-Test`);
+  if (!istAbgeschlossen(plan, tag(laenge * 7)) || istAbgeschlossen(plan, tag(laenge * 7 - 1))) fehler.push(`Länge ${laenge}: Abschluss falsch erkannt`);
+}
+{
+  const plan = planAnlegen({ tage: [1, 3, 5], dauer: 45, ftp: 220, laenge: null, heute: START });
+  const pausiert = pausieren(plan, tag(9));                   // Mi der Planwoche 2
+  if ([9, 10, 20, 40].some(n => einheitAm(pausiert, tag(n), 220))) fehler.push('Pause: Einheiten während der Pause');
+  // Stufen: [Pausentage, erwartete Planwoche beim Fortsetzen, erste Einheit locker?, Intensität harter Einheiten]
+  for (const [tageP, woche, lockerZuerst] of [[4, 1, false], [10, 1, true], [20, 3, false], [35, 3, false]]) {
+    const heute = tag(9 + tageP);
+    const { plan: neu, text } = wiedereinstieg(pausiert, tagIso(tag(9)), heute);
+    const name = `Wiedereinstieg nach ${tageP} Tagen (${text})`;
+    if (planWoche(neu, heute) !== woche) fehler.push(`${name}: Planwoche ${planWoche(neu, heute) + 1} statt ${woche + 1}`);
+    if (neu.pause) fehler.push(`${name}: noch pausiert`);
+    // vor dem Wiedereinstieg nichts, danach wieder Einheiten
+    const vorher = [...Array(7).keys()].map(i => tag(9 + tageP - 1 - i)).some(d => einheitAm(neu, d, 220));
+    if (vorher) fehler.push(`${name}: Einheiten vor dem Wiedereinstieg`);
+    const naechste = [...Array(14).keys()].map(i => einheitAm(neu, tag(9 + tageP + i), 220)).filter(Boolean);
+    if (!naechste.length) fehler.push(`${name}: keine Einheiten danach`);
+    if (lockerZuerst && istHart(naechste[0]) && naechste[0].typ !== 'T') fehler.push(`${name}: erste Einheit hart`);
+    if (tageP >= 7 && tageP <= 13 && naechste.some(e => istHart(e) && e.typ !== 'T' && e.opts.intensitaet > 95 && e.woche === woche))
+      fehler.push(`${name}: harte Einheit über 95 %`);
+    if (tageP >= 14 && !naechste.slice(0, 7).some(e => e.typ === 'T')) fehler.push(`${name}: kein FTP-Test in der Einstiegswoche`);
+    if (tageP >= 28 && !naechste.some(e => istHart(e) && e.typ !== 'T' && e.opts.intensitaet === 95)) fehler.push(`${name}: neuer Block nicht sanfter`);
+  }
+}
+
+// Bilanz zählt über Pausen hinweg (Fahrten vor dem Wiedereinstieg bleiben drin)
+{
+  const plan = planAnlegen({ tage: [1, 3, 5], dauer: 45, ftp: 220, laenge: 4, heute: START });
+  const fahrt = n => ({ planRef: `plan:${tagIso(tag(n))}`, start: tag(n).getTime() + 18 * 36e5, dauer: 2700 });
+  const sessions = [fahrt(1), fahrt(3), fahrt(5), { start: tag(8).getTime(), dauer: 600 }];   // 3 Planfahrten + 10-min-Rolle
+  const { plan: neu } = wiedereinstieg(pausieren(plan, tag(8)), tagIso(tag(8)), tag(20));
+  const b = planBilanz(neu, [...sessions, fahrt(22), fahrt(24)], tag(60));
+  if (b.gefahren !== 5 || b.geplant !== 12) fehler.push(`Bilanz: ${b.gefahren} von ${b.geplant} statt 5 von 12`);
+}
 
 const eindeutig = [...new Set(fehler)];
 console.log(eindeutig.length

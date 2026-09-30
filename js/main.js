@@ -548,6 +548,8 @@ $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern:
 const planDialog = () => oeffnePlanDialog().then(geaendert => { if (geaendert) renderPlan({ starte: startRide }); });
 $('#plan-anlegen').addEventListener('click', planDialog);
 $('#btn-plan').addEventListener('click', planDialog);
+// Rückgängig aus dem Plan-Dialog (Pausieren) meldet sich hierüber
+document.addEventListener('plan-geaendert', () => renderPlan({ starte: startRide }));
 $('#btn-back').addEventListener('click', () => zurueck(zurueckAusDetail));
 $('#btn-back-fahrten').addEventListener('click', () => zurueck(zurueckAusFahrten));
 $('#btn-demo-zur-fahrt').addEventListener('click', () => zurDemoFahrt(demoHistorie?.vonFahrt ?? 'vo2max'));
