@@ -9,7 +9,8 @@
 // Aufruf:
 //   node tools/release.mjs           nächste Version (v1.0 → v1.1)
 //   node tools/release.mjs v2.0      explizite Version
-//   node tools/release.mjs --check   nur prüfen: Stempel gleich, Offline-Shell vollständig
+//   node tools/release.mjs --check   nur prüfen: Stempel gleich, Offline-Shell vollständig,
+//                                    Stil nur aus css/tokens.css (tools/stil-check.mjs)
 //
 // Vor jedem Bump und bei --check wird die SHELL-Liste in sw.js gegen die
 // Dateien in js/, css/, icons/ und audio/ abgeglichen: ein vergessenes Modul
@@ -18,6 +19,7 @@
 
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { pruefeStil } from './stil-check.mjs';
 
 const DATEIEN = {
   'sw.js':         /(const VERSION = ')v[\d.]+(')/,
@@ -60,12 +62,19 @@ function pruefeShell(swText) {
 }
 pruefeShell(sw.text);
 
+// Design-System: feste Farben/Größen außerhalb von css/tokens.css blockieren das Release
+const stil = pruefeStil();
+if (stil.length) {
+  console.error(`Stil-Prüfung: ${stil.length} feste Werte außerhalb von css/tokens.css (node tools/stil-check.mjs)\n  ${stil.join('\n  ')}`);
+  process.exit(1);
+}
+
 if (process.argv[2] === '--check') {
   if (sw.v !== shell.v) {
     console.error(`Versions-Drift: sw.js=${sw.v}, js/version.js=${shell.v}`);
     process.exit(1);
   }
-  console.log(`ok — beide auf ${sw.v}, Offline-Shell vollständig`);
+  console.log(`ok — beide auf ${sw.v}, Offline-Shell vollständig, Stil nur aus Tokens`);
   process.exit(0);
 }
 

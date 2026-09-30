@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ergoMergo Stil</title>
+<!-- Lebendiger Style Guide: bindet die ECHTEN Stile und Module der App ein.
+     Was hier steht, sieht genauso aus wie in der App — die Seite kann nicht
+     veralten. Farben, Stufen und Maße werden aus css/tokens.css gelesen.
+     Regeln und Begründungen: docs/stil.md -->
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  /* Nur das Gerüst dieser Seite — ebenfalls aus Tokens */
+  body { user-select: text; }
+  .sg { max-width: 60rem; margin: 0 auto; padding: var(--abstand-6) var(--abstand-4) var(--abstand-12); }
+  .sg h1 { font-size: var(--text-2xl); margin: 0 0 var(--abstand-1); }
+  .sg h2 { font-size: var(--text-lg); margin: var(--abstand-12) 0 var(--abstand-1); padding-top: var(--abstand-4); border-top: 1px solid var(--line); }
+  .sg h3 { margin: var(--abstand-6) 0 var(--abstand-2); }
+  .sg p.einl { color: var(--ink2); font-size: var(--text-md); max-width: 44rem; margin: 0 0 var(--abstand-4); }
+  .sg code { font-size: var(--text-xs); color: var(--ink2); }
+  .raster { display: grid; gap: var(--abstand-3); grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+  .muster { display: flex; flex-wrap: wrap; gap: var(--abstand-3); align-items: center; }
+  .spalte { display: grid; gap: var(--abstand-2); max-width: 22rem; }
+  .farbe { display: grid; gap: var(--abstand-1); font-size: var(--text-xs); }
+  .farbe i { display: block; height: 3rem; border-radius: var(--radius-s); border: 1px solid var(--line); }
+  .farbe b { font-weight: 600; font-size: var(--text-sm); }
+  .farbe span { color: var(--ink3); }
+  .stufe { display: flex; gap: var(--abstand-4); align-items: baseline; padding: var(--abstand-1) 0; border-bottom: 1px solid var(--line); }
+  .stufe code { min-width: 9rem; }
+  .mass { display: flex; gap: var(--abstand-3); align-items: center; font-size: var(--text-xs); }
+  .mass code { min-width: 9rem; }
+  .mass i { display: block; background: var(--accent); height: var(--abstand-3); border-radius: var(--radius-xs); }
+  .ecke { width: 4rem; height: 3rem; background: var(--surface2); border: 1px solid var(--ink3); }
+  .demo-flaeche { background: var(--bg); padding: var(--abstand-3); border: 1px dashed var(--line); border-radius: var(--radius-m); }
+  .sg .controls { padding: 0; }
+  .einzeln .ctl { width: 7rem; }
+</style>
+</head>
+<body>
+<main class="sg">
+  <h1>ergoMergo — Stil</h1>
+  <p class="einl">Alle Tokens und Bausteine der App mit ihren echten Stilen. Werte stammen
+    ausschließlich aus <code>css/tokens.css</code>; <code>tools/stil-check.mjs</code> meldet feste Werte
+    außerhalb. Regeln und Begründungen stehen in <code>docs/stil.md</code>.</p>
+
+  <h2>Farben</h2>
+  <p class="einl">Automatisch aus <code>tokens.css</code> gelesen — neue Tokens erscheinen hier von selbst.</p>
+  <div id="farben"></div>
+
+  <h2>Schrift</h2>
+  <div id="schrift"></div>
+  <h3 class="gruppe-titel">Rollen</h3>
+  <div class="spalte">
+    <p class="gruppe-titel">Versal-Beschriftung · .gruppe-titel u. a.</p>
+    <span class="schalter-text">Zeilentext (--text-md)<small>Erklärung darunter (--text-xs, --ink3)</small></span>
+  </div>
+
+  <h2>Radien</h2>
+  <div class="muster" id="radien"></div>
+
+  <h2>Abstände</h2>
+  <div class="spalte" id="abstaende"></div>
+
+  <h2>Tippflächen und Symbole</h2>
+  <div class="spalte" id="tipp"></div>
+  <div class="muster">
+    <span class="opt-icon" data-icon="bike"></span><span class="opt-icon" data-icon="herzpuls"></span>
+    <span class="opt-icon" data-icon="gamepad"></span><span class="opt-icon" data-icon="ton"></span>
+    <span class="opt-icon" data-icon="sprache"></span><span class="opt-icon" data-icon="pip"></span>
+    <span class="opt-icon" data-icon="mehr"></span><span class="opt-icon" data-icon="timer"></span>
+    <span class="opt-icon" data-icon="rotate"></span><span class="opt-icon" data-icon="blitz"></span>
+    <span class="opt-icon" data-icon="route"></span><span class="opt-icon" data-icon="wuerfel"></span>
+  </div>
+
+  <h2>Karten und Kacheln</h2>
+  <div class="raster">
+    <button class="tile tile-primary"><span class="tile-kicker">Sofort los</span><span class="tile-title">Freies Fahren</span><span class="tile-sub">ERG · ± am Daumen</span></button>
+    <button class="tile"><span class="tile-title">VO2max 4×4</span><span class="tile-sub">Norwegische Intervalle</span></button>
+  </div>
+  <h3 class="gruppe-titel">Listeneintrag</h3>
+  <ul class="sessions">
+    <li><div class="zeile"><span class="datum">Di., 29.09. · 18:30</span><span class="prog">4×4 Intervalle</span></div><div class="meta">44:15 · Ø 138 W · 359 kJ · 19,2 km</div></li>
+    <li class="kurz"><div class="zeile"><span class="datum">Mo., 28.09. · 07:15</span><span class="prog">Freies Fahren</span></div><div class="meta">1:20 · Probefahrt unter 2 min (gedimmt)</div></li>
+  </ul>
+
+  <h2>Zeilen</h2>
+  <div class="spalte">
+    <label class="schalter-zeile"><i class="opt-icon" data-icon="ton"></i><span class="schalter-text">Schalter-Zeile<small>Ein/Aus-Einstellung</small></span><input type="checkbox" class="schalter" checked></label>
+    <label class="schalter-zeile"><i class="opt-icon" data-icon="sprache"></i><span class="schalter-text">Schalter aus<small>Erklärung, was passiert</small></span><input type="checkbox" class="schalter"></label>
+    <button type="button" class="fo-zeile"><i class="opt-icon" data-icon="pip"></i><span class="fo-text"><b>Aktions-Zeile</b><small>öffnet, koppelt — kein Schalter</small></span></button>
+  </div>
+
+  <h2>Geräte-Zustand</h2>
+  <p class="einl">Eine Regel (<code>[data-zustand]</code>) für Home-Leiste, Kopfzeile der Fahrt und Panel.</p>
+  <div id="zustaende" class="spalte"></div>
+
+  <h2>Chips und Knöpfe</h2>
+  <div class="muster">
+    <button class="chip">Chip</button>
+    <button class="chip chip-fahrt">⏮ Block</button>
+    <button class="chip update">Update</button>
+    <span class="demo-badge">DEMO</span>
+    <button class="demo-beispiel">Beispielfahrten ›</button>
+  </div>
+  <div class="dlg-actions"><button class="primary">Speichern</button><button class="ghost">Abbrechen</button></div>
+  <h3 class="gruppe-titel">Bedienleiste</h3>
+  <div class="demo-flaeche">
+    <div class="controls">
+      <button class="ctl ctl-minus" id="btn-minus">−10</button>
+      <button class="ctl ctl-plus" id="btn-plus">+10</button>
+      <button class="ctl ctl-stop" id="btn-stop">STOPP</button>
+      <button class="ctl ctl-end" id="btn-end">Beenden</button>
+    </div>
+  </div>
+  <div class="muster einzeln">
+    <button class="ctl ctl-stop" disabled>GESTOPPT</button>
+    <button class="ctl ctl-weiter">WEITER</button>
+    <button class="ctl ctl-end armiert">Sicher?</button>
+  </div>
+
+  <h2>LED-Statuszeile</h2>
+  <p class="einl">Live mit <code>js/ui/led-zeile.js</code>: neutral, OK, Fehler.</p>
+  <div class="spalte">
+    <span class="led-tafel" id="led-1"></span>
+    <span class="led-tafel" id="led-2"></span>
+    <span class="led-tafel" id="led-3"></span>
+  </div>
+
+  <h2>Toasts</h2>
+  <div class="spalte">
+    <div class="toast zeig">Neutral — außerhalb der Fahrt</div>
+    <div class="toast zeig ok">Gespeichert</div>
+    <div class="toast zeig err">Trainer nicht erreichbar</div>
+  </div>
+
+  <h2>Tastensymbole</h2>
+  <div class="muster" id="tasten"></div>
+</main>
+
+<script type="module">
+  import { montiereIcons, svgIcon } from '../js/ui/icons.js';
+  import { LedZeile } from '../js/ui/led-zeile.js';
+  import { tastenSymbol } from '../js/ui/tasten-symbol.js';
+
+  // Tokens aus der Quelldatei lesen (Name, Wert, Kommentar, Abschnitt)
+  const text = await (await fetch('../css/tokens.css')).text();
+  const tokens = [];
+  let abschnitt = '';
+  for (const zeile of text.split('\n')) {
+    const kopf = zeile.match(/\/\*\s*---\s*(.+?)\s*---/);
+    if (kopf) abschnitt = kopf[1];
+    for (const m of zeile.matchAll(/(--[\w-]+):\s*([^;]+);(?:\s*\/\*\s*(.*?)\s*\*\/)?/g))
+      tokens.push({ name: m[1], wert: m[2].trim(), info: m[3] ?? '', abschnitt });
+  }
+  const el = (tag, cls, html) => Object.assign(document.createElement(tag), { className: cls ?? '', innerHTML: html ?? '' });
+  const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+  // Farben, gruppiert nach Abschnitt
+  const farben = document.querySelector('#farben');
+  const istFarbe = t => /^(#|rgba?\(|var\(--)/.test(t.wert) && !/schatten|abdunkeln/.test(t.name) && !t.name.startsWith('--schrift');
+  for (const ab of [...new Set(tokens.filter(istFarbe).map(t => t.abschnitt))]) {
+    farben.append(el('h3', 'gruppe-titel', esc(ab)));
+    const r = el('div', 'raster');
+    for (const t of tokens.filter(t => istFarbe(t) && t.abschnitt === ab))
+      r.append(el('div', 'farbe', `<i style="background: var(${t.name})"></i><b>${t.name}</b><span>${esc(t.wert)}${t.info ? ' — ' + esc(t.info) : ''}</span>`));
+    farben.append(r);
+  }
+  const schrift = document.querySelector('#schrift');
+  for (const t of tokens.filter(t => t.name.startsWith('--text-')))
+    schrift.append(el('div', 'stufe', `<code>${t.name} · ${t.wert}</code><span style="font-size: var(${t.name})">Block übersprungen · 188 W</span><code>${esc(t.info)}</code>`));
+  const radien = document.querySelector('#radien');
+  for (const t of tokens.filter(t => t.name.startsWith('--radius-')))
+    radien.append(el('div', 'farbe', `<i class="ecke" style="border-radius: var(${t.name})"></i><b>${t.name}</b><span>${esc(t.wert)}</span>`));
+  const abstaende = document.querySelector('#abstaende');
+  for (const t of tokens.filter(t => t.name.startsWith('--abstand-')))
+    abstaende.append(el('div', 'mass', `<code>${t.name}</code><i style="width: var(${t.name})"></i><span>${esc(t.info)}</span>`));
+  const tipp = document.querySelector('#tipp');
+  for (const t of tokens.filter(t => /^--(tippflaeche|bedien|icon)/.test(t.name)))
+    tipp.append(el('div', 'mass', `<code>${t.name}</code><i style="width: var(${t.name}); height: var(${t.name})"></i><span>${esc(t.wert)} ${esc(t.info)}</span>`));
+
+  // Geräte-Zustände in allen drei Darstellungen
+  const TEXT = { fehlt: 'nicht gekoppelt — tippen zum Koppeln', gemerkt: 'nicht verbunden — tippen zum Verbinden',
+    verbindet: 'verbindet …', verbunden: 'Herzgurt · verbunden', teilweise: 'nicht alle Pads — tippen', fehler: 'nicht erreichbar' };
+  const zustaende = document.querySelector('#zustaende');
+  for (const [z, t] of Object.entries(TEXT)) {
+    const zeile = el('div', 'muster');
+    zeile.append(el('code', '', z));
+    const gl = el('div', 'gl'); gl.innerHTML = `<button data-zustand="${z}">${svgIcon('herzpuls')}<i class="dot"></i>Herzgurt</button>`;
+    const kopf = el('button', 'kopf-geraet', `<span>${svgIcon('herzpuls')}</span><i class="dot"></i>`); kopf.dataset.zustand = z;
+    const fo = el('button', 'fo-zeile', `<i class="opt-icon">${svgIcon('herzpuls')}</i><span class="fo-text"><b>Herzgurt</b><small class="fo-zustand">${t}</small></span><i class="dot"></i>`); fo.dataset.zustand = z;
+    zeile.append(gl, kopf, fo);
+    zustaende.append(zeile);
+  }
+
+  montiereIcons();
+  new LedZeile(document.querySelector('#led-1')).setze('Block übersprungen', '', { durchlaeufe: Infinity });
+  new LedZeile(document.querySelector('#led-2')).setze('Demo-Herzgurt verbunden', 'ok', { durchlaeufe: Infinity });
+  new LedZeile(document.querySelector('#led-3')).setze('Trainer getrennt — verbindet neu', 'err', { durchlaeufe: Infinity });
+  document.querySelector('#tasten').innerHTML = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 24, 25, 26, 27]
+    .map(b => { try { return tastenSymbol(b); } catch { return ''; } }).join('');
+</script>
+</body>
+</html>

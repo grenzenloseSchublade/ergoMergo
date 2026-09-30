@@ -6,6 +6,7 @@
 
 import { FIELDS } from '../storage.js';
 import { zoneIndex } from '../metrics.js';
+import { tokenLeser, canvasSchrift } from './tokens.js';
 
 // ---------- Helfer ----------
 
@@ -30,8 +31,7 @@ function prepCanvas(canvas) {
     canvas.height = Math.round(h * dpr);
   }
   ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
-  const style = getComputedStyle(canvas);
-  const css = name => style.getPropertyValue(name).trim();
+  const css = tokenLeser(canvas);
   ctx.clearRect(0, 0, w, h);
   return { ctx, w, h, css };
 }
@@ -81,7 +81,7 @@ function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null, von
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink3');
   ctx.lineWidth = 1;
-  ctx.font = `${axisFont(s)}px system-ui`;
+  ctx.font = canvasSchrift(axisFont(s));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.beginPath();
@@ -137,7 +137,7 @@ function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink2');
   ctx.lineWidth = 1;
-  ctx.font = `${axisFont(s)}px system-ui`;
+  ctx.font = canvasSchrift(axisFont(s));
   ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
   ctx.beginPath();
@@ -180,7 +180,7 @@ function zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s, xLabel = w - 
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = css('--ink2');
-  ctx.font = `${axisFont(s)}px system-ui`;
+  ctx.font = canvasSchrift(axisFont(s));
   ctx.textAlign = 'right';
   ctx.textBaseline = 'bottom';
   beschrifte(ctx, css, 'FTP', xLabel, y - 1);
@@ -246,7 +246,7 @@ function zeichneKlammern(ctx, css, w, gruppen, total, s = 1) {
 // Wattzahl in breite Blöcke schreiben (nur Vollbild): Block muss Platz bieten
 function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) {
   ctx.fillStyle = css('--ink');
-  ctx.font = `600 ${labelFont(s)}px system-ui`;
+  ctx.font = canvasSchrift(labelFont(s), 600);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   let t = 0;
@@ -263,7 +263,7 @@ function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) 
       ctx.save();
       ctx.fillStyle = css('--power-line');
       ctx.globalAlpha = 0.7;
-      ctx.font = `${axisFont(1)}px system-ui`;
+      ctx.font = canvasSchrift(axisFont(1));
       if (bw >= ctx.measureText(dauer).width + 10 && h - fuss - y >= 44) {
         ctx.fillText(dauer, mitte, y + 6 + labelFont(2));
       }
@@ -502,7 +502,7 @@ export class LiveChart {
     } else {
       // Reduziert: nur die Skalen-Obergrenze als Orientierung
       ctx.fillStyle = css('--ink3');
-      ctx.font = `${axisFont(1)}px system-ui`;
+      ctx.font = canvasSchrift(axisFont(1));
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       beschrifte(ctx, css, `${maxW} W`, 4, 2);
@@ -607,7 +607,7 @@ export function drawSessionChart(canvas, samples, count, { ftp = 0, programmEnde
     if (mitHf) {
       // bpm-Beschriftung rechts, ohne eigene Rasterlinien (die gehören der Wattachse)
       ctx.fillStyle = css('--hr-line');
-      ctx.font = `${axisFont(s)}px system-ui`;
+      ctx.font = canvasSchrift(axisFont(s));
       ctx.textAlign = 'right';
       ctx.textBaseline = 'bottom';
       const schritt = [10, 20, 40].find(r => (unten - kopf) * r / (hfHi - hfLo) >= 30) ?? 40;

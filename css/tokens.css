@@ -1,0 +1,95 @@
+/* ergoMergo — Design-Tokens: die EINZIGE Stelle für Farben, Schriftgrößen,
+   Radien, Abstände, Schatten und Tippflächen. app.css und JS (pip.js,
+   led-zeile.js, chart.js) lesen nur von hier; tools/release.mjs --check
+   meldet feste Werte außerhalb dieser Datei. Übersicht mit allen Bausteinen:
+   docs/stil.html. Regeln und Begründungen: docs/stil.md. */
+
+:root {
+  /* --- Farben: Flächen und Schrift (dunkel, Instrumenten-Optik) --- */
+  --bg: #0b1113;
+  --surface: #131c1f;         /* Karten, Kacheln, Dialoge */
+  --surface2: #1b2629;        /* Zeilen und Eingaben auf Karten */
+  --line: #223034;            /* Rahmen, Trennlinien */
+  --ink: #ecf3f5;             /* Haupttext, Werte */
+  --ink2: #9fb0b6;            /* Nebentext */
+  --ink3: #74868d;            /* Beschriftung, Hinweise — ≥ 4,5:1 auf --bg/--surface */
+
+  /* --- Farben: Bedeutung (nie nur Farbe allein — immer mit Text/Symbol) --- */
+  --accent: #45c7d4;          /* Aktion, Auswahl, aktuelle Position */
+  --ok: #5fc98d;              /* verbunden, im Ziel, WEITER */
+  --danger: #ef6b5e;          /* STOPP, Fehler, Löschen */
+  --warn: #e3c63f;            /* Demo, verbindet … */
+  --auf-accent: var(--bg);    /* Schrift auf Akzent-/OK-Flächen */
+  --auf-danger: #fff;         /* Schrift auf STOPP */
+  --danger-aktiv: #c94f44;    /* STOPP gedrückt */
+  --ok-aktiv: #4aa974;        /* WEITER gedrückt */
+  --warn-flaeche: rgba(227, 198, 63, .16);
+
+  /* Powerzonen (Zwift-Konvention, 6 Zonen) */
+  --z1: #8a9aa0; --z2: #4a9bd8; --z3: #5fc98d;
+  --z4: #e3c63f; --z5: #e8913f; --z6: #ef6b5e;
+  /* Tastenfarben des Zwift-Lenkers (Symbole + Lenkeransicht) */
+  --taste-gruen: #4cc76e; --taste-magenta: #e0489a; --taste-blau: #4a9bd8; --taste-orange: #f0892f;
+  /* Graphen */
+  --power-line: #ecf3f5;
+  --target-fill: rgba(69, 199, 212, .18);
+  --hr-line: #ff6f8a;         /* Herzfrequenz: Kurve, Werte, Symbol — überall gleich */
+  /* LED-Statuszeile */
+  --status-mulde: #050809;    /* eingelassene Tafel */
+  --led-aus: rgba(236, 243, 245, .06);   /* unbeleuchtete Punkte */
+
+  /* --- Tiefe --- */
+  --abdunkeln: rgba(0, 0, 0, .55);          /* Hintergrund hinter modalen Dialogen */
+  --abdunkeln-leicht: rgba(0, 0, 0, .3);
+  --schatten-panel: 0 8px 28px rgba(0, 0, 0, .5);
+  --schatten-toast: 0 4px 16px rgba(0, 0, 0, .4);
+  --schatten-mulde: inset 0 1px 4px rgba(0, 0, 0, .6);
+
+  /* --- Schrift --- */
+  --schrift: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Stufen (px bei 16 px Basis). Große Fahrwerte skalieren fließend mit
+     clamp() in app.css — das sind Anzeigen, keine Textstufen. */
+  --text-2xs: .625rem;        /* 10 — Achsen, Mini-Marken */
+  --text-xs: .75rem;          /* 12 — Versal-Beschriftungen, Hinweise, Erklärungen */
+  --text-sm: .8125rem;        /* 13 — Chips, Metazeilen */
+  --text-md: .875rem;         /* 14 — Zeilentext, Listen */
+  --text-base: 1rem;          /* 16 — Fließtext, Knöpfe */
+  --text-lg: 1.125rem;        /* 18 — Titel in Karten und Dialogen */
+  --text-xl: 1.25rem;         /* 20 — Markenname */
+  --text-2xl: 1.5rem;         /* 24 — Kacheltitel, ±-Tasten */
+  --sperrung-versal: .08em;   /* VERSAL-Beschriftungen */
+  --sperrung-leicht: .04em;   /* Badges, STOPP */
+
+  /* --- Radien: 4 Stufen + Pille/Kreis --- */
+  --radius-xs: 4px;           /* Balken, Mini-Elemente */
+  --radius-s: 8px;            /* Eingaben, kleine Knöpfe, Tastensymbole */
+  --radius-m: 12px;           /* Zeilen, Listeneinträge, Toasts, Karten-Inhalte */
+  --radius-l: 16px;           /* Kacheln, Dialoge, große Bedientasten */
+  --radius-pill: 999px;
+
+  /* --- Abstände: 4-px-Raster (Name = Vielfache von 4 px; 05 = 2 px) --- */
+  --abstand-05: .125rem;      /*  2 */
+  --abstand-1: .25rem;        /*  4 */
+  --abstand-15: .375rem;      /*  6 */
+  --abstand-2: .5rem;         /*  8 */
+  --abstand-25: .625rem;      /* 10 */
+  --abstand-3: .75rem;        /* 12 */
+  --abstand-4: 1rem;          /* 16 */
+  --abstand-5: 1.25rem;       /* 20 */
+  --abstand-6: 1.5rem;        /* 24 */
+  --abstand-8: 2rem;          /* 32 */
+  --abstand-12: 3rem;         /* 48 */
+
+  /* --- Tippflächen und Symbole --- */
+  --tippflaeche: 44px;        /* Minimum für alles Tippbare */
+  --tippflaeche-zeile: 48px;  /* Zeilen in Panels und Dialogen */
+  --bedien-hoehe: 64px;       /* −10/+10/STOPP/Beenden */
+  --icon-xs: 12px;
+  --icon-s: 14px;
+  --icon-m: 18px;
+  --icon-l: 20px;
+
+  /* --- Bewegung (bei „Bewegung reduzieren" global aus) --- */
+  --dauer-kurz: .15s;
+  --dauer: .2s;
+}

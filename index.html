@@ -28,6 +28,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -129,7 +130,7 @@
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
       </div>
       <!-- Statuszeile: eigene Zeile, mittig; Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
-      <span id="m-status" class="status" aria-live="polite" role="status"></span>
+      <span id="m-status" class="led-tafel" aria-live="polite" role="status"></span>
     </div>
     <!-- Chip-Zeile nur für die Block-Aktionen (Programm); beim freien Fahren
          und nach Programmende fällt sie ganz weg -->
@@ -242,7 +243,7 @@
     </div>
     <details class="diagnose">
       <summary>Erweitert</summary>
-      <div class="dlg-fields" style="margin-top:.5rem">
+      <div class="dlg-fields">
         <label class="schalter-zeile">
           <span class="schalter-text">Signaltöne<small>Countdown und Ton beim Blockwechsel</small></span>
           <input type="checkbox" class="schalter" id="set-ton">
@@ -257,7 +258,7 @@
     <details class="diagnose">
       <summary>Sicherung</summary>
       <p class="hint">Komplette Datenbank (Fahrten, Programme, Einstellungen) als JSON-Datei.</p>
-      <div class="dlg-actions" style="margin-top:.5rem">
+      <div class="dlg-actions">
         <button type="button" id="btn-backup">Export</button>
         <button type="button" id="btn-restore" class="ghost">Import</button>
         <input type="file" id="backup-file" accept=".json" hidden>
@@ -277,7 +278,7 @@
         <summary>Als Liste</summary>
         <ul id="ctrl-map-anzeige" class="belegung"></ul>
       </details>
-      <div class="dlg-actions" style="margin-top:.5rem">
+      <div class="dlg-actions">
         <button type="button" id="btn-map-lernen">Tasten zuordnen</button>
       </div>
       <div class="einstell-gruppe">
@@ -296,7 +297,7 @@
     <details class="diagnose">
       <summary>Diagnose-Log</summary>
       <pre id="log-view">–</pre>
-      <div class="dlg-actions" style="margin-top:.5rem">
+      <div class="dlg-actions">
         <button type="button" id="btn-log-export">Export</button>
         <button type="button" id="btn-log-clear" class="ghost">Leeren</button>
       </div>
@@ -311,7 +312,7 @@
 <!-- ============ TASTEN-LERN-MODUS ============ -->
 <dialog id="dlg-mapping">
   <h2>Tasten zuordnen</h2>
-  <p id="map-schritt" style="font-size:1.1rem;margin:.8rem 0"></p>
+  <p id="map-schritt"></p>
   <p class="hint" id="map-status">Lenker wird verbunden …</p>
   <div id="map-karte"></div>
   <div class="dlg-actions">
@@ -324,7 +325,7 @@
 <dialog id="dlg-graph" aria-label="Vergrößerter Graph">
   <h2 id="graph-title" class="graph-title"></h2>
   <canvas id="graph-big"></canvas>
-  <p class="hint" style="text-align:center;margin:.5rem 0 0">Tippen zum Schließen</p>
+  <p class="hint graph-hinweis">Tippen zum Schließen</p>
 </dialog>
 
 <script type="module" src="js/main.js"></script>

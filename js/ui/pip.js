@@ -5,19 +5,13 @@
 // requestAnimationFrame im Hintergrund gedrosselt wird.
 
 import { zeichneIcon } from './icons.js';
+import { tokenLeser, canvasSchrift } from './tokens.js';
 
 // Farb-Tokens zur Zeichenzeit aus dem CSS lesen — Palette-Änderungen
 // ziehen damit automatisch ins PiP-Fenster mit
 function tokens() {
-  const css = getComputedStyle(document.documentElement);
-  const t = name => css.getPropertyValue(name).trim();
-  return {
-    bg: t('--bg') || '#0b1113',
-    ink: t('--ink') || '#ecf3f5',
-    ink2: t('--ink2') || '#9fb0b6',
-    accent: t('--accent') || '#45c7d4',
-    hr: t('--hr-line') || '#ff6f8a',
-  };
+  const t = tokenLeser();
+  return { bg: t('--bg'), ink: t('--ink'), ink2: t('--ink2'), accent: t('--accent'), hr: t('--hr-line') };
 }
 
 export class PiP {
@@ -136,24 +130,24 @@ function zeichnePipBild(canvas, d) {
   c.textAlign = 'center';
   c.textBaseline = 'alphabetic';
   c.fillStyle = d.farbe || farbe.ink;
-  c.font = '700 108px system-ui';
+  c.font = canvasSchrift(108, 700);
   // Slot fix auf 3 Ziffern bemessen — die Anzeige springt sonst bei 99→100
   const wattSlot = c.measureText('000').width;
   c.fillText(String(d.watt), w / 2, 128);
-  c.font = '600 30px system-ui';
+  c.font = canvasSchrift(30, 600);
   c.fillStyle = farbe.ink2;
   c.textAlign = 'left';
   c.fillText('W', w / 2 + wattSlot / 2 + 12, 128);
   c.textAlign = 'center';
 
   // Ziel darunter — die eine Zahl, gegen die ERG gerade regelt
-  c.font = '500 34px system-ui';
+  c.font = canvasSchrift(34, 500);
   c.fillStyle = farbe.accent;
   c.fillText(`Ziel ${d.ziel} W`, w / 2, 176);
 
   // Untere Zeile: Rest · rpm · HF — Icons aus derselben Quelle wie der
   // Fahrbildschirm (icons.js), als EINE zentrierte Gruppe mit festen Lücken
-  const LUECKE = 44, ICON = 26, ICON_ABSTAND = 8, WERT_F = '600 42px system-ui';
+  const LUECKE = 44, ICON = 26, ICON_ABSTAND = 8, WERT_F = canvasSchrift(42, 600);
   const segmente = [];
   if (d.rest) segmente.push({ wert: d.rest, slot: '00:00', icon: 'timer', farbe: farbe.ink });
   segmente.push({ wert: String(d.rpm || '–'), slot: '000', icon: 'rotate', farbe: farbe.ink });

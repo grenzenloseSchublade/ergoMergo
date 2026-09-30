@@ -7,6 +7,8 @@
 // links still, genauso lange. Der echte Text steht für Screenreader im DOM
 // (sr-Span), das Canvas ist aria-hidden.
 
+import { tokenLeser, canvasSchrift } from './tokens.js';
+
 const ZEILEN = 11;              // Punktzeilen (Schrift ≈ 8 hoch + Unterlänge)
 const TEMPO = 24;               // Punkte pro Sekunde
 const BILDRATE_MS = 1000 / 30;  // 30 Bilder/s reichen für die Laufschrift
@@ -17,7 +19,7 @@ const wenigBewegung = () => matchMedia('(prefers-reduced-motion: reduce)').match
 function raster(text) {
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d');
-  const font = `600 ${ZEILEN}px system-ui, sans-serif`;
+  const font = canvasSchrift(ZEILEN, 600);
   // Ein Punkt Abstand zwischen den Zeichen — sonst verschmelzen „ch", „W" …
   const stil = x => { x.font = font; x.letterSpacing = '1px'; };
   stil(ctx);
@@ -26,7 +28,7 @@ function raster(text) {
   c.height = ZEILEN;
   stil(ctx);                                // Größenänderung setzt den Kontext zurück
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = 'white';                  // nur Maske — gezeichnet wird in Token-Farbe
   ctx.fillText(text, 0, ZEILEN - 3);        // 3 Zeilen Platz für Unterlängen
   const px = ctx.getImageData(0, 0, breite, ZEILEN).data;
   const r = [];
@@ -109,14 +111,14 @@ export class LedZeile {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const css = getComputedStyle(el);
+    const css = tokenLeser(el);
     const p = h / (ZEILEN + 1);                  // Punktabstand aus der Höhe
     const spalten = Math.floor(w / p);
     const x0 = (w - spalten * p) / 2 + p / 2, y0 = p;
     const rAus = p * 0.3, rAn = p * 0.4;
 
     // Unbeleuchtete Punkte der Tafel
-    ctx.fillStyle = css.getPropertyValue('--led-aus').trim() || 'rgba(255,255,255,.05)';
+    ctx.fillStyle = css('--led-aus');
     ctx.beginPath();
     for (let y = 0; y < ZEILEN; y++)
       for (let s = 0; s < spalten; s++) { ctx.moveTo(x0 + s * p + rAus, y0 + y * p); ctx.arc(x0 + s * p, y0 + y * p, rAus, 0, 7); }
@@ -138,7 +140,7 @@ export class LedZeile {
       this.#stillTimer = setTimeout(() => { this.#stillTimer = null; this.#beende(); this.#zeichne(); },
         zyklus * this.durchlaeufe / TEMPO * 1000);
     }
-    const farbe = css.getPropertyValue(this.art === 'err' ? '--danger' : this.art === 'ok' ? '--ok' : '--ink2').trim();
+    const farbe = css(this.art === 'err' ? '--danger' : this.art === 'ok' ? '--ok' : '--ink2');
     const zeichneText = dx => {
       ctx.beginPath();
       for (let y = 0; y < ZEILEN; y++) {

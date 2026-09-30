@@ -19,6 +19,7 @@ import { toastErr } from './toast.js';   // nur fürs Fahrtende — danach ist d
 
 import { geraeteHinweis } from './geraete-leiste.js';
 import { LedZeile } from './led-zeile.js';
+import { tokenLeser } from './tokens.js';
 
 const STOPP_SPERRE_MS = 3000;     // Panik-Schutz nach Not-Stopp
 const HALTEN_PAUSE_MS = 500;      // ±-Knopf halten: erste Wiederholung
@@ -397,11 +398,14 @@ export class RideScreen {
       const d = dlg.getBoundingClientRect();
       const rand = 8;
       const links = Math.max(rand, Math.min(innerWidth - d.width - rand, c.right - d.width));
-      // „⋯" sitzt immer oben: Panel darunter, zu Hohes scrollt in sich
+      // „⋯" sitzt immer oben: Panel darunter. Es endet über der Bedienleiste
+      // (hochkant liegt sie darunter, quer daneben) — zu Hohes scrollt in sich
       const oben = Math.round(c.bottom + rand / 2);
+      const taste = this.$('#btn-minus').getBoundingClientRect();
+      const unten = taste.left < links + d.width && taste.top > oben ? taste.top : innerHeight;
       dlg.style.left = `${Math.round(links)}px`;
       dlg.style.top = `${oben}px`;
-      dlg.style.maxHeight = `${innerHeight - oben - rand}px`;
+      dlg.style.maxHeight = `${Math.floor(unten - oben - rand / 2)}px`;
     };
     const bedienung = this.$('.controls');
     // Den zum Tipp gehörenden click schlucken; kommt keiner (Wischen,
@@ -459,7 +463,7 @@ export class RideScreen {
       rest: this.#zeitAnzeige().wert,
       rpm: Math.round(s.live.rpm || 0),
       hr: s.live.hr || 0,
-      farbe: getComputedStyle(this.root).getPropertyValue(farbVar).trim() || '#e8f1f2',
+      farbe: tokenLeser(this.root)(farbVar),
     };
   }
 
