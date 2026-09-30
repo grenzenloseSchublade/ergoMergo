@@ -1,7 +1,8 @@
 // Fahrbildschirm: Livewerte, ±-Bedienung mit Tastenwiederholung, Not-Stopp,
-// Geräte-Chips, Fokus-Modi, Statuszeile. Die DOM-Elemente überleben die
-// Fahrt (ein Fahrbildschirm für alle Fahrten) — deshalb setzt der Konstruktor
-// alles Sichtbare zurück und Handler werden ZUGEWIESEN statt angehängt.
+// Statusleiste (LED-Zeile + Geräte-Symbole), Optionen-Panel, Fokus-Modi.
+// Die DOM-Elemente überleben die Fahrt (ein Fahrbildschirm für alle
+// Fahrten) — deshalb setzt der Konstruktor alles Sichtbare zurück und
+// Handler werden ZUGEWIESEN statt angehängt.
 
 import { LiveChart, WorkoutChart, zoneColor, zoneVar, beobachte } from './chart.js';
 import { fmtTime, fmtKm } from '../format.js';
@@ -13,6 +14,7 @@ import { setSetting } from '../storage.js';
 import { beendeMessung } from '../energie.js';
 import { effektiveFtp, kadenzBereich } from '../metrics.js';
 import { logError } from '../logger.js';
+import { oeffneModal } from '../navigation.js';
 import { toastErr } from './toast.js';   // nur fürs Fahrtende — danach ist die LED-Zeile weg
 
 import { geraeteHinweis } from './geraete-leiste.js';
@@ -27,9 +29,9 @@ const HALTEN_TAKT_MS = 300;       //   … danach im Takt
 // Problem (rot) ansteht: Probleme gehen immer vor.
 const STATUS_PRIO = ['trainer', 'stopp', 'geraet', 'ausfahren'];
 
-// Geräte-Chip: Zustand als data-Attribut, Punkt und Rahmen per CSS (gleiche
-// Regeln wie die Geräte-Leiste auf dem Home)
-function setzeChip(btn, zustand, beschreibung) {
+// Geräte-Symbol der Statusleiste: Zustand als data-Attribut, Punkt und Farbe
+// per CSS (gleiche Regeln wie die Geräte-Leiste auf dem Home)
+function setzeGeraet(btn, zustand, beschreibung) {
   btn.dataset.zustand = zustand;
   btn.setAttribute('aria-label', beschreibung);
 }
@@ -54,7 +56,7 @@ export class RideScreen {
     this.#zuruecksetzen();
     if (run) this.#bindProgramm();
     this.#bindGeraete();
-    this.#bindSchalter();
+    this.#bindOptionen();
     this.#bindPip();
     this.#bindBedienung();
     this.#bindFokus();
@@ -87,7 +89,7 @@ export class RideScreen {
   #watchdog = null;
   #keys = null;
   #verbStatus = 'ok';         // 'ok' | 'reconnect' | 'lang' | 'unerreichbar'
-  #koppelFallback = { hr: 0, controller: 0 };   // Zeitfenster: nächster Chip-Tap → Chooser
+  #koppelFallback = { hr: 0, controller: 0 };   // Zeitfenster: nächster Symbol-Tap → Chooser
   #geraetZustand = { hr: null, controller: null };
   #cursorBlinkBis = 0;
   #zustaende = new Map();     // Statuszeile: art → { text, cls }
@@ -211,10 +213,10 @@ export class RideScreen {
 
   // --- Geräte: Herzgurt und Lenker ------------------------------------------
 
-  // Zustand eines Geräte-Chips aus dem Manager (dieselbe Quelle wie die
+  // Zustand eines Geräte-Symbols aus dem Manager (dieselbe Quelle wie die
   // Home-Leiste): verbunden | teilweise | verbindet | gemerkt | fehlt.
-  // Verlust während der Fahrt meldet die Statuszeile — auch im Werte-Fokus,
-  // wo die Chips ausgeblendet sind.
+  // Die Symbole stehen neben der LED-Zeile und bleiben in jedem Fokus-Modus
+  // sichtbar; einen Verlust meldet zusätzlich die LED-Zeile im Klartext.
   async #aktualisiereGeraet(rolle) {
     const btn = this.$(rolle === 'hr' ? '#btn-hr' : '#btn-click');
     let zustand;
@@ -227,12 +229,12 @@ export class RideScreen {
     if (this.#tot) return;
     const vorher = this.#geraetZustand[rolle];
     this.#geraetZustand[rolle] = zustand;
-    setzeChip(btn, zustand, `${ROLLEN_LABEL[rolle]}: ${ZUSTAND_TEXT[zustand]}`);
+    setzeGeraet(btn, zustand, `${ROLLEN_LABEL[rolle]}: ${ZUSTAND_TEXT[zustand]}`);
     const verloren = ['verbunden', 'teilweise'].includes(vorher) && ['gemerkt', 'fehlt'].includes(zustand);
     // Neu verbunden (nicht schon beim Fahrtstart): kurz bestätigen
     if (vorher && !['verbunden', 'teilweise'].includes(vorher) && zustand === 'verbunden')
       this.#info(`${ROLLEN_LABEL[rolle]} verbunden`);
-    if (verloren) this.#setzeZustand('geraet', `${ROLLEN_LABEL[rolle]} getrennt — Chip tippen zum Neuverbinden`);
+    if (verloren) this.#setzeZustand('geraet', `${ROLLEN_LABEL[rolle]} getrennt — Symbol tippen zum Neuverbinden`);
     else if (['verbunden', 'teilweise'].includes(zustand) && this.#zustaende.get('geraet')?.text.startsWith(ROLLEN_LABEL[rolle]))
       this.#setzeZustand('geraet', null);
   }
@@ -276,7 +278,7 @@ export class RideScreen {
     // Manager-Änderungen (Trennung, Neu-Verbindung, laufender Aufbau) spiegeln
     this.#abo(geraeteManager, 'change', () => { this.#uebernehmeHR(); this.#uebernehmeCtrl(); });
 
-    // Chip-Tap: verbunden → nur melden (kein Chooser über der Fahrt);
+    // Symbol-Tap: verbunden → nur melden (kein Chooser über der Fahrt);
     // sonst verbinden (gemerkt) oder koppeln (Chooser) über den Manager
     for (const [rolle, id] of [['hr', '#btn-hr'], ['controller', '#btn-click']]) {
       const btn = this.$(id);
@@ -301,7 +303,7 @@ export class RideScreen {
             // Zweiter Tap innerhalb von 30 s öffnet die Geräteauswahl —
             // so ist ein in der Fahrt verlorenes Pad wieder einfangbar
             this.#koppelFallback[rolle] = Date.now() + 30000;
-            this.#info(`${label} nicht erreichbar — Gerät wecken oder Chip erneut tippen für die Geräteauswahl`, 'err');
+            this.#info(`${label} nicht erreichbar — Gerät wecken oder Symbol erneut tippen für die Geräteauswahl`, 'err');
           }
         } catch (err) {
           this.#info(`${label}: ${err.message}`, 'err');
@@ -321,12 +323,12 @@ export class RideScreen {
 
   // --- Trainer ---------------------------------------------------------------
 
-  // Chip und Statuszeile aus dem Verbindungszustand — EINE Stelle für alle
+  // Symbol und Statuszeile aus dem Verbindungszustand — EINE Stelle für alle
   // Trainer-Texte (Events und Watchdog überschrieben sich sonst gegenseitig)
   #zeigeTrainer() {
     const ok = this.session.ftms.connected;
     const zustand = ok ? 'verbunden' : this.#verbStatus === 'unerreichbar' ? 'fehler' : 'verbindet';
-    setzeChip(this.$('#btn-trainer'), zustand, `Trainer: ${ZUSTAND_TEXT[zustand]}`);
+    setzeGeraet(this.$('#btn-trainer'), zustand, `Trainer: ${ZUSTAND_TEXT[zustand]}`);
     this.#setzeZustand('trainer', ok ? null
       : this.#verbStatus === 'unerreichbar' ? 'Trainer nicht erreichbar — Fahrt beenden und neu starten'
       : this.#verbStatus === 'lang' ? 'Trainer nicht erreichbar — eingeschaltet? Weiter wird versucht …'
@@ -346,7 +348,7 @@ export class RideScreen {
     // beim übernommenen Pool-Client längst gefeuert (Livetest: „verbinde …"
     // blieb die ganze Fahrt stehen)
     this.#zeigeTrainer();
-    // Tap auf den Trainer-Chip löst mitten in der Fahrt nichts aus, er sagt
+    // Tap auf das Trainer-Symbol löst mitten in der Fahrt nichts aus, er sagt
     // nur, was los ist
     this.$('#btn-trainer').onclick = () => {
       if (ftms.connected) this.#info(`${ftms.deviceName ?? 'Trainer'} verbunden`);
@@ -360,22 +362,47 @@ export class RideScreen {
     }, 5000);
   }
 
-  // --- Schalter: Signaltöne, Sprachansagen -----------------------------------
+  // --- Optionen: „⋯"-Chip öffnet das Panel mit den Schiebeschaltern ----------
 
-  #bindSchalter() {
+  // Die drei Schalter werden selten während der Fahrt umgelegt — deshalb
+  // hinter EINEM Chip statt drei dauerhaft sichtbaren. Das Panel ist ein
+  // modaler Dialog (History-Eintrag: Zurück schließt ihn) und sitzt direkt
+  // über dem Chip, damit der Daumen kurze Wege hat. Tap daneben schließt.
+  #bindOptionen() {
+    const dlg = this.$('#dlg-fahrt-optionen');
+    const mehr = this.$('#btn-mehr');
+    // Lage am Chip ausrichten: rechte Kante bündig, Unterkante knapp über dem
+    // Chip; passt es oben nicht (quer, niedrig), dann darunter/eingepasst
+    const platziere = () => {
+      const c = mehr.getBoundingClientRect();
+      // Chip weg (gedreht in den Graph-Fokus quer): Panel hätte keinen Anker
+      if (!c.width) { dlg.close(); return; }
+      const d = dlg.getBoundingClientRect();
+      const rand = 8;
+      const links = Math.max(rand, Math.min(innerWidth - d.width - rand, c.right - d.width));
+      let oben = c.top - d.height - rand;
+      if (oben < rand) oben = Math.min(innerHeight - d.height - rand, c.bottom + rand);
+      dlg.style.left = `${Math.round(links)}px`;
+      dlg.style.top = `${Math.round(Math.max(rand, oben))}px`;
+    };
+    mehr.onclick = () => {
+      oeffneModal(dlg, 'fahrt-optionen');
+      platziere();
+      addEventListener('resize', platziere);
+      dlg.addEventListener('close', () => removeEventListener('resize', platziere), { once: true });
+    };
+    // Tap auf den Hintergrund: das Ziel ist der Dialog selbst (der Inhalt
+    // liegt vollständig im inneren Container)
+    dlg.onclick = e => { if (e.target === dlg) dlg.close(); };
+
     // Zustand wandert in die Einstellungen zurück
     const schalter = (id, key, get, set) => {
-      const btn = this.$(id);
-      const zeige = () => { btn.classList.toggle('on', get()); btn.setAttribute('aria-pressed', String(get())); };
-      zeige();
-      btn.onclick = () => {
-        set(!get());
-        zeige();
-        setSetting(key, get());
-      };
+      const box = this.$(id);
+      box.checked = get();
+      box.onchange = () => { set(box.checked); setSetting(key, box.checked); };
     };
-    schalter('#btn-ton', 'tonAn', () => this.tonAn, v => { this.tonAn = v; });
-    schalter('#btn-sprich', 'sprachansagen', () => this.ansagenAn, v => {
+    schalter('#opt-ton', 'tonAn', () => this.tonAn, v => { this.tonAn = v; });
+    schalter('#opt-sprache', 'sprachansagen', () => this.ansagenAn, v => {
       this.ansagenAn = v;
       if (!v) { clearTimeout(this.#ansageTimer); stoppeAnsagen(); }   // aus heißt sofort still
     });
@@ -400,20 +427,25 @@ export class RideScreen {
     // Nur anbieten, wenn der Browser es kann. arm() hält den Stream scharf
     // und registriert den Auto-PiP-Handler — Chrome kann das Fenster dann
     // selbst öffnen, wenn die App verlassen wird
-    const pipBtn = this.$('#btn-pip');
-    pipBtn.hidden = !PiP.verfuegbar();
-    pipBtn.classList.remove('on');
-    if (pipBtn.hidden) return;
+    // Schalter im Optionen-Panel; die Zeile fehlt, wo es kein PiP gibt
+    const box = this.$('#opt-pip');
+    const zeile = this.$('#opt-pip-zeile');
+    zeile.hidden = !PiP.verfuegbar();
+    box.checked = false;
+    if (zeile.hidden) return;
     this.#pip = new PiP();
-    this.#pip.onEnde = () => pipBtn.classList.remove('on');
-    this.#pip.onAuto = () => pipBtn.classList.add('on');
+    this.#pip.onEnde = () => { box.checked = false; };
+    this.#pip.onAuto = () => { box.checked = true; };
     const daten = () => this.#pipDaten();
     this.#pip.arm(daten);
-    pipBtn.onclick = async () => {
+    // change läuft in der Nutzergeste — requestPictureInPicture braucht sie
+    box.onchange = async () => {
       try {
-        const an = await this.#pip.toggle(daten);
-        pipBtn.classList.toggle('on', an);
-      } catch (err) { this.#info('Bild-in-Bild nicht möglich: ' + err.message, 'err'); }
+        box.checked = await this.#pip.toggle(daten);
+      } catch (err) {
+        box.checked = this.#pip.aktiv;
+        this.#info('Bild-in-Bild nicht möglich: ' + err.message, 'err');
+      }
     };
   }
 

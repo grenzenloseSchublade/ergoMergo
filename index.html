@@ -116,32 +116,27 @@
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
       </div>
-      <!-- Statuszeile: eigene Zeile, Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
-      <span id="m-status" class="status" aria-live="polite" role="status"></span>
+      <!-- Statusleiste: LED-Tafel (Mulde bleibt immer stehen, Inhalt setzt der
+           RideScreen) eingerahmt von den Geräte-Symbolen — Trainer links,
+           Herzgurt und Lenker rechts. Zustand am Punkt (gleiche Regeln wie die
+           Geräte-Leiste auf dem Home), Tap wie früher der Geräte-Chip. Liegt in
+           den Werten, damit der Gerätezustand in jedem Fokus-Modus sichtbar bleibt. -->
+      <div class="statusleiste">
+        <button type="button" class="status-geraet" id="btn-trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
+        <span id="m-status" class="status" aria-live="polite" role="status"></span>
+        <span class="status-geraete">
+          <button type="button" class="status-geraet" id="btn-hr" aria-label="Herzgurt verbinden" title="Herzgurt"><span data-icon="herzpuls"></span><i class="dot"></i></button>
+          <button type="button" class="status-geraet" id="btn-click" aria-label="Lenker verbinden" title="Lenker"><span data-icon="gamepad"></span><i class="dot"></i></button>
+        </span>
+      </div>
     </div>
-    <!-- Drei Gruppen, die jeweils als Ganzes umbrechen: Fahrt | Geräte | Schalter -->
+    <!-- Eine ruhige Chip-Zeile: Block-Aktionen (nur im Programm) und „⋯" für
+         die seltenen Schalter (Signaltöne, Sprachansagen, Bild-in-Bild) -->
     <div class="row-actions">
-      <span class="chip-gruppe">
       <button class="chip chip-fahrt" id="btn-prev" hidden aria-label="Block zurück">⏮ Block</button>
       <button class="chip chip-fahrt" id="btn-skip" hidden aria-label="Block überspringen">Block ⏭</button>
       <button class="chip chip-fahrt" id="btn-ext" hidden aria-label="Block um 30 Sekunden verlängern">⏱ +30 s</button>
-      </span>
-      <!-- Geräte: gleiche Icons wie die Geräte-Leiste auf dem Home, Zustand am Punkt -->
-      <span class="chip-gruppe">
-      <button class="chip chip-geraet" id="btn-trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
-      <button class="chip chip-geraet" id="btn-hr" aria-label="Herzgurt verbinden" title="Herzgurt"><span data-icon="herzpuls"></span><i class="dot"></i></button>
-      <button class="chip chip-geraet" id="btn-click" aria-label="Lenker verbinden" title="Lenker"><span data-icon="gamepad"></span><i class="dot"></i></button>
-      </span>
-      <!-- Icons: Lucide (lucide.dev, MIT) — inline, kein CDN -->
-      <span class="chip-gruppe">
-      <button class="chip chip-icon" id="btn-ton" aria-label="Signaltöne an/aus" title="Signaltöne">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-      </button>
-      <button class="chip chip-icon" id="btn-sprich" data-icon="sprache" aria-label="Sprachansagen an/aus" title="Sprachansagen"></button>
-      <button class="chip chip-icon" id="btn-pip" hidden aria-label="Bild-in-Bild-Fenster" title="Bild-in-Bild (Experiment)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/></svg>
-      </button>
-      </span>
+      <button class="chip chip-mehr" id="btn-mehr" data-icon="mehr" aria-label="Weitere Optionen: Töne, Ansagen, Bild-in-Bild" aria-haspopup="dialog" title="Optionen"></button>
     </div>
     <canvas id="live-chart"></canvas>
     <div class="controls">
@@ -151,6 +146,28 @@
       <button class="ctl ctl-end" id="btn-end">Beenden</button>
     </div>
   </div>
+  <!-- Optionen der Fahrt als kleines Panel über dem „⋯"-Chip (ride.js setzt
+       die Lage). Schiebeschalter wie in den Einstellungen; Tap daneben oder
+       Zurück schließt. -->
+  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Optionen der Fahrt">
+    <div class="fahrt-optionen-inhalt">
+      <label class="schalter-zeile">
+        <i class="opt-icon" data-icon="ton"></i>
+        <span class="schalter-text">Signaltöne<small>Countdown, Blockwechsel</small></span>
+        <input type="checkbox" class="schalter" id="opt-ton">
+      </label>
+      <label class="schalter-zeile">
+        <i class="opt-icon" data-icon="sprache"></i>
+        <span class="schalter-text">Sprachansagen<small>Dauer und Watt je Block</small></span>
+        <input type="checkbox" class="schalter" id="opt-sprache">
+      </label>
+      <label class="schalter-zeile" id="opt-pip-zeile" hidden>
+        <i class="opt-icon" data-icon="pip"></i>
+        <span class="schalter-text">Bild-in-Bild<small>Experiment: Werte über Apps</small></span>
+        <input type="checkbox" class="schalter" id="opt-pip">
+      </label>
+    </div>
+  </dialog>
 </section>
 
 <!-- ============ FAHRTEN (Historie) ============ -->

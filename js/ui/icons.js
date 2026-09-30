@@ -35,6 +35,13 @@ const ICONS = {
   schiebenLinks: ['m12 19-7-7 7-7', 'M19 12H5'],       // Lucide arrow-left: Paddle-Richtung
   schiebenRechts: ['M5 12h14', 'm12 5 7 7-7 7'],      // Lucide arrow-right
   power: ['M12 2v10', 'M18.4 6.6a9 9 0 1 1-12.77.04'],  // Lucide power: Ein/Aus
+  // Optionen der Fahrt: „⋯"-Chip (Lucide ellipsis) und die Zeilen im Panel
+  // (Lucide volume-2, picture-in-picture-2) — vorher Inline-SVG in den Chips
+  mehr: ['M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0', 'M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+         'M19 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0'],
+  ton: ['M11 5 6 9H2v6h4l5 4V5z', 'M15.54 8.46a5 5 0 0 1 0 7.07', 'M19.07 4.93a10 10 0 0 1 0 14.14'],
+  pip: ['M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4',
+        'M14 13h6a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z'],
   // Lucide „dices": Fartlek neu würfeln
   wuerfel: ['M4 10h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z',
             'm17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6',
