@@ -383,9 +383,10 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .metrics {
   display: grid; align-content: center; justify-items: center;
   grid-template-columns: 1fr 1fr;
-  grid-template-areas: "power power" "target time" "sec sec";
+  grid-template-areas: "power power" "target time" "sec sec" "status status";
   padding: .5rem 1rem 0;
 }
+.metrics > .status { grid-area: status; }
 .metric { display: grid; justify-items: center; gap: 0; font-variant-numeric: tabular-nums; }
 .metric .label { font-size: .72rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .1em; }
 .metric .value {
@@ -445,16 +446,23 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   width: 100%; transition: width .9s linear;
 }
 
+/* Nebenwerte als festes Raster statt fließendem Umbruch (der brach je nach
+   Breite 3+2 oder 2+2+1): hochkant 2×2, ab 440 px und quer 4 nebeneinander */
 .row-secondary {
-  grid-area: sec; display: flex; flex-wrap: wrap; justify-content: center;
-  gap: .3rem 1.6rem; margin-top: .4rem;
-  color: var(--ink3); font-size: .9rem; font-variant-numeric: tabular-nums;
+  grid-area: sec; display: grid; grid-template-columns: repeat(2, auto);
+  justify-content: center; justify-items: start;
+  gap: .3rem 1.8rem; margin-top: .4rem;
+  color: var(--ink3); font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+@media (min-width: 440px) { .row-secondary { grid-template-columns: repeat(4, auto); } }
+/* Gesamtzeit klein unter der Blockzeit */
+.gesamt { font-size: .8rem; color: var(--ink3); margin-top: .15rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gesamt b { color: var(--ink2); font-weight: 600; display: inline-block; min-width: 7ch; text-align: right; }   /* bis 1:02:15 ohne Verschieben */
 /* Statuszeile: eingelassene LED-Tafel mit FESTER Höhe — immer sichtbar,
    damit klar ist, wo Meldungen erscheinen; eine Meldung verschiebt nichts.
    Schrift als Punktmatrix (led-zeile.js): rot = Problem, grün = kurze Info. */
-.row-secondary .status {
-  flex-basis: 100%; max-width: 16rem; margin: .2rem auto 0; box-sizing: border-box;
+.metrics .status {
+  width: 100%; max-width: 16rem; margin: .45rem auto 0; box-sizing: border-box;
   height: 1.9rem; padding: .15rem .5rem; position: relative;
   border-radius: 8px; border: 1px solid var(--line);
   background: var(--status-mulde);
@@ -499,8 +507,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
    dürfen wachsen statt den Nachbarn zu überlappen) */
 #m-rpm, #m-hr { min-width: 3ch; }
 #m-kj, #m-km { min-width: 4ch; }
-#m-total-time { min-width: 7ch; }
-#m-total-label { display: inline-block; width: 10.5ch; text-align: left; }
+#m-total-label { display: inline-block; width: 7.5ch; text-align: left; }   /* „gesamt"/„Fahrzeit" */
 .status { color: var(--ink3); }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--danger); }
@@ -584,7 +591,7 @@ button:disabled { cursor: default; }
   .metrics {
     grid-area: metrics;
     grid-template-columns: auto auto auto;
-    grid-template-areas: "power target time" "sec sec sec";
+    grid-template-areas: "power target time" "sec sec sec" "status status status";
     column-gap: clamp(1rem, 5vw, 3rem);
     /* oben ausgerichtet: Beschriftungen auf einer Linie statt treppenförmig
        (der Restbalken unter der Zeit machte die Spalte höher) */
@@ -600,7 +607,7 @@ button:disabled { cursor: default; }
   .ride-grid.fokus-graph .demo-beispiel { display: inline; }
   .metric-power .value { font-size: clamp(2.4rem, 13vmin, 4rem); }
   .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 8vmin, 2.4rem); }
-  .row-secondary { gap: .2rem 1.2rem; font-size: .85rem; margin-top: 0; }
+  .row-secondary { grid-template-columns: repeat(4, auto); gap: .2rem 1.4rem; font-size: .85rem; margin-top: 0; }
   #live-chart { grid-area: chart; height: 100%; min-height: 0; }
   .row-actions {
     grid-area: chips; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;

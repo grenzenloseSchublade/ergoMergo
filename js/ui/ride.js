@@ -105,7 +105,7 @@ export class RideScreen {
   #zuruecksetzen() {
     this.$('#m-time-label').textContent = this.run ? 'Intervall Rest' : 'Zeit';
     this.$('#m-total').hidden = !this.run;
-    this.$('#m-total-label').textContent = 'Rest gesamt';
+    this.$('#m-total-label').textContent = 'gesamt';
     this.$('#m-restbalken').hidden = !this.run;
     this.$('.ride-grid').classList.remove('fokus-werte', 'fokus-graph');
     this.#zeigeStatus();
@@ -649,7 +649,7 @@ export class RideScreen {
     this.$('#m-time').textContent = zeit.wert;
     if (this.run) {
       const vorbei = this.run.vorbei;
-      this.$('#m-total-label').textContent = vorbei ? 'Fahrzeit' : 'Rest gesamt';
+      this.$('#m-total-label').textContent = vorbei ? 'Fahrzeit' : 'gesamt';
       this.$('#m-total-time').textContent = vorbei
         ? fmtTime(s.elapsed) : fmtTime(Math.max(0, this.run.restGesamt ?? this.run.total));
       // Block-Aktionen wirken nach Programmende nicht mehr

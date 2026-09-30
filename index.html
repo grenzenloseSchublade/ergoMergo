@@ -106,16 +106,18 @@
         <span class="label" id="m-time-label">Zeit</span>
         <span class="value value-time" id="m-time">0:00</span>
         <span class="restbalken" id="m-restbalken" hidden><i></i></span>
+        <!-- Gesamtzeit gehört zur Zeit: Rest des Programms bzw. Fahrzeit beim Ausfahren -->
+        <span class="gesamt" id="m-total" hidden><b id="m-total-time">0:00</b> <span id="m-total-label">gesamt</span></span>
       </div>
+      <!-- Vier Nebenwerte in festem Raster: hochkant 2×2, breit/quer 4 nebeneinander -->
       <div class="row-secondary">
         <span><i class="si" data-icon="rotate"></i><b id="m-rpm">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
         <span><i class="si si-hf" data-icon="herzpuls"></i><b id="m-hr">–</b> bpm</span>
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
-        <span id="m-total" hidden><b id="m-total-time">0:00</b> <span id="m-total-label">Rest gesamt</span></span>
-        <!-- Statuszeile: Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
-        <span id="m-status" class="status" aria-live="polite" role="status"></span>
       </div>
+      <!-- Statuszeile: eigene Zeile, Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
+      <span id="m-status" class="status" aria-live="polite" role="status"></span>
     </div>
     <!-- Drei Gruppen, die jeweils als Ganzes umbrechen: Fahrt | Geräte | Schalter -->
     <div class="row-actions">
