@@ -595,7 +595,9 @@ button:disabled { cursor: default; }
    Detailstufe (inline), Werte kompakt. Erneuter Tap zurück. */
 .ride-grid.fokus-werte .metric-power .value { font-size: clamp(6rem, 28vmin, 12rem); }
 .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(2.4rem, 11vmin, 4.5rem); }
-.ride-grid.fokus-werte { grid-template-rows: auto 1fr auto 74px auto; }
+/* Graph-Streifen gibt auf kleinen Schirmen zuerst nach (bis 48 px), damit
+   die Bedienleiste nicht nach unten rutscht */
+.ride-grid.fokus-werte { grid-template-rows: auto 1fr auto minmax(48px, 74px) auto; }
 .ride-grid.fokus-werte .row-actions { display: none; }
 /* Sekundärzeile vollwertig und fahrtauglich groß (inkl. kJ und gesamt) —
    die Icons skalieren per em mit */

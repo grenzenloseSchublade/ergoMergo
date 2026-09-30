@@ -383,9 +383,10 @@ export class RideScreen {
   // --- Panel „Geräte und Töne" hinter „⋯" oben rechts ------------------------
 
   // Geräte im Klartext (Name, Zustand, was ein Tipp bewirkt) und die selten
-  // gebrauchten Schalter. Das Panel ist NICHT modal: STOPP und ± bleiben
-  // daneben sofort bedienbar (ein Tipp daneben schließt es UND wirkt).
-  // History-Eintrag: Zurück schließt es; Esc ebenso.
+  // gebrauchten Schalter. Das Panel ist NICHT modal: STOPP, ± und Beenden
+  // bleiben daneben sofort bedienbar (Tipp schließt es UND wirkt). Jeder
+  // andere Tipp daneben schließt nur — er kippt nicht nebenbei den Fokus
+  // oder löst einen Chip aus. Zurück und Esc schließen ebenso.
   #bindOptionen() {
     const dlg = this.$('#dlg-fahrt-optionen');
     const mehr = this.$('#btn-mehr');
@@ -402,7 +403,20 @@ export class RideScreen {
       dlg.style.top = `${oben}px`;
       dlg.style.maxHeight = `${innerHeight - oben - rand}px`;
     };
-    const draussen = e => { if (!dlg.contains(e.target) && !mehr.contains(e.target)) dlg.close(); };
+    const bedienung = this.$('.controls');
+    // Den zum Tipp gehörenden click schlucken; kommt keiner (Wischen,
+    // abgebrochene Geste), verfällt das nach kurzer Zeit
+    const schlucke = () => {
+      const weg = e => { e.preventDefault(); e.stopPropagation(); ende(); };
+      const ende = () => { clearTimeout(t); document.removeEventListener('click', weg, true); };
+      const t = setTimeout(ende, 600);
+      document.addEventListener('click', weg, true);
+    };
+    const draussen = e => {
+      if (dlg.contains(e.target) || mehr.contains(e.target)) return;
+      dlg.close();
+      if (!bedienung.contains(e.target)) schlucke();
+    };
     const esc = e => { if (e.key === 'Escape') dlg.close(); };
     mehr.onclick = () => {
       if (dlg.open) { dlg.close(); return; }
