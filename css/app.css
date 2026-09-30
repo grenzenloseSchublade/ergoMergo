@@ -505,12 +505,30 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 dialog.fahrt-optionen {
   position: fixed; inset: auto; margin: 0; padding: 0; z-index: 50;
   width: min(20rem, calc(100vw - 16px)); min-width: 0;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .5); overflow-y: auto; overscroll-behavior: contain;
 }
 .fahrt-optionen::backdrop { background: rgba(0, 0, 0, .3); }
-.fahrt-optionen-inhalt { display: grid; gap: .4rem; padding: .5rem; }
+.fahrt-optionen-inhalt { display: grid; gap: .7rem; padding: .6rem; }
+.fo-gruppe { display: grid; gap: .35rem; align-content: start; }
 .fahrt-optionen .schalter-zeile { justify-content: flex-start; min-height: 48px; }
-.fahrt-optionen .schalter-text { flex: 1; }
+.fahrt-optionen .schalter-text, .fo-text { flex: 1; min-width: 0; }
+/* Geräte- und Aktionszeile: sieht aus wie eine Schalter-Zeile, ist aber ein Knopf */
+.fo-zeile {
+  display: flex; align-items: center; gap: .8rem; width: 100%; min-height: 48px; text-align: left;
+  background: var(--surface2); border: 1px solid var(--line); border-radius: 10px;
+  padding: .45rem .7rem; color: var(--ink); font: inherit;
+}
+.fo-text { display: grid; gap: .1rem; font-size: .85rem; }
+.fo-text b { font-weight: 600; }
+.fo-text small { font-size: .75rem; color: var(--ink3); }
+.fo-zeile[data-zustand="fehler"] small { color: var(--danger); }
+/* Rückmeldung auf einen Tipp: feste Höhe (2 Zeilen), damit das Panel nie wächst */
+.fo-hinweis {
+  margin: 0; height: 2.3em; font-size: .75rem; line-height: 1.15; color: var(--ink2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.fo-hinweis.err { color: var(--danger); }
+.fo-hinweis.ok { color: var(--ok); }
 .opt-icon { display: flex; color: var(--ink2); }
 .opt-icon svg { width: 20px; height: 20px; }
 /* Feste Feldbreiten für den größten Wert (Ziffern sind tabellarisch):
@@ -618,6 +636,9 @@ button:disabled { cursor: default; }
   /* Kopfzeile quer flacher: die Höhe gehört dem Graphen */
   .ride-kopf { padding-top: 0; }
   .kopf-geraet, .kopf-mehr { height: 38px; }
+  /* Panel quer zweispaltig (Geräte | Töne), sonst ragt es unten hinaus */
+  dialog.fahrt-optionen { width: min(36rem, calc(100vw - 16px)); }
+  .fahrt-optionen-inhalt { grid-template-columns: 1fr 1fr; }
   .metric-power .value { font-size: clamp(2.4rem, 13vmin, 4rem); }
   .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 8vmin, 2.4rem); }
   .row-secondary { grid-template-columns: repeat(4, auto); gap: .2rem 1.4rem; font-size: .85rem; margin-top: 0; }

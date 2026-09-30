@@ -93,15 +93,15 @@
          die selten gebrauchten Schalter. Bleibt in jedem Fokus-Modus stehen. -->
     <div class="ride-kopf">
       <span class="kopf-geraete">
-        <button type="button" class="kopf-geraet" id="btn-trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
-        <button type="button" class="kopf-geraet" id="btn-hr" aria-label="Herzgurt verbinden" title="Herzgurt"><span data-icon="herzpuls"></span><i class="dot"></i></button>
-        <button type="button" class="kopf-geraet" id="btn-click" aria-label="Lenker verbinden" title="Lenker"><span data-icon="gamepad"></span><i class="dot"></i></button>
+        <button type="button" class="kopf-geraet" id="btn-trainer" data-geraet="trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
+        <button type="button" class="kopf-geraet" id="btn-hr" data-geraet="hr" aria-label="Herzgurt verbinden" title="Herzgurt"><span data-icon="herzpuls"></span><i class="dot"></i></button>
+        <button type="button" class="kopf-geraet" id="btn-click" data-geraet="controller" aria-label="Lenker verbinden" title="Lenker"><span data-icon="gamepad"></span><i class="dot"></i></button>
       </span>
       <div class="demo-leiste" id="m-demo" hidden>
         <span class="demo-badge" title="Demo — wird nicht gespeichert">DEMO</span>
         <button type="button" class="demo-beispiel" id="btn-demo-beispiel">Beispielfahrten ›</button>
       </div>
-      <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Töne, Ansagen, Bild-in-Bild" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
+      <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte und Töne" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
     </div>
     <div class="metrics">
       <div class="metric metric-power">
@@ -149,23 +149,32 @@
   <!-- Optionen der Fahrt als kleines Panel unter „⋯" (ride.js setzt die
        Lage). Nicht modal: STOPP und ± bleiben daneben sofort bedienbar; Tap
        daneben, Esc oder Zurück schließt. Schiebeschalter wie in den Einstellungen. -->
-  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Optionen der Fahrt">
+  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Geräte und Töne">
     <div class="fahrt-optionen-inhalt">
-      <label class="schalter-zeile">
-        <i class="opt-icon" data-icon="ton"></i>
-        <span class="schalter-text">Signaltöne<small>Countdown, Blockwechsel</small></span>
-        <input type="checkbox" class="schalter" id="opt-ton">
-      </label>
-      <label class="schalter-zeile">
-        <i class="opt-icon" data-icon="sprache"></i>
-        <span class="schalter-text">Sprachansagen<small>Dauer und Watt je Block</small></span>
-        <input type="checkbox" class="schalter" id="opt-sprache">
-      </label>
-      <label class="schalter-zeile" id="opt-pip-zeile" hidden>
-        <i class="opt-icon" data-icon="pip"></i>
-        <span class="schalter-text">Bild-in-Bild<small>Experiment: Werte über Apps</small></span>
-        <input type="checkbox" class="schalter" id="opt-pip">
-      </label>
+      <div class="fo-gruppe">
+        <p class="gruppe-titel">Geräte</p>
+        <!-- data-geraet wie die Symbole oben links: RideScreen setzt den Zustand an EINER Stelle für beide -->
+        <button type="button" class="fo-zeile" data-geraet="trainer"><i class="opt-icon" data-icon="bike"></i><span class="fo-text"><b>Trainer</b><small class="fo-zustand"></small></span><i class="dot"></i></button>
+        <button type="button" class="fo-zeile" data-geraet="hr"><i class="opt-icon" data-icon="herzpuls"></i><span class="fo-text"><b>Herzgurt</b><small class="fo-zustand"></small></span><i class="dot"></i></button>
+        <button type="button" class="fo-zeile" data-geraet="controller"><i class="opt-icon" data-icon="gamepad"></i><span class="fo-text"><b>Lenker</b><small class="fo-zustand"></small></span><i class="dot"></i></button>
+        <!-- Rückmeldung eines Tipps hier im Panel — die LED-Zeile kann darunter liegen. Feste Höhe: nichts wächst -->
+        <p class="fo-hinweis" id="fo-hinweis" role="status"></p>
+      </div>
+      <div class="fo-gruppe">
+        <p class="gruppe-titel">Töne &amp; Anzeige</p>
+        <label class="schalter-zeile">
+          <i class="opt-icon" data-icon="ton"></i>
+          <span class="schalter-text">Signaltöne<small>Countdown vor dem Wechsel, Ton beim Wechsel</small></span>
+          <input type="checkbox" class="schalter" id="opt-ton">
+        </label>
+        <label class="schalter-zeile">
+          <i class="opt-icon" data-icon="sprache"></i>
+          <span class="schalter-text">Sprachansagen<small>Dauer und Watt jedes neuen Blocks</small></span>
+          <input type="checkbox" class="schalter" id="opt-sprache">
+        </label>
+        <!-- Bild-in-Bild ist eine Aktion, keine Einstellung: Knopf öffnet bzw. schließt das Fenster sofort -->
+        <button type="button" class="fo-zeile" id="opt-pip" hidden><i class="opt-icon" data-icon="pip"></i><span class="fo-text"><b id="opt-pip-titel">Bild-in-Bild öffnen</b><small>Watt, Ziel und Zeit über anderen Apps</small></span></button>
+      </div>
     </div>
   </dialog>
 </section>

@@ -29,16 +29,11 @@ const HALTEN_TAKT_MS = 300;       //   … danach im Takt
 // Problem (rot) ansteht: Probleme gehen immer vor.
 const STATUS_PRIO = ['trainer', 'stopp', 'geraet', 'ausfahren'];
 
-// Geräte-Symbol der Statusleiste: Zustand als data-Attribut, Punkt und Farbe
-// per CSS (gleiche Regeln wie die Geräte-Leiste auf dem Home)
-function setzeGeraet(btn, zustand, beschreibung) {
-  btn.dataset.zustand = zustand;
-  btn.setAttribute('aria-label', beschreibung);
-}
 
-const ROLLEN_LABEL = { hr: 'Herzgurt', controller: 'Lenker' };
-const ZUSTAND_TEXT = { verbunden: 'verbunden', teilweise: 'teilweise verbunden', verbindet: 'verbindet',
-  gemerkt: 'nicht verbunden', fehlt: 'nicht gekoppelt', fehler: 'nicht erreichbar' };
+const ROLLEN_LABEL = { trainer: 'Trainer', hr: 'Herzgurt', controller: 'Lenker' };
+// Klartext der Geräte-Zeilen im Panel (verbunden: Gerätename statt Text)
+const ZEILEN_TEXT = { verbindet: 'verbindet …', gemerkt: 'nicht verbunden — tippen zum Verbinden',
+  fehlt: 'nicht gekoppelt — tippen zum Koppeln', fehler: 'nicht erreichbar — Fahrt beenden und neu starten' };
 
 export class RideScreen {
   constructor(root, session, settings, onEnd, run = null) {
@@ -90,7 +85,7 @@ export class RideScreen {
   #keys = null;
   #verbStatus = 'ok';         // 'ok' | 'reconnect' | 'lang' | 'unerreichbar'
   #koppelFallback = { hr: 0, controller: 0 };   // Zeitfenster: nächster Symbol-Tap → Chooser
-  #geraetZustand = { hr: null, controller: null };
+  #geraetZustand = { trainer: null, hr: null, controller: null };
   #cursorBlinkBis = 0;
   #zustaende = new Map();     // Statuszeile: art → { text, cls }
   #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
@@ -122,7 +117,13 @@ export class RideScreen {
   }
 
   // Einmalige Meldung (läuft zweimal durch). Öffentlich als melde() für main.js.
+  // Ist das Panel offen, steht sie zusätzlich dort (die LED kann darunter liegen).
   #info(text, cls = 'ok') {
+    if (this.$('#dlg-fahrt-optionen').open) {
+      const h = this.$('#fo-hinweis');
+      h.textContent = text;
+      h.className = `fo-hinweis ${cls}`;
+    }
     this.#infoMeldung = { text, cls, neu: true };
     this.#zeigeStatus();
   }
@@ -217,8 +218,30 @@ export class RideScreen {
   // Home-Leiste): verbunden | teilweise | verbindet | gemerkt | fehlt.
   // Die Symbole stehen neben der LED-Zeile und bleiben in jedem Fokus-Modus
   // sichtbar; einen Verlust meldet zusätzlich die LED-Zeile im Klartext.
+  // Zustand eines Geräts an EINER Stelle für Symbol oben links und
+  // Panel-Zeile (beide tragen data-geraet): Punkt/Farbe per CSS, Klartext
+  // in der Zeile, aria-label an beiden
+  #zeigeGeraet(rolle, zustand) {
+    this.#geraetZustand[rolle] = zustand;
+    const verbunden = ['verbunden', 'teilweise'].includes(zustand);
+    const text = verbunden
+      ? `${this.#geraeteNamen(rolle)} · ${zustand === 'teilweise' ? 'nicht alle Pads — tippen' : 'verbunden'}`
+      : rolle === 'trainer' && zustand === 'verbindet' ? 'verbindet neu …' : ZEILEN_TEXT[zustand];
+    for (const el of this.root.querySelectorAll(`[data-geraet="${rolle}"]`)) {
+      el.dataset.zustand = zustand;
+      el.setAttribute('aria-label', `${ROLLEN_LABEL[rolle]}: ${text}`);
+      const z = el.querySelector('.fo-zustand');
+      if (z) z.textContent = text;
+    }
+  }
+
+  #geraeteNamen(rolle) {
+    if (rolle === 'trainer') return this.session.ftms.deviceName ?? 'Trainer';
+    if (rolle === 'hr' && this.session.ftms.istDemo) return 'Demo-Herzgurt';
+    return geraeteManager.clients(rolle).map(c => c.deviceName ?? ROLLEN_LABEL[rolle]).join(' + ') || ROLLEN_LABEL[rolle];
+  }
+
   async #aktualisiereGeraet(rolle) {
-    const btn = this.$(rolle === 'hr' ? '#btn-hr' : '#btn-click');
     let zustand;
     if (rolle === 'hr' && this.session.ftms.istDemo) zustand = 'verbunden';   // Demo: simulierter Gurt
     else {
@@ -228,8 +251,7 @@ export class RideScreen {
     }
     if (this.#tot) return;
     const vorher = this.#geraetZustand[rolle];
-    this.#geraetZustand[rolle] = zustand;
-    setzeGeraet(btn, zustand, `${ROLLEN_LABEL[rolle]}: ${ZUSTAND_TEXT[zustand]}`);
+    this.#zeigeGeraet(rolle, zustand);
     const verloren = ['verbunden', 'teilweise'].includes(vorher) && ['gemerkt', 'fehlt'].includes(zustand);
     // Neu verbunden (nicht schon beim Fahrtstart): kurz bestätigen
     if (vorher && !['verbunden', 'teilweise'].includes(vorher) && zustand === 'verbunden')
@@ -278,20 +300,14 @@ export class RideScreen {
     // Manager-Änderungen (Trennung, Neu-Verbindung, laufender Aufbau) spiegeln
     this.#abo(geraeteManager, 'change', () => { this.#uebernehmeHR(); this.#uebernehmeCtrl(); });
 
-    // Symbol-Tap: verbunden → nur melden (kein Chooser über der Fahrt);
-    // sonst verbinden (gemerkt) oder koppeln (Chooser) über den Manager
-    for (const [rolle, id] of [['hr', '#btn-hr'], ['controller', '#btn-click']]) {
-      const btn = this.$(id);
+    // Tap auf Symbol oder Panel-Zeile: verbunden → nur melden (kein Chooser
+    // über der Fahrt); sonst verbinden (gemerkt) oder koppeln (Chooser)
+    for (const rolle of ['hr', 'controller']) {
       const label = ROLLEN_LABEL[rolle];
-      btn.onclick = async () => {
+      const tipp = async () => {
         const zustand = this.#geraetZustand[rolle];
         if (zustand === 'verbindet') return;
-        if (zustand === 'verbunden') {
-          const namen = rolle === 'hr' && this.session.ftms.istDemo ? 'Demo-Herzgurt'
-            : geraeteManager.clients(rolle).map(c => c.deviceName ?? label).join(' + ');
-          this.#info(`${namen} verbunden`);
-          return;
-        }
+        if (zustand === 'verbunden') { this.#info(`${this.#geraeteNamen(rolle)} verbunden`); return; }
         if (!navigator.bluetooth) { this.#info('Kein Web Bluetooth in diesem Browser', 'err'); return; }
         try {
           const r = await geraeteManager.verbindeOderKoppel(rolle, {
@@ -303,13 +319,14 @@ export class RideScreen {
             // Zweiter Tap innerhalb von 30 s öffnet die Geräteauswahl —
             // so ist ein in der Fahrt verlorenes Pad wieder einfangbar
             this.#koppelFallback[rolle] = Date.now() + 30000;
-            this.#info(`${label} nicht erreichbar — Gerät wecken oder Symbol erneut tippen`, 'err');
+            this.#info(`${label} nicht erreichbar — Gerät wecken und erneut tippen`, 'err');
           }
         } catch (err) {
           this.#info(`${label}: ${err.message}`, 'err');
         }
         rolle === 'hr' ? this.#uebernehmeHR() : this.#uebernehmeCtrl();
       };
+      for (const el of this.root.querySelectorAll(`[data-geraet="${rolle}"]`)) el.onclick = tipp;
     }
     // Schon verbundene Pool-Geräte sofort übernehmen; gemerkte best effort
     // nachverbinden (nicht in der Demo)
@@ -328,7 +345,7 @@ export class RideScreen {
   #zeigeTrainer() {
     const ok = this.session.ftms.connected;
     const zustand = ok ? 'verbunden' : this.#verbStatus === 'unerreichbar' ? 'fehler' : 'verbindet';
-    setzeGeraet(this.$('#btn-trainer'), zustand, `Trainer: ${ZUSTAND_TEXT[zustand]}`);
+    this.#zeigeGeraet('trainer', zustand);
     this.#setzeZustand('trainer', ok ? null
       : this.#verbStatus === 'unerreichbar' ? 'Trainer nicht erreichbar — Fahrt beenden und neu starten'
       : this.#verbStatus === 'lang' ? 'Trainer nicht erreichbar — eingeschaltet? Weiter wird versucht …'
@@ -348,12 +365,13 @@ export class RideScreen {
     // beim übernommenen Pool-Client längst gefeuert (Livetest: „verbinde …"
     // blieb die ganze Fahrt stehen)
     this.#zeigeTrainer();
-    // Tap auf das Trainer-Symbol löst mitten in der Fahrt nichts aus, er sagt
-    // nur, was los ist
-    this.$('#btn-trainer').onclick = () => {
+    // Tap auf Trainer-Symbol oder -Zeile löst mitten in der Fahrt nichts aus,
+    // er sagt nur, was los ist
+    const tipp = () => {
       if (ftms.connected) this.#info(`${ftms.deviceName ?? 'Trainer'} verbunden`);
-      else this.#zeigeStatus();
+      else this.#info(this.#zustaende.get('trainer')?.text ?? 'Trainer getrennt', 'err');
     };
+    for (const el of this.root.querySelectorAll('[data-geraet="trainer"]')) el.onclick = tipp;
     // Watchdog: erkennt still abgerissene GATT-Verbindungen (5-s-Takt)
     this.#watchdog = setInterval(() => {
       if (this.session.status === 'done') return;
@@ -362,10 +380,10 @@ export class RideScreen {
     }, 5000);
   }
 
-  // --- Optionen: „⋯" oben rechts öffnet das Panel mit den Schiebeschaltern --
+  // --- Panel „Geräte und Töne" hinter „⋯" oben rechts ------------------------
 
-  // Die drei Schalter werden selten während der Fahrt umgelegt — deshalb
-  // hinter EINEM Knopf. Das Panel ist NICHT modal: STOPP und ± bleiben
+  // Geräte im Klartext (Name, Zustand, was ein Tipp bewirkt) und die selten
+  // gebrauchten Schalter. Das Panel ist NICHT modal: STOPP und ± bleiben
   // daneben sofort bedienbar (ein Tipp daneben schließt es UND wirkt).
   // History-Eintrag: Zurück schließt es; Esc ebenso.
   #bindOptionen() {
@@ -378,15 +396,17 @@ export class RideScreen {
       const d = dlg.getBoundingClientRect();
       const rand = 8;
       const links = Math.max(rand, Math.min(innerWidth - d.width - rand, c.right - d.width));
-      let oben = c.bottom + rand / 2;
-      if (oben + d.height > innerHeight - rand) oben = c.top - d.height - rand / 2;
+      // „⋯" sitzt immer oben: Panel darunter, zu Hohes scrollt in sich
+      const oben = Math.round(c.bottom + rand / 2);
       dlg.style.left = `${Math.round(links)}px`;
-      dlg.style.top = `${Math.round(Math.max(rand, oben))}px`;
+      dlg.style.top = `${oben}px`;
+      dlg.style.maxHeight = `${innerHeight - oben - rand}px`;
     };
     const draussen = e => { if (!dlg.contains(e.target) && !mehr.contains(e.target)) dlg.close(); };
     const esc = e => { if (e.key === 'Escape') dlg.close(); };
     mehr.onclick = () => {
       if (dlg.open) { dlg.close(); return; }
+      this.$('#fo-hinweis').textContent = '';   // alte Rückmeldung nicht wieder zeigen
       oeffneModal(dlg, 'fahrt-optionen', { modal: false });
       mehr.setAttribute('aria-expanded', 'true');
       platziere();
@@ -433,23 +453,26 @@ export class RideScreen {
     // Nur anbieten, wenn der Browser es kann. arm() hält den Stream scharf
     // und registriert den Auto-PiP-Handler — Chrome kann das Fenster dann
     // selbst öffnen, wenn die App verlassen wird
-    // Schalter im Optionen-Panel; die Zeile fehlt, wo es kein PiP gibt
-    const box = this.$('#opt-pip');
-    const zeile = this.$('#opt-pip-zeile');
-    zeile.hidden = !PiP.verfuegbar();
-    box.checked = false;
-    if (zeile.hidden) return;
+    // Knopf im Panel (Aktion, keine Einstellung); fehlt, wo es kein PiP gibt
+    const knopf = this.$('#opt-pip');
+    const titel = this.$('#opt-pip-titel');
+    const zeige = an => { titel.textContent = an ? 'Bild-in-Bild schließen' : 'Bild-in-Bild öffnen'; };
+    knopf.hidden = !PiP.verfuegbar();
+    zeige(false);
+    if (knopf.hidden) return;
     this.#pip = new PiP();
-    this.#pip.onEnde = () => { box.checked = false; };
-    this.#pip.onAuto = () => { box.checked = true; };
+    this.#pip.onEnde = () => zeige(false);
+    this.#pip.onAuto = () => zeige(true);
     const daten = () => this.#pipDaten();
     this.#pip.arm(daten);
-    // change läuft in der Nutzergeste — requestPictureInPicture braucht sie
-    box.onchange = async () => {
+    // Der Tipp ist die Nutzergeste, die requestPictureInPicture braucht
+    knopf.onclick = async () => {
       try {
-        box.checked = await this.#pip.toggle(daten);
+        const an = await this.#pip.toggle(daten);
+        zeige(an);
+        if (an) this.$('#dlg-fahrt-optionen').close();   // das Fenster ist jetzt da
       } catch (err) {
-        box.checked = this.#pip.aktiv;
+        zeige(!!this.#pip.aktiv);
         this.#info('Bild-in-Bild nicht möglich: ' + err.message, 'err');
       }
     };
