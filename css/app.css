@@ -371,11 +371,12 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   /* Graph-Zeile flexibel (min 60 px, sonst bis 22vh/180 px): wird es eng
      (kleines Handy, Chip-Zeile bricht um), schrumpft der Graph — −10/+10/STOPP
      bleiben immer im Bild */
-  grid-template-rows: 1fr auto minmax(60px, clamp(90px, 22vh, 180px)) auto;
+  grid-template-rows: auto 1fr auto minmax(60px, clamp(90px, 22vh, 180px)) auto;
   /* Benannte Bereiche: blendet ein Fokus-Modus die Chips aus (display:none),
      rutschen die übrigen Kinder sonst eine Zeile nach oben */
-  grid-template-areas: "metrics" "chips" "chart" "controls";
+  grid-template-areas: "kopf" "metrics" "chips" "chart" "controls";
 }
+.ride-grid > .ride-kopf { grid-area: kopf; }
 .ride-grid > .metrics { grid-area: metrics; }
 .ride-grid > .row-actions { grid-area: chips; }
 .ride-grid > #live-chart { grid-area: chart; }
@@ -386,7 +387,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   grid-template-areas: "power power" "target time" "sec sec" "status status";
   padding: .5rem 1rem 0;
 }
-.metrics > .statusleiste { grid-area: status; }
+.metrics > .status { grid-area: status; }
 .metric { display: grid; justify-items: center; gap: 0; font-variant-numeric: tabular-nums; }
 .metric .label { font-size: .72rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .1em; }
 .metric .value {
@@ -406,11 +407,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   line-height: 1.5; white-space: nowrap;
 }
 .demo-badge { background: rgba(227, 198, 63, .16); color: var(--z4); border: 1px solid var(--z4); }
-/* Fahrbildschirm im Demo: Badge + Sprung zur Beispielfahrt oben mittig */
-.demo-leiste {
-  position: absolute; top: .5rem; left: 50%; transform: translateX(-50%); z-index: 5;
-  display: flex; flex-direction: column; gap: .3rem; align-items: center;
-}
+/* Fahrbildschirm im Demo: Badge + Sprung zur Beispielfahrt mittig in der Kopfzeile */
+.demo-leiste { grid-area: demo; display: flex; gap: .4rem; align-items: center; justify-content: center; }
 .demo-beispiel { background: none; color: var(--accent); border: 1px solid var(--accent); }
 /* Detailansicht: Badge als eigene Zeile unter dem Kopf — neben Zurück und
    Datum wäre bei 360 px kein Platz */
@@ -420,21 +418,30 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 .brand .demo-kopf { order: 3; margin-top: -.5rem; display: flex; gap: .4rem; flex-basis: 100%; }
 .brand .demo-kopf .demo-badge { order: 0; margin-top: 0; }
 .metrics { position: relative; cursor: pointer; }
-/* Platz schaffen, wenn die Demo-Leiste eingeblendet ist */
-/* Hochkant: Beispielfahrten-Knopf unter dem Badge; Platz über den Werten schaffen */
-.metrics:has(.demo-leiste:not([hidden])) { padding-top: 3.6rem; }
-/* Graph-Fokus hochkant: Werte sind kompakt, für zwei Zeilen fehlt der Platz —
-   nur das Badge bleibt */
-.ride-grid.fokus-graph .demo-beispiel { display: none; }
-.ride-grid.fokus-graph .metrics:has(.demo-leiste:not([hidden])) { padding-top: 2rem; }
-/* Niedrige Bildschirme hochkant: gestapelt kostete die Zeile, die −10/+10/STOPP
-   noch in den Bildschirm bringt — dann nebeneinander, Badge nur „DEMO" */
-@media (max-height: 720px) {
-  .demo-leiste { flex-direction: row; gap: .4rem; }
-  .demo-leiste .demo-badge-hint { display: none; }
-  .metrics:has(.demo-leiste:not([hidden])) { padding-top: 2rem; }
-  .ride-grid.fokus-graph .demo-beispiel { display: inline; }
+
+/* Kopfzeile wie eine Handy-Statusleiste: Geräte links, Demo mittig, „⋯"
+   rechts. Schmale Schirme mit Demo: Demo in eine eigene zweite Zeile (drei
+   Geräte + Badge + Beispielfahrten + ⋯ passen bei 360 px nicht nebeneinander) */
+.ride-kopf {
+  display: grid; align-items: center;
+  /* Seitenspalten gleich breit (1fr), damit die Mitte wirklich mittig ist —
+     links stehen drei Symbole, rechts nur eines */
+  grid-template-columns: 1fr auto 1fr; grid-template-areas: "geraete demo mehr";
+  padding: max(.15rem, env(safe-area-inset-top)) .35rem 0;
 }
+.kopf-geraete { grid-area: geraete; display: flex; }
+.kopf-mehr { grid-area: mehr; justify-self: end; }
+@media (max-width: 420px) {
+  .ride-kopf:has(.demo-leiste:not([hidden])) { grid-template-areas: "geraete . mehr" "demo demo demo"; }
+}
+/* Geräte-Symbol ohne Rahmen: Icon + Zustandspunkt, Tippfläche 44 px */
+.kopf-geraet, .kopf-mehr {
+  width: 44px; height: 44px; padding: 0; background: none; color: var(--ink2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+}
+.kopf-geraet > span { display: flex; }
+.kopf-geraet svg { width: 19px; height: 19px; }
+.kopf-mehr svg { width: 22px; height: 22px; }
 
 /* Countdown-Balken unter der Intervall-Restzeit: leert sich mit dem Block */
 .restbalken {
@@ -458,35 +465,11 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 /* Gesamtzeit klein unter der Blockzeit */
 .gesamt { font-size: .8rem; color: var(--ink3); margin-top: .15rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gesamt b { color: var(--ink2); font-weight: 600; display: inline-block; min-width: 7ch; text-align: right; }   /* bis 1:02:15 ohne Verschieben */
-/* Statusleiste wie eine Instrumententafel: LED-Zeile in der Mitte, links das
-   Trainer-Symbol, rechts Herzgurt und Lenker. Die Seitenspalten halten die
-   Tippflächen frei (44 bzw. 2×44 px) und teilen sich den Rest, damit die
-   Tafel auf breiten Schirmen mittig unter den Werten steht. */
-.statusleiste {
-  width: 100%; margin-top: .45rem;
-  display: grid; align-items: center;
-  grid-template-columns: minmax(44px, 1fr) minmax(0, 16rem) minmax(88px, 1fr);
-}
-.statusleiste > #btn-trainer { justify-self: end; }
-.status-geraete { display: flex; justify-self: start; }
-/* Geräte-Symbol ohne Rahmen: Icon + Zustandspunkt, so hoch wie die Tafel.
-   Die Tippfläche wächst unsichtbar (::before) auf 44 px Höhe — sie ragt in
-   die Luft über und unter der Zeile, ohne die Zeile höher zu machen. Nach
-   unten nur 4 px: darunter liegen (hochkant, niedrige Schirme nur .3rem
-   entfernt) die Block-Chips, deren Tippfläche nicht angeknabbert werden darf. */
-.status-geraet {
-  position: relative; width: 44px; height: 1.9rem; padding: 0;
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
-  background: none; color: var(--ink2);
-}
-.status-geraet::before { content: ''; position: absolute; inset: calc(1.9rem - 44px + 4px) 0 -4px; }
-.status-geraet > span { display: flex; }
-.status-geraet svg { width: 18px; height: 18px; }
 /* Statuszeile: eingelassene LED-Tafel mit FESTER Höhe — immer sichtbar,
    damit klar ist, wo Meldungen erscheinen; eine Meldung verschiebt nichts.
    Schrift als Punktmatrix (led-zeile.js): rot = Problem, grün = kurze Info. */
 .metrics .status {
-  width: 100%; box-sizing: border-box;
+  width: 100%; max-width: 16rem; margin: .45rem auto 0; box-sizing: border-box;
   height: 1.9rem; padding: .15rem .5rem; position: relative;
   border-radius: 8px; border: 1px solid var(--line);
   background: var(--status-mulde);
@@ -514,16 +497,13 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 }
 /* Fahr-Aktionen (häufig) gefüllt und zuerst; „⋯" (selten) zurückhaltend */
 .chip-fahrt { background: var(--surface2); border-color: var(--ink3); color: var(--ink); font-weight: 600; }
-/* Icon-Größe fest vorgeben: ohne Maß schrumpft das SVG auf den Rest, den
-   das Chip-Padding übrig lässt */
-.row-actions .chip-mehr { padding-inline: 0; width: 46px; color: var(--ink2); }
-.chip-mehr svg { width: 22px; height: 22px; flex: 0 0 auto; }
+/* Keine sichtbaren Chips (freies Fahren, Programm vorbei): Zeile fällt weg */
+.row-actions:not(:has(> :not([hidden]))) { display: none; }
 
-/* Optionen der Fahrt: kleines Panel direkt über dem „⋯"-Chip (Lage setzt
-   ride.js). Kein Innenabstand am Dialog selbst — so trifft ein Tap auf den
-   Dialog nur den Hintergrund (schließt), nie den Rand des Panels. */
+/* Optionen der Fahrt: kleines Panel unter „⋯" (Lage setzt ride.js), nicht
+   modal — liegt über dem Fahrbildschirm, ohne ihn zu sperren */
 dialog.fahrt-optionen {
-  position: fixed; inset: auto; margin: 0; padding: 0;
+  position: fixed; inset: auto; margin: 0; padding: 0; z-index: 50;
   width: min(20rem, calc(100vw - 16px)); min-width: 0;
   box-shadow: 0 8px 28px rgba(0, 0, 0, .5);
 }
@@ -597,7 +577,7 @@ button:disabled { cursor: default; }
    Detailstufe (inline), Werte kompakt. Erneuter Tap zurück. */
 .ride-grid.fokus-werte .metric-power .value { font-size: clamp(6rem, 28vmin, 12rem); }
 .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(2.4rem, 11vmin, 4.5rem); }
-.ride-grid.fokus-werte { grid-template-rows: 1fr auto 74px auto; }
+.ride-grid.fokus-werte { grid-template-rows: auto 1fr auto 74px auto; }
 .ride-grid.fokus-werte .row-actions { display: none; }
 /* Sekundärzeile vollwertig und fahrtauglich groß (inkl. kJ und gesamt) —
    die Icons skalieren per em mit */
@@ -608,7 +588,7 @@ button:disabled { cursor: default; }
 /* Graph nimmt nur den Restplatz: mit fester Höhe (vorher 52vh) rutschten
    hochkant −10/+10/STOPP unter den Bildschirmrand, sobald die Chips zwei,
    drei Zeilen brauchten — STOPP war dann unerreichbar */
-.ride-grid.fokus-graph { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.ride-grid.fokus-graph { grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
 
 .ride-grid.fokus-graph .metric-power .value { font-size: clamp(2.2rem, 9vmin, 3.4rem); }
 .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.3rem, 5.5vmin, 2rem); }
@@ -621,9 +601,9 @@ button:disabled { cursor: default; }
    Layout bekommen statt des breitgezogenen Portrait-Stapels. */
 @media (orientation: landscape) and (max-height: 620px) {
   .ride-grid {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "metrics controls" "chart controls" "chips controls";
+    grid-template-areas: "kopf controls" "metrics controls" "chart controls" "chips controls";
   }
   .metrics {
     grid-area: metrics;
@@ -635,13 +615,9 @@ button:disabled { cursor: default; }
     justify-content: center; align-items: start;
     padding: .3rem .6rem 0;
   }
-  /* Metrikzeile ist flach: Badge-Zusatztext würde drücken — nur „DEMO" zeigen;
-     Badge und Beispielfahrten nebeneinander, die Höhe gehört dem Graphen */
-  .demo-leiste .demo-badge-hint { display: none; }
-  .demo-leiste { flex-direction: row; gap: .4rem; }
-  .metrics:has(.demo-leiste:not([hidden])),
-  .ride-grid.fokus-graph .metrics:has(.demo-leiste:not([hidden])) { padding-top: 2rem; }
-  .ride-grid.fokus-graph .demo-beispiel { display: inline; }
+  /* Kopfzeile quer flacher: die Höhe gehört dem Graphen */
+  .ride-kopf { padding-top: 0; }
+  .kopf-geraet, .kopf-mehr { height: 38px; }
   .metric-power .value { font-size: clamp(2.4rem, 13vmin, 4rem); }
   .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 8vmin, 2.4rem); }
   .row-secondary { grid-template-columns: repeat(4, auto); gap: .2rem 1.4rem; font-size: .85rem; margin-top: 0; }
@@ -658,7 +634,6 @@ button:disabled { cursor: default; }
   /* Nur noch eine kurze Chip-Zeile (Block-Aktionen + ⋯): die volle
      Tippfläche von 44 px ist quer bezahlbar */
   .row-actions .chip { flex: 0 0 auto; min-height: 44px; padding: .3rem .8rem; font-size: .82rem; }
-  .chip-mehr svg { width: 20px; height: 20px; }
   .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(.6rem, env(safe-area-inset-right)); }
   /* Portrait-Spurzuweisung aufheben — per ID, sonst verliert der Reset
      den Spezifitätsvergleich gegen #btn-stop { grid-column: 5 } */
@@ -671,15 +646,13 @@ button:disabled { cursor: default; }
   .ride-grid.fokus-werte .metric-power .value { font-size: clamp(3.2rem, 18vmin, 5.5rem); }
   .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 9vmin, 3rem); }
   /* Hochkant-Zeilenvorgaben der Fokus-Modi gelten quer nicht (eigenes Raster) */
-  .ride-grid.fokus-werte, .ride-grid.fokus-graph { grid-template-rows: auto minmax(0, 1fr) auto; }
+  .ride-grid.fokus-werte, .ride-grid.fokus-graph { grid-template-rows: auto auto minmax(0, 1fr) auto; }
   .ride-grid.fokus-graph .metric-power .value { font-size: clamp(1.8rem, 8vmin, 2.6rem); }
   .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.1rem, 5vmin, 1.6rem); }
-  /* Graph-Fokus quer: der Graph soll der größte sein — „⋯“ weg (Block-
-     Aktionen bleiben; beim freien Fahren fällt die Chip-Zeile damit ganz
-     weg), Sekundärzeile kleiner */
-  .ride-grid.fokus-graph .chip-mehr { display: none; }
+  /* Graph-Fokus quer: der Graph soll der größte sein — Sekundärzeile kleiner */
   .ride-grid.fokus-graph .row-secondary { font-size: .8rem; }
-  .ride-grid.fokus-graph .metric .unit { display: none; }
+  .ride-grid.fokus-graph .metric .unit,
+  .ride-grid.fokus-graph .gesamt { display: none; }   /* die Kopfzeile kostet quer eine Zeile — hier zurückholen */
   /* +10 oben, −10 direkt über STOPP: verrutscht der Daumen Richtung STOPP,
      trifft er die harmlose Richtung */
   .controls #btn-plus { order: -1; }
@@ -793,7 +766,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 [data-zustand="verbindet"] .dot { background: var(--z4); animation: punkt-puls 1s ease-in-out infinite; }
 [data-zustand="fehler"] { border-color: var(--danger); color: var(--danger); }
 [data-zustand="fehler"] .dot { background: var(--danger); }
-@keyframes punkt-puls { 50% { opacity: .25; } }
+/* Pulsieren bleibt gut sichtbar (nicht unter 50 %) — „verbindet" muss auf
+   einen Blick vom Punkt „nicht verbunden" zu unterscheiden sein */
+@keyframes punkt-puls { 50% { opacity: .5; transform: scale(.8); } }
 
 
 /* Lucide-Icons in Geräte-Leiste, Geräteliste und Zahnrad */

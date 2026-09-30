@@ -38,7 +38,10 @@ export function zurueck(ersatz) {
 // zurückgesetzt (sonst bliebe „ok" vom letzten Mal stehen und Zurück/Esc
 // zählte als Bestätigung — der Startdialog startete so eine Fahrt), kein
 // Auto-Fokus (sonst klappt am Gerät sofort die Tastatur auf).
-export function oeffneModal(dlg, name) {
+// modal:false öffnet ohne Backdrop (show statt showModal) — für Menüs im
+// Fahrbildschirm, neben denen STOPP bedienbar bleiben muss; History und
+// Zurück-Taste funktionieren genauso.
+export function oeffneModal(dlg, name, { modal = true } = {}) {
   dlg.returnValue = '';
   history.pushState({ dialog: name }, '');
   modale.push(dlg);
@@ -50,7 +53,8 @@ export function oeffneModal(dlg, name) {
     if (history.state?.dialog === name) eintragAbbauen();
     ausstehendNachholen();
   }, { once: true });
-  dlg.showModal();
+  if (modal) dlg.showModal();
+  else dlg.show();
   document.activeElement?.blur();
 }
 

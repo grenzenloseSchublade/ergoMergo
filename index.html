@@ -87,11 +87,23 @@
 <!-- ============ FAHRT ============ -->
 <section id="screen-ride" class="screen" hidden>
   <div class="ride-grid">
-    <div class="metrics">
+    <!-- Kopfzeile wie eine Handy-Statusleiste: Gerätezustand links (gleiche
+         Icons und Zustandspunkte wie die Geräte-Leiste auf dem Home, Tap =
+         Info bzw. neu verbinden), Demo-Hinweis mittig, „⋯" rechts öffnet
+         die selten gebrauchten Schalter. Bleibt in jedem Fokus-Modus stehen. -->
+    <div class="ride-kopf">
+      <span class="kopf-geraete">
+        <button type="button" class="kopf-geraet" id="btn-trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
+        <button type="button" class="kopf-geraet" id="btn-hr" aria-label="Herzgurt verbinden" title="Herzgurt"><span data-icon="herzpuls"></span><i class="dot"></i></button>
+        <button type="button" class="kopf-geraet" id="btn-click" aria-label="Lenker verbinden" title="Lenker"><span data-icon="gamepad"></span><i class="dot"></i></button>
+      </span>
       <div class="demo-leiste" id="m-demo" hidden>
-        <span class="demo-badge">DEMO<span class="demo-badge-hint"> — wird nicht gespeichert</span></span>
+        <span class="demo-badge" title="Demo — wird nicht gespeichert">DEMO</span>
         <button type="button" class="demo-beispiel" id="btn-demo-beispiel">Beispielfahrten ›</button>
       </div>
+      <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Töne, Ansagen, Bild-in-Bild" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
+    </div>
+    <div class="metrics">
       <div class="metric metric-power">
         <span class="label">Leistung</span>
         <span class="value" id="m-watt">0</span>
@@ -116,27 +128,15 @@
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
       </div>
-      <!-- Statusleiste: LED-Tafel (Mulde bleibt immer stehen, Inhalt setzt der
-           RideScreen) eingerahmt von den Geräte-Symbolen — Trainer links,
-           Herzgurt und Lenker rechts. Zustand am Punkt (gleiche Regeln wie die
-           Geräte-Leiste auf dem Home), Tap wie früher der Geräte-Chip. Liegt in
-           den Werten, damit der Gerätezustand in jedem Fokus-Modus sichtbar bleibt. -->
-      <div class="statusleiste">
-        <button type="button" class="status-geraet" id="btn-trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
-        <span id="m-status" class="status" aria-live="polite" role="status"></span>
-        <span class="status-geraete">
-          <button type="button" class="status-geraet" id="btn-hr" aria-label="Herzgurt verbinden" title="Herzgurt"><span data-icon="herzpuls"></span><i class="dot"></i></button>
-          <button type="button" class="status-geraet" id="btn-click" aria-label="Lenker verbinden" title="Lenker"><span data-icon="gamepad"></span><i class="dot"></i></button>
-        </span>
-      </div>
+      <!-- Statuszeile: eigene Zeile, mittig; Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
+      <span id="m-status" class="status" aria-live="polite" role="status"></span>
     </div>
-    <!-- Eine ruhige Chip-Zeile: Block-Aktionen (nur im Programm) und „⋯" für
-         die seltenen Schalter (Signaltöne, Sprachansagen, Bild-in-Bild) -->
+    <!-- Chip-Zeile nur für die Block-Aktionen (Programm); beim freien Fahren
+         und nach Programmende fällt sie ganz weg -->
     <div class="row-actions">
       <button class="chip chip-fahrt" id="btn-prev" hidden aria-label="Block zurück">⏮ Block</button>
       <button class="chip chip-fahrt" id="btn-skip" hidden aria-label="Block überspringen">Block ⏭</button>
       <button class="chip chip-fahrt" id="btn-ext" hidden aria-label="Block um 30 Sekunden verlängern">⏱ +30 s</button>
-      <button class="chip chip-mehr" id="btn-mehr" data-icon="mehr" aria-label="Weitere Optionen: Töne, Ansagen, Bild-in-Bild" aria-haspopup="dialog" title="Optionen"></button>
     </div>
     <canvas id="live-chart"></canvas>
     <div class="controls">
@@ -146,9 +146,9 @@
       <button class="ctl ctl-end" id="btn-end">Beenden</button>
     </div>
   </div>
-  <!-- Optionen der Fahrt als kleines Panel über dem „⋯"-Chip (ride.js setzt
-       die Lage). Schiebeschalter wie in den Einstellungen; Tap daneben oder
-       Zurück schließt. -->
+  <!-- Optionen der Fahrt als kleines Panel unter „⋯" (ride.js setzt die
+       Lage). Nicht modal: STOPP und ± bleiben daneben sofort bedienbar; Tap
+       daneben, Esc oder Zurück schließt. Schiebeschalter wie in den Einstellungen. -->
   <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Optionen der Fahrt">
     <div class="fahrt-optionen-inhalt">
       <label class="schalter-zeile">

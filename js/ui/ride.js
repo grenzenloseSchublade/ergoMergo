@@ -234,7 +234,7 @@ export class RideScreen {
     // Neu verbunden (nicht schon beim Fahrtstart): kurz bestätigen
     if (vorher && !['verbunden', 'teilweise'].includes(vorher) && zustand === 'verbunden')
       this.#info(`${ROLLEN_LABEL[rolle]} verbunden`);
-    if (verloren) this.#setzeZustand('geraet', `${ROLLEN_LABEL[rolle]} getrennt — Symbol tippen zum Neuverbinden`);
+    if (verloren) this.#setzeZustand('geraet', `${ROLLEN_LABEL[rolle]} getrennt — Symbol oben links tippen`);
     else if (['verbunden', 'teilweise'].includes(zustand) && this.#zustaende.get('geraet')?.text.startsWith(ROLLEN_LABEL[rolle]))
       this.#setzeZustand('geraet', null);
   }
@@ -303,7 +303,7 @@ export class RideScreen {
             // Zweiter Tap innerhalb von 30 s öffnet die Geräteauswahl —
             // so ist ein in der Fahrt verlorenes Pad wieder einfangbar
             this.#koppelFallback[rolle] = Date.now() + 30000;
-            this.#info(`${label} nicht erreichbar — Gerät wecken oder Symbol erneut tippen für die Geräteauswahl`, 'err');
+            this.#info(`${label} nicht erreichbar — Gerät wecken oder Symbol erneut tippen`, 'err');
           }
         } catch (err) {
           this.#info(`${label}: ${err.message}`, 'err');
@@ -362,38 +362,44 @@ export class RideScreen {
     }, 5000);
   }
 
-  // --- Optionen: „⋯"-Chip öffnet das Panel mit den Schiebeschaltern ----------
+  // --- Optionen: „⋯" oben rechts öffnet das Panel mit den Schiebeschaltern --
 
   // Die drei Schalter werden selten während der Fahrt umgelegt — deshalb
-  // hinter EINEM Chip statt drei dauerhaft sichtbaren. Das Panel ist ein
-  // modaler Dialog (History-Eintrag: Zurück schließt ihn) und sitzt direkt
-  // über dem Chip, damit der Daumen kurze Wege hat. Tap daneben schließt.
+  // hinter EINEM Knopf. Das Panel ist NICHT modal: STOPP und ± bleiben
+  // daneben sofort bedienbar (ein Tipp daneben schließt es UND wirkt).
+  // History-Eintrag: Zurück schließt es; Esc ebenso.
   #bindOptionen() {
     const dlg = this.$('#dlg-fahrt-optionen');
     const mehr = this.$('#btn-mehr');
-    // Lage am Chip ausrichten: rechte Kante bündig, Unterkante knapp über dem
-    // Chip; passt es oben nicht (quer, niedrig), dann darunter/eingepasst
+    // Lage an „⋯" ausrichten: rechte Kante bündig, knapp darunter; passt es
+    // unten nicht, darüber
     const platziere = () => {
       const c = mehr.getBoundingClientRect();
-      // Chip weg (gedreht in den Graph-Fokus quer): Panel hätte keinen Anker
-      if (!c.width) { dlg.close(); return; }
       const d = dlg.getBoundingClientRect();
       const rand = 8;
       const links = Math.max(rand, Math.min(innerWidth - d.width - rand, c.right - d.width));
-      let oben = c.top - d.height - rand;
-      if (oben < rand) oben = Math.min(innerHeight - d.height - rand, c.bottom + rand);
+      let oben = c.bottom + rand / 2;
+      if (oben + d.height > innerHeight - rand) oben = c.top - d.height - rand / 2;
       dlg.style.left = `${Math.round(links)}px`;
       dlg.style.top = `${Math.round(Math.max(rand, oben))}px`;
     };
+    const draussen = e => { if (!dlg.contains(e.target) && !mehr.contains(e.target)) dlg.close(); };
+    const esc = e => { if (e.key === 'Escape') dlg.close(); };
     mehr.onclick = () => {
-      oeffneModal(dlg, 'fahrt-optionen');
+      if (dlg.open) { dlg.close(); return; }
+      oeffneModal(dlg, 'fahrt-optionen', { modal: false });
+      mehr.setAttribute('aria-expanded', 'true');
       platziere();
       addEventListener('resize', platziere);
-      dlg.addEventListener('close', () => removeEventListener('resize', platziere), { once: true });
+      document.addEventListener('pointerdown', draussen, true);
+      document.addEventListener('keydown', esc);
+      dlg.addEventListener('close', () => {
+        mehr.setAttribute('aria-expanded', 'false');
+        removeEventListener('resize', platziere);
+        document.removeEventListener('pointerdown', draussen, true);
+        document.removeEventListener('keydown', esc);
+      }, { once: true });
     };
-    // Tap auf den Hintergrund: das Ziel ist der Dialog selbst (der Inhalt
-    // liegt vollständig im inneren Container)
-    dlg.onclick = e => { if (e.target === dlg) dlg.close(); };
 
     // Zustand wandert in die Einstellungen zurück
     const schalter = (id, key, get, set) => {
@@ -600,6 +606,9 @@ export class RideScreen {
 
     // Tastatur (Laptop): Pfeile ±, Leertaste Stop
     this.#keys = e => {
+      // Tasten in einem offenen Panel (Leertaste auf einem Schalter) gehören
+      // dem Panel — sonst löste die Leertaste zugleich STOPP aus
+      if (e.target.closest?.('dialog')) return;
       if (e.key === 'ArrowUp' || e.key === 'ArrowRight') this.steuere(step);
       else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') this.steuere(-step);
       else if (e.key === ' ') { e.preventDefault(); this.#stoppTaste(); }
@@ -732,6 +741,8 @@ export class RideScreen {
 
   destroy() {
     this.#tot = true;
+    const optionen = this.$('#dlg-fahrt-optionen');
+    if (optionen.open) optionen.close();
     this.#beendet = true;
     clearTimeout(this.#ansageTimer);   // keine Geister-Ansage nach Fahrtende
     stoppeAnsagen();
