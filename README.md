@@ -27,9 +27,9 @@ ergoMergo ist genau das: eine einzige statische Web-App (Vanilla JS, Web
 Bluetooth/FTMS, keine Buildkette, kein Backend), alle Daten bleiben lokal auf
 dem Gerät.
 
-| | |
-|---|---|
-| ![Startbildschirm](docs/img/start.png) | ![Fahrmodus](docs/img/fahrt.png) |
+| | | | |
+|---|---|---|---|
+| ![Startbildschirm](docs/img/start.png) | ![Fahrbildschirm](docs/img/fahrt.png) | ![Panel „Geräte und Töne"](docs/img/panel.png) | ![Fahrten-Historie](docs/img/fahrten.png) |
 
 ![Fahrmodus im Querformat](docs/img/quer.png)
 
