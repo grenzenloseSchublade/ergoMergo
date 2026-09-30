@@ -6,7 +6,7 @@
 import { getSettings, setSetting, listSessions } from '../storage.js';
 import { planAnlegen, wocheAb, wocheWirksam, naechsteEinheit, wochenMinuten, titel, programmFuer,
   verschiebeZiele, mitAnpassung, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart,
-  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg,
+  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg, planInfo,
   tagIso, montag, WOCHENTAGE, DAUERN, LAENGEN, ZIELE } from '../plan.js';
 import { baueBlocks } from '../program.js';
 import { drawProfile, beobachte } from './chart.js';
@@ -23,7 +23,17 @@ const wochentagLang = iso => new Date(iso + 'T12:00').toLocaleDateString('de-DE'
 let profilAbmelden = null;
 const montagPlus = (d, n) => { const m = montag(d); return new Date(m.getFullYear(), m.getMonth(), m.getDate() + n); };
 
-// Karte auf Home. starte(programm, { vorgaben, planRef }) öffnet den Startdialog.
+// Offene Plan-Einheit von heute als Ersatz-Info für eine Fahrt, die nicht
+// aus dem Plan gestartet wurde (oder null: kein Plan, pausiert, frei, erledigt)
+export async function planErsatzHeute(heute = new Date()) {
+  const [settings, sessions] = await Promise.all([getSettings(), listSessions()]);
+  const plan = settings.plan;
+  if (!plan || plan.pause) return null;
+  const t = wocheWirksam(plan, heute, sessions, heute, settings.ftp).find(x => x.datum === tagIso(heute));
+  return t?.einheit && t.status === 'geplant' ? planInfo(plan, t.einheit, { ersatz: true }) : null;
+}
+
+// Karte auf Home. starte(programm, { vorgaben, planInfo }) öffnet den Startdialog.
 export async function renderPlan({ starte, heute = new Date() } = {}) {
   const [settings, sessions] = await Promise.all([getSettings(), listSessions()]);
   const plan = settings.plan;
@@ -109,7 +119,7 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
     // Lockere Einheiten heißen nach ihrer Rolle („Grundlage", nicht „Ausdauer") —
     // so stehen sie auch in Startdialog und Fahrtenliste
     const p = e.art === 'locker' ? { ...programmFuer(e), name: e.name } : programmFuer(e);
-    knopf.onclick = () => starte(p, { vorgaben: e.opts, planRef: e.ref });
+    knopf.onclick = () => starte(p, { vorgaben: e.opts, planInfo: planInfo(plan, e) });
     profil.hidden = false;
     const zeichne = c => drawProfile(c, baueBlocks(programmFuer(e), { ...e.opts }, ftp), effektiveFtp(ftp));
     zeichne(profil);

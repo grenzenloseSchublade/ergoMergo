@@ -9,6 +9,7 @@ import { drawSessionChart, beobachte } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
 import { fmtTime, fmtKm } from '../format.js';
 import { effektiveFtp } from '../metrics.js';
+import { planBeschreibung } from '../plan.js';
 import { zonenBalken, ergaenzeKennwerte, programmEndeVon } from './list.js';
 
 // Intervall-Report: Blöcke aus den Ziel-Samples ableiten (Lauflängen der
@@ -57,6 +58,10 @@ export async function renderDetail(root, session, onClose, { demo = null } = {})
   root.querySelector('#d-title').textContent =
     new Date(session.start).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
   root.querySelector('#d-demo').hidden = !demo;
+  // Programm und — bei Fahrten aus dem Trainingsplan — Woche und Einheit
+  root.querySelector('#d-programm-name').textContent = session.programm ?? 'Freies Fahren';
+  root.querySelector('#d-plan').hidden = !session.plan;
+  root.querySelector('#d-plan-text').textContent = planBeschreibung(session.plan);
   const data = demo ?? await getSamples(session.id);
   const settings = await getSettings();
 

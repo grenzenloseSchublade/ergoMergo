@@ -273,9 +273,32 @@ export function naechsteEinheit(plan, datum, ftpJetzt = plan.ftp, tage = 14) {
 // Erledigt: eine Fahrt aus dem Plan (planRef) oder irgendeine Fahrt
 // ≥ 15 min an dem Tag — wer an einem Plantag anders fährt, hat trotzdem trainiert
 export function erledigtDurch(einheit, sessions) {
-  return sessions.find(s => s.planRef === einheit.ref)
+  return sessions.find(s => s.planRef === einheit.ref && zaehltFuerPlan(s))
     ?? sessions.find(s => tagIso(new Date(s.start)) === einheit.datum && (s.dauer ?? 0) >= 900)
     ?? null;
+}
+
+// Zählt eine Fahrt für den Plan? ≥ 15 min; der FTP-Test ≥ 5 min (er endet
+// gewollt an der Erschöpfung). Ein Abbruch nach 2 min ist nicht „gefahren".
+export const zaehltFuerPlan = s => (s.dauer ?? 0) >= (s.programmId === 'rampentest' ? 300 : 900);
+
+// Plan-Info, die mit der Fahrt gespeichert wird — bleibt lesbar, auch wenn
+// der Plan später geändert oder beendet wird. ersatz: frei oder mit einem
+// anderen Programm gefahren, gilt aber für die Einheit des Tages.
+export function planInfo(plan, e, { ersatz = false } = {}) {
+  return {
+    ref: e.ref, plan: plan.angelegt, woche: e.woche + 1, laenge: plan.laenge ?? null,
+    typ: e.typ, name: e.name, art: e.art,
+    ...(e.variante ? { variante: e.variante } : {}),
+    ...(ersatz ? { ersatz: true, statt: titel(e) } : {}),
+  };
+}
+// „Trainingsplan · Woche 3 von 8 · Intervalle" (+ „· statt Grundlage · 45 min")
+export function planBeschreibung(info) {
+  if (!info) return '';
+  const woche = `Woche ${info.woche}${info.laenge ? ` von ${info.laenge}` : ''}`;
+  const art = info.ersatz ? `statt ${info.statt}` : `${info.name}${info.variante ? ` (${info.variante})` : ''}`;
+  return `Trainingsplan · ${woche} · ${art}`;
 }
 
 // --- Verpasste Einheiten verschieben ---

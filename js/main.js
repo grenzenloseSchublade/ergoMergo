@@ -34,7 +34,7 @@ import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung, effektiveFtp, FTP_ANNAHME } from './metrics.js';
 import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
 import { WORKOUTS } from './workouts.js';
-import { renderPlan, oeffnePlanDialog } from './ui/plan-ui.js';
+import { renderPlan, oeffnePlanDialog, planErsatzHeute } from './ui/plan-ui.js';
 import { initAudio } from './signals.js';
 import { starteMessung } from './energie.js';
 
@@ -90,7 +90,7 @@ function verlasseFahrt() {
   eintragAbbauen();
 }
 
-// plan: { vorgaben, planRef } — Start aus dem Trainingsplan (Dialog vorbelegt)
+// plan: { vorgaben, planInfo } — Start aus dem Trainingsplan (Dialog vorbelegt)
 async function startRide(programm = null, plan = null) {
   if (startLaeuft || rideScreen) return;
   startLaeuft = true;
@@ -153,7 +153,9 @@ async function startRideInner(programm, plan = null) {
   geraeteManager.starteSession();           // Trainer kämpft ab jetzt um die Verbindung
   const session = new Session(ftms, settings, programm);
   session.seed = seed;                      // Zufallsprogramm exakt wiederholbar
-  session.planRef = plan?.planRef ?? null;   // Trainingsplan: diese Einheit gilt als gefahren
+  // Trainingsplan: aus dem Plan gestartet → diese Einheit; sonst gilt eine
+  // Fahrt ≥ 15 min an einem Plantag als Ersatz für die offene Einheit
+  session.planInfo = plan?.planInfo ?? await planErsatzHeute();
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, blocks);
   else session.setTarget(settings.startWatt, { instant: true });

@@ -199,6 +199,25 @@ export async function beispielHistorie() {
     fahrten.push(demoFahrt({ id, start: start.getTime(), programm: p, ziele, programmEndeBei, ftp, seed,
       gurtAb: Math.round((rnd() + 0.5) * 60) }));
   }
+  // Die letzten vier Wochen als Trainingsplan (8 Wochen) gefahren — damit die
+  // Beispielfahrten zeigen, wie Planfahrten in Liste und Detail aussehen
+  const planStart = new Date();
+  planStart.setDate(planStart.getDate() - ((planStart.getDay() + 6) % 7) - 21);
+  planStart.setHours(0, 0, 0, 0);
+  const ROLLE = { vo2max: ['H1', 'Intervalle', 'hart'], hiit4020: ['H1', 'Intervalle', 'hart'], sprint3030: ['H1', 'Intervalle', 'hart'],
+    schwelle: ['H2', 'Schwelle', 'hart'], ausdauer: ['E', 'Grundlage', 'locker'], recovery: ['R', 'Regeneration', 'locker'] };
+  // Klassische Programme (feste Watt) gelten als Ersatz für eine passende Einheit
+  const STATT = { intervalle44: 'VO2max 4×4 · 45 min', pyramide: 'Schwelle / Sweet Spot · 60 min' };
+  for (const { session: s } of fahrten) {
+    if (s.start < planStart.getTime() || s.dauer < 900) continue;
+    const woche = Math.floor((s.start - planStart.getTime()) / (7 * 864e5)) + 1;
+    const [typ, name, art] = ROLLE[s.programmId] ?? ['E', 'Grundlage', 'locker'];
+    const tag = new Date(s.start);
+    const ref = `plan:${tag.getFullYear()}-${String(tag.getMonth() + 1).padStart(2, '0')}-${String(tag.getDate()).padStart(2, '0')}`;
+    s.planRef = ref;
+    s.plan = { ref, plan: 'demo', woche, laenge: 8, typ, name, art,
+      ...(ROLLE[s.programmId] ? {} : { ersatz: true, statt: STATT[s.programmId] ?? 'Grundlage · 45 min' }) };
+  }
   return {
     sessions: fahrten.map(f => f.session),
     daten: new Map(fahrten.map(f => [f.session.id, f.data])),

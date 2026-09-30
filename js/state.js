@@ -5,6 +5,7 @@
 import { FIELDS, saveSamples, saveSession } from './storage.js';
 import { logInfo, logWarn } from './logger.js';
 import { fahrtStats } from './metrics.js';
+import { zaehltFuerPlan } from './plan.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
 const RAMP_MS = 2000;         // Zielsprünge als Rampe, nicht als Sprung
@@ -20,7 +21,7 @@ export class Session extends EventTarget {
     this.settings = settings;
     this.programm = programm;                 // Programm-Definition (Name/id für die gespeicherte Fahrt)
     this.seed = null;                         // Startwert eines Zufallsprogramms (Fartlek)
-    this.planRef = null;                      // Einheit des Trainingsplans (plan:JJJJ-MM-TT)
+    this.planInfo = null;                     // Trainingsplan: Einheit dieser Fahrt (plan.js planInfo)
     this.id = new Date().toISOString();
     this.start = Date.now();
     this.status = 'riding';                   // riding | paused | done
@@ -229,7 +230,11 @@ export class Session extends EventTarget {
       programm: this.programm?.name ?? 'Freies Fahren',
       programmId: this.programm?.id ?? null,
       seed: this.seed,
-      planRef: this.planRef,
+      // Plan: nur speichern, wenn die Fahrt zählt (Abbruch nach 2 min ist nicht „gefahren")
+      ...(() => {
+        const plan = this.planInfo && zaehltFuerPlan({ dauer: this.count, programmId: this.programm?.id }) ? this.planInfo : null;
+        return { planRef: plan?.ref ?? null, plan };
+      })(),
       geraet: this.ftms.deviceName ?? null,
       fw: this.ftms.firmware ?? null,
       ftp: this.settings.ftp || null,

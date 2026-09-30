@@ -11,6 +11,7 @@
 
 import { planAnlegen, einheitAm, wocheAb, wocheWirksam, wocheMitAnpassungen, verschiebeZiele, mitAnpassung, ohneLetzteAnpassung,
   kuerzerDauer, istHart, tagIso, planWoche, pausieren, wiedereinstieg, istAbgeschlossen, planBilanz,
+  erledigtDurch, zaehltFuerPlan, planInfo, planBeschreibung,
   WOCHENTAGE, DAUERN, ZIELE, TYPEN, programmFuer } from '../js/plan.js';
 
 const fehler = [];
@@ -220,6 +221,21 @@ for (const laenge of [4, 8, 12]) {
   const { plan: neu } = wiedereinstieg(pausieren(plan, tag(8)), tagIso(tag(8)), tag(20));
   const b = planBilanz(neu, [...sessions, fahrt(22), fahrt(24)], tag(60));
   if (b.gefahren !== 5 || b.geplant !== 12) fehler.push(`Bilanz: ${b.gefahren} von ${b.geplant} statt 5 von 12`);
+}
+
+// Fahrten aus dem Plan: Abbruch zählt nicht, FTP-Test ab 5 min; Beschreibung lesbar
+{
+  const plan = planAnlegen({ tage: [1, 3, 5], dauer: 45, ftp: 220, laenge: 8, heute: START });
+  const e = einheitAm(plan, tag(8), 220);                                  // Di Woche 2: Intervalle
+  const s = dauer => ({ planRef: e.ref, start: tag(8).getTime() + 18 * 36e5, dauer, programmId: e.programmId });
+  if (erledigtDurch(e, [s(120)])) fehler.push('Abbruch nach 2 min gilt als erledigt');
+  if (!erledigtDurch(e, [s(2700)])) fehler.push('Planfahrt 45 min nicht erledigt');
+  if (!zaehltFuerPlan({ dauer: 400, programmId: 'rampentest' }) || zaehltFuerPlan({ dauer: 400, programmId: 'vo2max' }))
+    fehler.push('Schwelle für den FTP-Test falsch');
+  const text = planBeschreibung(planInfo(plan, e));
+  if (text !== `Trainingsplan · Woche 2 von 8 · ${e.name}`) fehler.push(`Beschreibung: ${text}`);
+  const ersatz = planBeschreibung(planInfo(plan, e, { ersatz: true }));
+  if (!ersatz.includes('statt ')) fehler.push(`Ersatz-Beschreibung: ${ersatz}`);
 }
 
 const eindeutig = [...new Set(fehler)];

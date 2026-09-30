@@ -4,6 +4,7 @@
 import { listSessions, getSamples, saveSession } from '../storage.js';
 import { fmtTime, fmtKm, fmtDauer, esc } from '../format.js';
 import { fahrtStats } from '../metrics.js';
+import { planBeschreibung } from '../plan.js';
 
 // Zeit-in-Zonen als schmaler Farbbalken (HTML, nutzt --z1..--z6)
 export function zonenBalken(zonenSek, hoehe = 6) {
@@ -84,8 +85,9 @@ function wochenKopf(ws, fahrten) {
   li.className = 'woche';
   const { name, spanne } = wochenName(ws);
   const w = wochenSumme(fahrten);
+  const imPlan = fahrten.filter(s => s.plan).length;
   li.innerHTML = `<span class="w-titel">${name} <i>${spanne}</i></span>
-    <span class="w-summe">${w.n} ${w.n === 1 ? 'Fahrt' : 'Fahrten'} · ${fmtDauer(w.sek)}${w.km ? ` · ${fmtKm(w.km)} km` : ''}${w.tss ? ` · ${w.tss} TSS` : ''}</span>`;
+    <span class="w-summe">${w.n} ${w.n === 1 ? 'Fahrt' : 'Fahrten'}${imPlan ? ` (${imPlan} im Plan)` : ''} · ${fmtDauer(w.sek)}${w.km ? ` · ${fmtKm(w.km)} km` : ''}${w.tss ? ` · ${w.tss} TSS` : ''}</span>`;
   return li;
 }
 
@@ -117,7 +119,7 @@ function fahrtZeile(s, onOpen) {
   const d = new Date(s.start);
   li.innerHTML = `<span class="zeile"><span class="datum">${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
     · ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
-    <span class="prog">${esc(s.programm)}</span></span>
+    <span class="prog">${s.plan ? `<span class="plan-marke" title="${esc(planBeschreibung(s.plan))}">Plan</span>` : ''}${esc(s.programm)}</span></span>
     <span class="meta">${fmtTime(s.dauer)} · Ø ${s.avgW} W · ${s.kJ} kJ${s.km ? ` · ${fmtKm(s.km)} km` : ''}${s.final ? '' : ' · abgebrochen'}</span>
     ${zonenBalken(s.zonenSek, 5)}`;
   li.addEventListener('click', () => onOpen(s));

@@ -97,6 +97,8 @@ try {
   soll('Rückgängig angeboten', await b.ev(`!!document.querySelector('.toast.mit-aktion .toast-aktion')`), true);
   await b.ev(`document.querySelector('.toast-aktion').click()`); await sleep(900);
   soll('Rückgängig stellt her', await b.ev(`document.querySelector('.plan-tag.heute').dataset.status`), 'geplant');
+  // Freie Fahrt an einem Plantag gilt als Ersatz für die offene Einheit
+  soll('Freie Fahrt heute = Ersatz', await b.ev(`import('./js/ui/plan-ui.js').then(m => m.planErsatzHeute()).then(i => !!i?.ersatz && i.statt.length > 0)`), true);
   soll('Kopf zeigt die Plan-Länge', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => /Woche 1 von 8/.test(t));
   // Pausieren und Fortsetzen
   await b.klick('#btn-plan', 700);
@@ -162,10 +164,13 @@ try {
   // --- Demo-Wege: Beispielfahrten hin und zurück ---
   await b.geh(srv.url + '?demo=programm', 2500);
   await b.klick('#btn-demo-beispiel', 3000);
+  soll('Planfahrten markiert', await b.ev(`document.querySelectorAll('#fahrten-monate .plan-marke').length`), n => n > 0);
+  soll('Wochenkopf nennt Planfahrten', await b.ev(`[...document.querySelectorAll('.w-summe')].some(x => x.textContent.includes('im Plan'))`), true);
   soll('Demo-Fahrt → Beispielfahrten', [await bildschirm(), await suche()].join(' '), 'fahrten ?demo=fahrten&von=programm');
-  await b.ev(`document.querySelectorAll('#fahrten-monate li:not(.woche)')[1].click()`); await sleep(800);
+  await b.ev(`[...document.querySelectorAll('#fahrten-monate li:not(.woche)')].find(li => li.querySelector('.plan-marke')).click()`); await sleep(800);
   soll('Beispielfahrt öffnen', await bildschirm(), 'detail');
   soll('… mit Demo-Hinweis', await b.ev(`!document.querySelector('#d-demo').hidden`), true);
+  soll('Detail zeigt Plan', await b.ev(`!document.querySelector('#d-plan').hidden && document.querySelector('#d-plan-text').textContent`), t => typeof t === 'string' && t.startsWith('Trainingsplan · Woche'));
   await zurueck();
   soll('Zurück zur Liste', await bildschirm(), 'fahrten');
   await zurueck(3000);

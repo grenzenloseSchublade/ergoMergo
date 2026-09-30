@@ -316,6 +316,14 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .sessions .zeile { display: flex; justify-content: space-between; align-items: baseline; gap: var(--abstand-3); min-width: 0; }
 .sessions .datum { white-space: nowrap; }
 .sessions .prog { color: var(--ink2); font-size: var(--text-md); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Marke „Plan": Fahrt aus dem Trainingsplan (Liste, Detail) — Hinweis, kein Knopf */
+.plan-marke {
+  display: inline-block; margin-right: var(--abstand-15); padding: 0 var(--abstand-15);
+  border: 1px solid var(--accent); border-radius: var(--radius-pill); color: var(--accent);
+  font-size: var(--text-2xs); letter-spacing: var(--sperrung-leicht); line-height: 1.6; vertical-align: 1px;
+}
+.d-programm { margin: calc(-1 * var(--abstand-2)) 0 var(--abstand-2); display: grid; gap: var(--abstand-1); font-size: var(--text-md); color: var(--ink2); }
+.d-plan { color: var(--ink3); font-size: var(--text-sm); }
 .sessions .meta { color: var(--ink2); font-size: var(--text-sm); margin-top: calc(-1 * var(--abstand-1)); }
 /* Probefahrten/Fehlstarts unter 2 min: bleiben da, drängen sich aber nicht vor */
 .sessions li.kurz { opacity: .55; }
