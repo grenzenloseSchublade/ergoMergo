@@ -303,8 +303,12 @@ async function renderProgrammTilesInner() {
   fill('#workout-tiles', WORKOUTS);
   fill('#programm-tiles', PROGRAMME);
 
-  // Importierte .zwo-Workouts als eigene Kacheln mit Löschknopf
+  // Importierte .zwo-Workouts als eigene Kacheln mit Löschknopf. Der Import
+  // ist eine Einstellung (standardmäßig aus); schon importierte Programme
+  // bleiben auch ohne ihn sichtbar und fahrbar
   const customs = (await listProgramme()).map(p => zwoProgramm(p));
+  $('#btn-zwo').hidden = !settings.zwoImport;
+  $('#rubrik-custom').hidden = !settings.zwoImport && !customs.length;
   fill('#custom-tiles', customs, async p => {
     if (confirm(`„${p.name}“ löschen?`)) { await deleteProgramm(p.id); renderProgrammTiles(); }
   });

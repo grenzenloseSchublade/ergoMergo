@@ -103,6 +103,7 @@ export async function openSettings({ nachSpeichern } = {}) {
   $('#set-start').value = s.startWatt;
   $('#set-sprache').checked = s.sprachansagen;
   $('#set-ton').checked = s.tonAn !== false;
+  $('#set-zwo').checked = s.zwoImport;
   $('#set-halten-tasten').checked = s.haltenTasten;
   $('#set-halten-paddles').checked = s.haltenPaddles;
   $('#set-icukey').value = s.icuApiKey;
@@ -143,6 +144,7 @@ export async function openSettings({ nachSpeichern } = {}) {
     await setSetting('startWatt', zahl('#set-start', 20, 300, 100));
     await setSetting('sprachansagen', $('#set-sprache').checked);
     await setSetting('tonAn', $('#set-ton').checked);
+    await setSetting('zwoImport', $('#set-zwo').checked);
     await setSetting('icuApiKey', $('#set-icukey').value.trim());
     const halten = { tasten: $('#set-halten-tasten').checked, paddles: $('#set-halten-paddles').checked };
     await setSetting('haltenTasten', halten.tasten);
