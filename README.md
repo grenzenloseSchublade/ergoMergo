@@ -131,6 +131,22 @@ Trainer), `?demo` (freies Fahren); alle Parameter in
 [docs/debugging.md](docs/debugging.md). Test vom Android-Gerät:
 GitHub-Pages-Deployment oder USB-Debugging + `chrome://inspect`.
 
+### Stil und Tests
+
+Farben, Schriftgrößen, Radien und Abstände kommen nur aus `css/tokens.css`
+(Regeln: [docs/stil.md](docs/stil.md), alle Bausteine live:
+[docs/stil.html](https://grenzenloseschublade.github.io/ergoMergo/docs/stil.html)).
+
+```sh
+node tools/stil-check.mjs   # feste Werte außerhalb der Tokens (läuft auch in release.mjs)
+node test/layout.mjs        # Fahrbildschirm in 5 Größen: Bedienleiste, Überlauf, Zentrierung, Sprünge, Panel
+node test/ablauf.mjs        # Navigation, Einstellungen, Fahrt, Programm, Demo-Wege mit Sollwerten
+```
+
+Die Browser-Tests brauchen Node ≥ 22 und ein Chrome (`CHROME=/pfad/zu/chrome`,
+sonst Playwrights `chrome-headless-shell` oder `google-chrome`); sie starten
+ihren eigenen Server.
+
 ### Release
 
 Der Versionsstempel steht doppelt (`VERSION` in `sw.js` für die

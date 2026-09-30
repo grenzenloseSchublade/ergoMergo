@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+// Ablauf-Prüfung: Navigation (Zurück-Taste, Dialoge, Overlay), Einstellungen,
+// Fahrt (Halten, Not-Stopp mit Sperre, Fokus, Doppel-Zurück), Programm
+// (Skip, +30 s, zweistufiges Beenden) und die Demo-Wege — mit Sollwerten.
+// Aufruf: node test/ablauf.mjs     Exit 1, wenn ein Schritt abweicht.
+
+import { server, browser, sleep, historieAnlegen } from './lib.mjs';
+
+const srv = await server();
+const b = await browser({ breite: 412, hoehe: 900 });
+const abweichungen = [];
+let schritte = 0;
+const soll = (was, ist, erwartet) => {
+  schritte++;
+  const ok = typeof erwartet === 'function' ? erwartet(ist) : ist === erwartet;
+  if (!ok) abweichungen.push(`${was}: ist ${JSON.stringify(ist)}, erwartet ${typeof erwartet === 'function' ? erwartet.toString() : JSON.stringify(erwartet)}`);
+};
+const bildschirm = () => b.ev(`['home','fahrten','detail','ride'].filter(k => !document.querySelector('#screen-' + k).hidden).join()`);
+const suche = () => b.ev('location.search');
+const ftp = () => b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.ftp)`);
+const zurueck = (ms = 800) => b.ev('history.back()').then(() => sleep(ms));
+
+try {
+  // --- Navigation mit Fahrten-Historie ---
+  await b.geh(srv.url, 1500);
+  await b.ev(`import('./js/storage.js').then(m => m.setSetting('ftp', 200))`);
+  await historieAnlegen(b);
+  await b.geh(srv.url, 2000);
+  soll('Start', await bildschirm(), 'home');
+  await b.klick('#btn-alle-fahrten', 800);
+  soll('Alle Fahrten', await bildschirm(), 'fahrten');
+  await b.klick('#fahrten-monate li:not(.woche)', 800);
+  soll('Fahrt öffnen', await bildschirm(), 'detail');
+  await b.klick('#btn-back', 800);
+  soll('Zurück-Knopf', await bildschirm(), 'fahrten');
+  await zurueck();
+  soll('Handy-Zurück', await bildschirm(), 'home');
+  await b.klick('#session-list li', 800);
+  soll('Fahrt von Home', await bildschirm(), 'detail');
+  await zurueck();
+  soll('Zurück zu Home', await bildschirm(), 'home');
+  await b.klick('#session-list li', 600);
+  await b.klick('#detail-chart', 400);
+  soll('Graph-Overlay offen', await b.ev(`document.querySelector('#dlg-graph').open`), true);
+  await zurueck(500);
+  soll('Zurück schließt Overlay', await b.ev(`document.querySelector('#dlg-graph').open`), false);
+  soll('… und bleibt in der Fahrt', await bildschirm(), 'detail');
+  await b.klick('#btn-back', 700);
+
+  // --- Einstellungen: Zurück verwirft, Speichern übernimmt ---
+  await b.klick('#btn-settings', 700);
+  await b.ev(`document.querySelector('#set-ftp').value = 248`);
+  await zurueck(700);
+  soll('Zurück schließt Einstellungen', await b.ev(`document.querySelector('#dlg-settings').open`), false);
+  soll('… ohne zu speichern', await ftp(), 200);
+  await b.klick('#btn-settings', 700);
+  await b.ev(`document.querySelector('#set-ftp').value = 248; document.querySelector('#dlg-settings button.primary').click()`);
+  await sleep(800);
+  soll('Speichern übernimmt FTP 248', await ftp(), 248);
+  await b.klick('#btn-settings', 600);
+  soll('returnValue beim Öffnen leer', await b.ev(`document.querySelector('#dlg-settings').returnValue`), '');
+  await zurueck(600);
+  soll('FTP bleibt 248', await ftp(), 248);
+
+  // --- Freie Demo-Fahrt: Halten, Not-Stopp, Sperre, Fokus, Doppel-Zurück ---
+  await b.ev(`import('./js/storage.js').then(async m => { await m.setSetting('ftp', 200); await m.setSetting('wattSchritt', 10); })`);
+  await b.geh(srv.url + '?demo', 2500);
+  const ziel = () => b.ev(`+document.querySelector('#m-target').textContent`);
+  const stopp = () => b.ev(`document.querySelector('#btn-stop').textContent.trim()`);
+  const druck = (sel, pid, typ) => b.ev(`document.querySelector('${sel}').dispatchEvent(new PointerEvent('${typ}', { bubbles: true, pointerId: ${pid}, isPrimary: ${pid === 1} }))`);
+  soll('Fahrt läuft', await bildschirm(), 'ride');
+  await druck('#btn-plus', 1, 'pointerdown'); await druck('#btn-minus', 2, 'pointerdown');
+  await sleep(1300);
+  await druck('#btn-plus', 1, 'pointerup'); await druck('#btn-minus', 2, 'pointerup');
+  const z1 = await ziel(); await sleep(1500);
+  soll('Zwei Finger losgelassen: Ziel steht', await ziel(), z1);
+  await druck('#btn-plus', 1, 'pointerdown'); await sleep(700);
+  await b.klick('#btn-stop', 1500);
+  soll('STOPP während Halten', await stopp(), 'GESTOPPT');
+  await druck('#btn-plus', 1, 'pointerup');
+  const zGestoppt = await ziel();
+  await druck('#btn-plus', 3, 'pointerdown'); await druck('#btn-plus', 3, 'pointerup'); await sleep(300);
+  soll('± in der Sperre wirkt nicht', await ziel(), zGestoppt);
+  await sleep(3000);
+  soll('Nach der Sperre: WEITER', await stopp(), 'WEITER');
+  await druck('#btn-plus', 4, 'pointerdown'); await druck('#btn-plus', 4, 'pointerup'); await sleep(400);
+  soll('± nach der Sperre fährt weiter', await stopp(), 'STOPP');
+  await b.klick('.metrics', 300);
+  soll('Tipp auf Werte: Werte-Fokus', await b.ev(`document.querySelector('.ride-grid').className`), v => v.includes('fokus-werte'));
+  await b.ev(`(() => { const c = document.querySelector('#live-chart'), r = c.getBoundingClientRect();
+    c.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()`);
+  await sleep(300);
+  soll('Tipp auf Graph: Graph-Fokus', await b.ev(`document.querySelector('.ride-grid').className`), v => v.includes('fokus-graph'));
+  await zurueck(600);
+  soll('1× Zurück beendet nicht', await bildschirm(), 'ride');
+  await zurueck(2500);
+  soll('2× Zurück beendet', await bildschirm(), 'home');
+
+  // --- Programm: Skip, +30 s, zweistufiges Beenden ---
+  await b.geh(srv.url + '?demo=programm', 2500);
+  const zeit = () => b.ev(`document.querySelector('#m-time').textContent`);
+  const vorSkip = await zeit();
+  await b.klick('#btn-skip', 400);
+  soll('Skip wechselt den Block', await zeit(), v => v !== vorSkip);
+  const vorExt = await zeit();
+  await b.klick('#btn-ext', 300);
+  const sek = t => t.split(':').reduce((a, x) => a * 60 + +x, 0);
+  soll('+30 s verlängert', sek(await zeit()) - sek(vorExt), d => d >= 28 && d <= 31);
+  await b.klick('#btn-end', 200);
+  soll('Beenden 1×: Rückfrage', await b.ev(`document.querySelector('#btn-end').textContent.trim()`), 'Sicher?');
+  await b.klick('#btn-end', 2500);
+  soll('Beenden 2×: Home', await bildschirm(), 'home');
+
+  // --- Demo-Wege: Beispielfahrten hin und zurück ---
+  await b.geh(srv.url + '?demo=programm', 2500);
+  await b.klick('#btn-demo-beispiel', 3000);
+  soll('Demo-Fahrt → Beispielfahrten', [await bildschirm(), await suche()].join(' '), 'fahrten ?demo=fahrten&von=programm');
+  await b.ev(`document.querySelectorAll('#fahrten-monate li:not(.woche)')[1].click()`); await sleep(800);
+  soll('Beispielfahrt öffnen', await bildschirm(), 'detail');
+  soll('… mit Demo-Hinweis', await b.ev(`!document.querySelector('#d-demo').hidden`), true);
+  await zurueck();
+  soll('Zurück zur Liste', await bildschirm(), 'fahrten');
+  await zurueck(3000);
+  soll('Zurück in die Demo-Fahrt', [await bildschirm(), await suche()].join(' '), 'ride ?demo=programm');
+  await b.klick('#btn-demo-beispiel', 3000);
+  await b.klick('#btn-back-fahrten', 3000);
+  soll('Zurück-Knopf in die Demo-Fahrt', await bildschirm(), 'ride');
+  await b.geh(srv.url, 2000);
+  await b.klick('#btn-demo-fahrt', 1500);
+  soll('Home → Beispielfahrten', await bildschirm(), 'fahrten');
+  await zurueck(1000);
+  soll('… Zurück nach Home', await bildschirm(), 'home');
+  await b.klick('#btn-demo-fahrt', 1500);
+  await b.klick('#btn-demo-zur-fahrt', 3000);
+  soll('Beispielfahrten → Demo-Fahrt', [await bildschirm(), await suche()].join(' '), 'ride ?demo=vo2max');
+} catch (e) {
+  abweichungen.push('Testfehler: ' + e.message);
+} finally {
+  abweichungen.push(...b.fehler.map(f => 'JS-Fehler: ' + f));
+  b.schliesse();
+  srv.schliesse();
+}
+
+console.log(abweichungen.length ? `${abweichungen.length} Abweichungen bei ${schritte} Schritten:\n  ${abweichungen.join('\n  ')}` : `ok — ${schritte} Schritte wie erwartet`);
+process.exit(abweichungen.length ? 1 : 0);
