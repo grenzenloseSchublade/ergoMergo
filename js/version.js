@@ -12,7 +12,7 @@ export async function heileVersionsDrift() {
   try {
     if (!('caches' in window) || location.hostname === 'localhost') return;
     const keys = await caches.keys();
-    const cacheVersion = keys.map(k => k.match(/^ergomergo-(v\d+)$/)?.[1]).find(Boolean);
+    const cacheVersion = keys.map(k => k.match(/^ergomergo-(v[\d.]+)$/)?.[1]).find(Boolean);
     if (!cacheVersion || cacheVersion === APP_VERSION) return;
     if (sessionStorage.getItem('driftReload') === cacheVersion) return;   // schon versucht
     sessionStorage.setItem('driftReload', cacheVersion);
@@ -25,7 +25,9 @@ export function starteUpdateWatchdog(statusEl) {
   // trägt nur noch Update-Angebot bzw. Ausnahmezustände
   if (location.hostname === 'localhost') { statusEl.textContent = 'dev (localhost)'; return; }
 
+  let updateLaeuft = false;   // Installation angestoßen: Knopf nicht ersetzen
   const pruefe = async () => {
+    if (updateLaeuft) return;
     try {
       const text = await (await fetch(`sw.js?_=${Date.now()}`, { cache: 'no-store' })).text();
       const live = text.match(/VERSION = '([^']+)'/)?.[1];
@@ -48,21 +50,20 @@ export function starteUpdateWatchdog(statusEl) {
       btn.onclick = async () => {
         btn.disabled = true;
         btn.textContent = 'prüfe …';
+        updateLaeuft = true;
         const { logInfo, logError } = await import('./logger.js');
+        const { neuLaden: ladeNeu } = await import('./navigation.js');
         let fertig = false;
+        // Nie mitten in der Fahrt oder bei offenem Dialog — navigation.js
+        // merkt sich den Reload dann und holt ihn nach
         const neuLaden = quelle => {
           if (fertig) return;
           fertig = true;
-          // Nie mitten in der Fahrt — der controllerchange-Handler in
-          // main.js hat reloadAusstehend gesetzt, goHome holt den Reload nach
-          if (!document.querySelector('#screen-ride')?.hidden) return;
-          logInfo('update', `Update fertig — lade neu (${quelle})`);
-          // Mini-Verzögerung: der Log-Write muss die IndexedDB noch erreichen
-          setTimeout(() => location.reload(), 150);
+          ladeNeu(`Update fertig (${quelle})`);
         };
         try {
           const reg = await navigator.serviceWorker?.getRegistration();
-          if (!reg) { location.reload(); return; }
+          if (!reg) { neuLaden('ohne Registrierung'); return; }
           logInfo('update', `Update angestoßen (${APP_VERSION} → ${live})`,
             `waiting=${!!reg.waiting} installing=${!!reg.installing}`);
           navigator.serviceWorker.addEventListener('controllerchange',
@@ -84,6 +85,7 @@ export function starteUpdateWatchdog(statusEl) {
                 // Installation kontrolliert gescheitert (z. B. Deploy noch
                 // nicht vollständig am CDN) — klar sagen statt still hängen
                 btn.disabled = false;
+                updateLaeuft = false;
                 btn.textContent = `${live} verfügbar — gleich erneut versuchen`;
                 logError('update', 'Installation verworfen (redundant) — Deploy evtl. noch nicht vollständig');
               }
@@ -107,6 +109,7 @@ export function starteUpdateWatchdog(statusEl) {
         // erneut anbieten (langsames Netz, abgebrochene Installation)
         setTimeout(() => {
           if (fertig) return;
+          updateLaeuft = false;
           logError('update', 'Update nicht abgeschlossen (Timeout 25 s)');
           btn.disabled = false;
           btn.textContent = `${live} verfügbar — erneut versuchen`;

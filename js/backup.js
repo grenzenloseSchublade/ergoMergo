@@ -1,7 +1,7 @@
 // Komplettsicherung der lokalen Datenbank als JSON-Datei — und Wiederherstellung.
 // Schutz gegen Browser-Datenverlust und der Weg für den Gerätewechsel.
 
-import { listSessions, getAllSamples, saveSession, saveSamples, listProgramme, saveProgramm, getSettings, setSetting } from './storage.js';
+import { listSessions, getAllSamples, saveSession, saveSamples, listProgramme, saveProgramm, getSettings, setSetting, FIELDS } from './storage.js';
 
 const FORMAT = 'ergomergo-backup';
 const FORMAT_VERSION = 1;
@@ -34,7 +34,7 @@ export async function importiereAlles(text) {
   }
   for (const d of data.sessionData ?? []) {
     // Länge gegen count prüfen — beschädigte Sicherungen nicht still übernehmen
-    if (!d?.id || !Array.isArray(d.samples) || d.samples.length < d.count * 6) {
+    if (!d?.id || !Array.isArray(d.samples) || d.samples.length < d.count * FIELDS) {
       fehler.push(`Rohdaten ${d?.id ?? '?'} unvollständig`);
       continue;
     }

@@ -14,8 +14,6 @@ let aktiveQuellen = 0;
 // aufstauen und beim ersten Tap gleichzeitig herausplatzen (?demo-Autostart)
 let entsperrt = false;
 
-export function istEntsperrt() { return entsperrt; }
-
 // Geteilter Context für ansagen.js (Bausteine über dieselbe Audio-Uhr)
 export function audioCtx() { return ctx; }
 
@@ -35,12 +33,22 @@ export function initAudio() {
 // Liefert ein Promise, das nach dem resume() auflöst — Töne erst DANACH
 // planen (wie spiele() in ansagen.js): synchron bei suspended geplante
 // Oszillatoren gehen auf Android teils verloren.
-export function wecke() {
+function wecke() {
   if (!ctx) return Promise.resolve();
   clearTimeout(suspendTimer);
   if (ctx.state === 'suspended')
     return ctx.resume().then(() => { entsperrt = true; }).catch(() => { /* ohne Ton weiter */ });
   return Promise.resolve();
+}
+
+// Gemeinsames Tor vor jeder Wiedergabe (Töne und Ansagen): vor der ersten
+// User-Geste verwerfen statt aufstauen, sonst Context wecken. false = nichts
+// abspielen.
+export async function bereit() {
+  if (!ctx) return false;
+  if (!entsperrt && ctx.state === 'suspended') return false;
+  await wecke();
+  return true;
 }
 
 // Quellen-Zählung: erst wenn die letzte Quelle geendet hat, wird suspendiert
@@ -89,9 +97,7 @@ function tone(freq, at, dur = 0.15, gainVal = 0.5, halten = false) {
 
 export async function blockwechsel(hart) {
   navigator.vibrate?.(hart ? [200, 100, 200] : 200);
-  if (!ctx) return;
-  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
-  await wecke();
+  if (!await bereit()) return;
   const t = ctx.currentTime + 0.05;
   // EIN gehaltener Ton genau beim Wechsel (nach den Countdown-Beeps) —
   // keine Vortöne. Unterscheidung über die Höhe: hart (Watt rauf) hoch,
@@ -102,17 +108,13 @@ export async function blockwechsel(hart) {
 
 // Kurzer Bestätigungs-Tick für Controller-Tastendrücke
 export async function tick() {
-  if (!ctx) return;
-  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
-  await wecke();
+  if (!await bereit()) return;
   tone(1200, ctx.currentTime + 0.02, 0.035, 0.15);
 }
 
 export async function countdown() {
   navigator.vibrate?.(80);
-  if (!ctx) return;
-  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
-  await wecke();
+  if (!await bereit()) return;
   tone(880, ctx.currentTime + 0.05, 0.09, 0.4);
 }
 
@@ -129,9 +131,7 @@ export function sage(text) {
 
 export async function fertig() {
   navigator.vibrate?.([150, 80, 150, 80, 400]);
-  if (!ctx) return;
-  if (!entsperrt && ctx.state === 'suspended') return;   // verwerfen statt aufstauen
-  await wecke();
+  if (!await bereit()) return;
   const t = ctx.currentTime + 0.05;
   // Festliches Dur-Arpeggio aufwärts, Schlusston gehalten
   [659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.16, 0.15));

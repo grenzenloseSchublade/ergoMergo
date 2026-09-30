@@ -4,12 +4,14 @@
 // Bausteine + Konkatenation über die AudioContext-Uhr überleben das.
 // Live-TTS (signals.sage) bleibt nur Fallback, wenn Bausteine fehlen.
 
-import { wecke, quelleStart, quelleEnde, istEntsperrt } from './signals.js';
+import { bereit, quelleStart, quelleEnde } from './signals.js';
 
 const BASE = new URL('../audio/', import.meta.url);
 
 let ctx = null;
-const puffer = new Map();          // name → AudioBuffer | Promise | null(Fehlschlag)
+const puffer = new Map();          // name → AudioBuffer | Promise
+let generation = 0;                // jede neue/abgebrochene Ansage zählt hoch
+let laufend = [];                  // geplante Quellen der aktuellen Ansage
 
 const EINER = [null, 'ein', 'zwei', 'drei', 'vier', 'fuenf', 'sechs', 'sieben',
   'acht', 'neun', 'zehn', 'elf', 'zwoelf', 'dreizehn', 'vierzehn', 'fuenfzehn',
@@ -19,7 +21,7 @@ const ZEHNER = [null, null, 'zwanzig', 'dreissig', 'vierzig', 'fuenfzig',
 
 // 1–999 als Baustein-Folge in deutscher Komposition:
 // 216 → zwei|hundert|sechzehn, 85 → fuenf|und|achtzig, 1 → eins.
-export function zahlBausteine(n) {
+function zahlBausteine(n) {
   n = Math.round(n);
   if (n < 1 || n > 999) return null;
   const out = [];
@@ -43,7 +45,9 @@ async function lade(name) {
     .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
     .then(b => ctx.decodeAudioData(b))
     .then(buf => { puffer.set(name, buf); return buf; })
-    .catch(() => { puffer.set(name, null); return null; });
+    // Fehlschlag nicht merken: offline beim ersten Mal soll ein späterer
+    // Versuch (wieder online, SW-Cache gefüllt) den Baustein noch laden
+    .catch(() => { puffer.delete(name); return null; });
   puffer.set(name, p);
   return p;
 }
@@ -56,25 +60,36 @@ export function initAnsagen(audioCtx) {
   for (const n of ['minuten', 'minute', 'watt', 'und', 'hundert', 'fertig', 'sekunden']) lade(n);
 }
 
-// Baustein-Folge lückenlos über die AudioContext-Uhr planen.
-// Danach den Context wieder schlafen legen (Quellen-Zählung in signals.js) —
-// ein dauerhaft laufender Context hält sonst den Android-Audiofokus.
+// Laufende und geplante Ansage sofort verstummen lassen (Skip während der
+// Ansage, Fahrtende, Ansagen ausgeschaltet) — sonst sprechen zwei Stimmen
+// gleichzeitig bzw. eine geplante Folge spielt beim nächsten resume() weiter
+export function stoppeAnsagen() {
+  generation++;
+  for (const src of laufend) { try { src.stop(); } catch { /* schon beendet */ } }
+  laufend = [];
+}
+
+// Baustein-Folge lückenlos über die AudioContext-Uhr planen; eine neue
+// Ansage ersetzt die vorige. Danach legt die Quellen-Zählung in signals.js
+// den Context wieder schlafen — ein dauerhaft laufender Context hält sonst
+// den Android-Audiofokus.
 async function spiele(namen) {
   if (!ctx || !namen?.length) return false;
-  // Ohne User-Geste hängt resume() endlos — Ansage verwerfen statt stauen
-  if (!istEntsperrt() && ctx.state === 'suspended') return false;
+  stoppeAnsagen();
+  const gen = generation;
   const bufs = await Promise.all(namen.map(lade));
   if (bufs.some(b => !b)) return false;         // Baustein fehlt → Fallback TTS
-  wecke();
-  if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { return false; } }
+  if (!await bereit() || ctx.state !== 'running') return false;
+  if (gen !== generation) return true;          // inzwischen abgebrochen/ersetzt
   let t = ctx.currentTime + 0.05;
   for (const buf of bufs) {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(ctx.destination);
     quelleStart();
-    src.onended = quelleEnde;
+    src.onended = () => { laufend = laufend.filter(q => q !== src); quelleEnde(); };
     src.start(t);
+    laufend.push(src);
     t += buf.duration + 0.02;
   }
   return true;
@@ -91,12 +106,16 @@ export function ansageBlock(dauerSek, watt) {
     if (!m) return Promise.resolve(false);
     if (min === 1) teile.push('eine', 'minute');
     else teile.push(...m, 'minuten');
+    // „eine Sekunde" gibt es nicht als Baustein („eins Sekunden" klänge
+    // falsch) — dann Live-TTS
+    if (rest === 1) return Promise.resolve(false);
     if (rest > 0) {
       const r = zahlBausteine(rest);
       if (!r) return Promise.resolve(false);
       teile.push('und', ...r, 'sekunden');
     }
   } else if (dauerSek > 0) {
+    if (Math.round(dauerSek) === 1) return Promise.resolve(false);
     const r = zahlBausteine(Math.round(dauerSek));
     if (!r) return Promise.resolve(false);
     teile.push(...r, 'sekunden');

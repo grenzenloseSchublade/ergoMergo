@@ -3,19 +3,19 @@
 // Screen-Wechsel und rideScreen-Registrierung kommen als Callbacks.
 
 import { getSettings, FIELDS } from './storage.js';
-import { distanzKm, fahrtStats } from './metrics.js';
+import { distanzKm, fahrtStats, kadenzBereich } from './metrics.js';
 import { initAudio } from './signals.js';
 import { Session } from './state.js';
 import { WORKOUTS } from './workouts.js';
-import { PROGRAMME, ProgramRun, expand, defaultOpts, baueBlocks } from './program.js';
+import { PROGRAMME, ProgramRun, expand, baueBlocks } from './program.js';
 
 const $ = s => document.querySelector(s);
 
 // Einfaches Fahrermodell für alle Demo-Daten (Vorgeschichte, Live-Werte,
 // Beispielfahrt): ERG regelt in wenigen Sekunden nach, beim Stopp rollt die
 // Leistung aus; HF folgt der Leistung träge (schneller Anstieg, langsamer
-// Abfall, leichte Drift); Kadenz passend zur Vorgabe im Fahrbildschirm
-// (über Schwelle 100–110, sonst 85–95).
+// Abfall, leichte Drift); Kadenz mitten im Bereich, den der Fahrbildschirm
+// vorgibt (metrics.kadenzBereich), sonst locker 89.
 function fahrermodell(ftp, rnd = () => Math.random() - 0.5) {
   let watt = 0, hf = 92;
   return (ziel, k) => {
@@ -23,7 +23,8 @@ function fahrermodell(ftp, rnd = () => Math.random() - 0.5) {
     const w = Math.max(0, Math.round(watt + (ziel ? rnd() * 14 : 0)));
     const hfZiel = 78 + w * 0.36 + k / 150;
     hf += (hfZiel - hf) / (hfZiel > hf ? 28 : 55);
-    const rpm = w ? Math.round((ftp && ziel / ftp > 1.05 ? 104 : 89) + rnd() * 6) : 0;
+    const bereich = kadenzBereich(ziel, ftp);
+    const rpm = w ? Math.round((bereich ? (bereich.low + Math.min(bereich.high, bereich.low + 20)) / 2 : 89) + rnd() * 6) : 0;
     return { watt: w, rpm, hr: Math.round(hf + rnd() * 2), kmh: w ? 14 + w / 11 : 0 };
   };
 }
@@ -74,13 +75,14 @@ export async function startDemo(variante, { betreteFahrt }) {
     session.count = secs;
     session.km = distanzKm(session.samples, secs);   // zentral aus den Samples, kein zweiter Rechenweg
   };
-  const workout = WORKOUTS.find(x => x.id === variante);
-  const programm = variante === 'programm' ? PROGRAMME.find(x => x.id === 'intervalle44') : null;
-  if (workout || programm) {
-    const blocks = workout ? workout.generieren(defaultOpts(workout), settings.ftp)
-      : expand(programm.bauen({ wdh: 4, hart: 210, locker: 90 }), settings.ftp);
+  // ?demo=<id> für jedes eingebaute Programm; ?demo=programm = 4×4 mit festen Watt
+  const programm = variante === 'programm' ? PROGRAMME.find(x => x.id === 'intervalle44')
+    : [...WORKOUTS, ...PROGRAMME].find(x => x.id === variante);
+  if (programm) {
+    const opts = variante === 'programm' ? { wdh: 4, hart: 210, locker: 90 } : optsFuer(programm, 1);
+    const blocks = baueBlocks(programm, opts, settings.ftp);
     prefill(einstiegVorWechsel(blocks), t => zielBei(blocks, t));
-    run = new ProgramRun(session, (workout ?? programm).name, blocks);
+    run = new ProgramRun(session, blocks);
   } else {
     prefill(480, k => k < 120 ? 120 : k < 300 ? 200 : 160);
     session.setTarget(160, { instant: true });
@@ -97,13 +99,14 @@ export async function startDemo(variante, { betreteFahrt }) {
   initAudio();
   document.addEventListener('pointerdown', initAudio, { once: true });
   // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde
+  // replace statt href: Zurück führt danach nicht wieder in die Demo
   betreteFahrt(session, settings,
-    async () => { $('#m-demo').hidden = true; location.href = location.pathname; }, run);
+    async () => { $('#m-demo').hidden = true; location.replace(location.pathname); }, run);
   ftms.dispatchEvent(new Event('connected'));
   $('#m-demo').hidden = false;                 // persistenter Badge, unabhängig vom Status
   // Sprung zu den gespeicherten Beispielfahrten — per Neuladen, das räumt wie
   // „Beenden" alle Demo-Timer ab
-  $('#btn-demo-beispiel').onclick = () => { location.href = `${location.pathname}?demo=fahrten`; };
+  $('#btn-demo-beispiel').onclick = () => { location.replace(`${location.pathname}?demo=fahrten`); };
 }
 
 // ---------- Gespeicherte Demo-Fahrten (Detailansicht + Fahrten-Historie) ----------
@@ -147,7 +150,7 @@ const optsFuer = (p, seed) => ({
 // kurzer Kontaktverlust. Gestern 18:30.
 function beispielFahrtMit(ftp) {
   const p = PROGRAMME.find(x => x.id === 'intervalle44');
-  const ziele = zieleAus(expand(p.bauen({ wdh: 4, hart: 210, locker: 90 }), ftp));
+  const ziele = zieleAus(expand(p.bauen({ wdh: 4, hart: 210, locker: 90 })));
   const stoppBei = 8 * 60 + 2 * 7 * 60 + 4 * 60 + 60;   // in der 3. Erholung
   ziele.splice(stoppBei, 0, ...Array(45).fill(0));
   const programmEndeBei = ziele.length;

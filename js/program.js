@@ -63,54 +63,51 @@ export const PROGRAMME = [
     // denselben Ablauf; neu gewürfelt wird nur per Button im Startdialog
     zufall: true,
     optionen: { dauer: { label: 'Dauer (min)', min: 20, max: 90, default: 40 },
-                von: { label: 'Watt min', min: 50, max: 300, default: 100 },
-                bis: { label: 'Watt max', min: 80, max: 400, default: 220 } },
+                von: { label: 'Untergrenze (W)', min: 50, max: 300, default: 100 },
+                bis: { label: 'Obergrenze (W)', min: 80, max: 400, default: 220 } },
     bauen: (o, rng) => {
-      const blocks = [{ min: 5, watt: o.von }];
+      // Vertauschte Grenzen (Untergrenze > Obergrenze) nicht auf den Kopf stellen
+      const lo = Math.min(o.von, o.bis), hi = Math.max(o.von, o.bis);
+      const blocks = [{ min: 5, watt: lo }];
       let rest = o.dauer - 10;
       while (rest > 0) {
         const m = Math.min(rest, 1 + Math.floor(rng() * 4));
-        blocks.push({ min: m, watt: o.von + Math.round(rng() * (o.bis - o.von) / 10) * 10 });
+        blocks.push({ min: m, watt: lo + Math.round(rng() * (hi - lo) / 10) * 10 });
         rest -= m;
       }
-      blocks.push({ min: 5, watt: o.von });
+      blocks.push({ min: 5, watt: lo });
       return blocks;
     },
   },
 ];
 
 // Schrittliste → flache Blockliste [{dauer, watt}] in Sekunden.
-// wattWert löst "55%" gegen die FTP auf.
 let gruppenZaehler = 0;
 
-export function expand(schritte, ftp = 0) {
-  // 30-W-Boden: "%"-Ziele ohne hinterlegte FTP dürfen nicht zu 0-W-Blöcken werden
-  const watt = w => typeof w === 'string' && w.endsWith('%')
-    ? Math.max(30, Math.round(parseFloat(w) / 100 * ftp)) : w;
+export function expand(schritte) {
   const out = [];
   for (const s of schritte) {
     if (s.wdh) {
       // Wiederholung fürs Intensitätsprofil markieren (Klammer „n×")
       const gruppe = `p${++gruppenZaehler}`;
       for (let i = 0; i < s.wdh; i++) {
-        for (const b of expand(s.block, ftp)) {
+        for (const b of expand(s.block)) {
           b.gruppe ??= gruppe;
           b.gruppeLabel ??= `${s.wdh}×`;
           out.push(b);
         }
       }
     } else {
-      out.push({ dauer: Math.round(s.min * 60), watt: watt(s.watt) });
+      out.push({ dauer: Math.round(s.min * 60), watt: s.watt });
     }
   }
   return out;
 }
 
 export class ProgramRun extends EventTarget {
-  constructor(session, name, blocks) {
+  constructor(session, blocks) {
     super();
     this.session = session;
-    this.name = name;
     this.blocks = blocks;
     this.total = blocks.reduce((a, b) => a + b.dauer, 0);
     this.offset = 0;                       // ± verschiebt den gesamten Ablauf (Watt)
@@ -165,17 +162,42 @@ export class ProgramRun extends EventTarget {
     this.#tick();
   }
 
-  // ±-Taps wirken als Offset auf alle Blöcke, nicht nur den aktuellen
-  adjust(delta) {
-    this.offset += delta;
-    this.#apply();
+  // Programm durchlaufen, ab jetzt wird ausgefahren
+  get vorbei() { return this.index === -2; }
+
+  // Laufender Block (vor dem ersten Tick der erste), nach Programmende null
+  get aktuellerBlock() {
+    return this.vorbei ? null : this.blocks[Math.max(0, this.index)] ?? null;
   }
 
-  // Aktuellen Block überspringen (Programmuhr ans Blockende springen)
+  // Effektives Ziel eines Blocks inkl. ±-Offset (Anzeige, Ansage, Zonenfarbe)
+  zielFuer(b) { return b.watt + this.offset; }
+
+  // Sekunden seit Programmende (Ausfahren) für eine Aufzeichnungszeit
+  ueberzeit(elapsed) {
+    return Math.max(0, this.programmZeit(elapsed) - this.total);
+  }
+
+  // ±-Taps wirken als Offset auf alle Blöcke, nicht nur den aktuellen.
+  // Geklemmt, sodass der laufende Block zwischen 0 W und maxWatt bleibt —
+  // sonst liefen Taps an der Grenze ins Leere und Anzeige/Ansage zeigten
+  // negative oder unerreichbare Ziele. anwenden=false: nur den Offset
+  // setzen (Wiedereinstieg nach Not-Stopp fährt ihn selbst sanft an).
+  adjust(delta, { anwenden = true } = {}) {
+    let neu = this.offset + delta;
+    const b = this.aktuellerBlock;
+    if (b) neu = Math.min(Math.max(neu, -b.watt), (this.session.settings.maxWatt ?? Infinity) - b.watt);
+    this.offset = neu;
+    if (anwenden) this.#apply();
+  }
+
+  // Aktuellen Block überspringen (Programmuhr ans Blockende springen).
+  // Liefert, ob etwas passiert ist (für die Rückmeldung in der UI).
   skip() {
-    if (this.index < 0 || !this.restImBlock) return;
+    if (this.index < 0 || !this.restImBlock) return false;
     this.#schliessePause();
     this.#setzeZeitOffset(this.zeitOffset + this.restImBlock);
+    return true;
   }
 
   // Player-Logik: erst an den Blockanfang, kurz nach Blockanfang (<3 s
@@ -200,19 +222,19 @@ export class ProgramRun extends EventTarget {
   // (Blockdauer wächst), statt die Programmuhr zurückzuspulen — der Graph
   // läuft vorwärts weiter, nichts wird doppelt durchlaufen oder gezeichnet.
   verlaengern(sek) {
-    if (this.index === -2) return;             // nach Programmende nichts anhängen
-    const b = this.blocks[Math.max(0, this.index)];
-    if (!b) return;
+    const b = this.aktuellerBlock;             // nach Programmende nichts anhängen
+    if (!b) return false;
     b.dauer += sek;
     this.total += sek;
     this.#tick();
+    return true;
   }
 
   // Aktuelles Blockziel inkl. Watt-Offset (für Resume nach Not-Stopp).
   // Nach Programmende (done) gilt das zuletzt gesetzte Session-Ziel.
   aktuellesZiel() {
-    if (this.index === -2) return this.session.zielVorStopp ?? this.session.target;
-    const b = this.blocks[Math.max(0, this.index)];
+    if (this.vorbei) return this.session.zielVorStopp ?? this.session.target;
+    const b = this.aktuellerBlock;
     return b ? b.watt + this.offset : 0;
   }
 
@@ -229,7 +251,7 @@ export class ProgramRun extends EventTarget {
     const el = this.session.elapsed;
     // Not-Stopp friert die Programmuhr ein (Countdown steht, WEITER setzt
     // exakt an der Stoppstelle fort); die Aufzeichnung läuft ehrlich weiter.
-    if (this.session.gestoppt && this.index !== -2) {
+    if (this.session.gestoppt && !this.vorbei) {
       let offen = this.pauseLog.at(-1);
       if (!offen || offen.bis !== null) {
         offen = { von: el, bis: null, frozen: Math.max(0, el + this.zeitOffset) };
@@ -244,6 +266,10 @@ export class ProgramRun extends EventTarget {
         this.index = cur.i;
         this.restImBlock = cur.ende - offen.frozen;
         this.restGesamt = this.total - offen.frozen;
+      } else {
+        // Skip über den letzten Block im Stopp: kein veralteter Rest, sonst
+        // schöbe ein zweiter Skip die Überzeit dauerhaft weiter
+        this.restImBlock = this.restGesamt = 0;
       }
       return;
     }
@@ -253,7 +279,7 @@ export class ProgramRun extends EventTarget {
     if (!cur) {
       this.restImBlock = 0;
       this.restGesamt = 0;
-      if (this.index !== -2) {
+      if (!this.vorbei) {
         this.index = -2;
         // Statistik-Schnitt: alles ab hier ist Ausfahren (wird aufgezeichnet,
         // zählt aber nicht in NP/IF/TSS)
@@ -277,8 +303,7 @@ export class ProgramRun extends EventTarget {
     // Not-Stopp respektieren: ein Blockwechsel darf den Widerstand nicht
     // wieder einschalten — WEITER/± sind die einzige Rückkehr
     if (this.session.gestoppt) return;
-    if (this.index === -2) return;            // nach Programmende kein Blockziel mehr
-    const b = this.blocks[Math.max(0, this.index)];
+    const b = this.aktuellerBlock;            // nach Programmende kein Blockziel mehr
     if (b) this.session.setTarget(b.watt + this.offset);
   }
 }
@@ -288,7 +313,7 @@ export class ProgramRun extends EventTarget {
 export function baueBlocks(programm, opts, ftp) {
   if (programm.generieren) return programm.generieren(opts, ftp);
   const rng = programm.zufall ? mulberry32(opts.seed ?? holeSeed(programm.id)) : Math.random;
-  return expand(programm.bauen(opts, rng), ftp);
+  return expand(programm.bauen(opts, rng));
 }
 
 export function defaultOpts(programm) {

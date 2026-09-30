@@ -4,13 +4,16 @@ import { Session } from './state.js';
 import { esc } from './format.js';
 import { getSettings, setSetting, requestPersistence, listSessions, getSession } from './storage.js';
 import { RideScreen } from './ui/ride.js';
-import { renderList, renderDetail, renderFahrten } from './ui/list.js';
-import { drawProfile } from './ui/chart.js';
+import { renderHome, renderFahrten } from './ui/list.js';
+import { renderDetail } from './ui/detail.js';
+import { drawProfile, beobachte } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
 import { logInfo, logError } from './logger.js';
 import { geraeteManager } from './ble/geraete.js';
 import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
+import { oeffneModal, schliesseObersten, istStill, eintragAbbauen, zurueck,
+  setzeReloadRegel, neuLaden, ausstehendNachholen } from './navigation.js';
 import { openSettings } from './ui/settings.js';
 import { startDemo, beispielFahrt, beispielHistorie } from './demo.js';
 
@@ -24,13 +27,13 @@ async function demoStarten(variante) {
   try { await startDemo(variante, { betreteFahrt }); }
   finally { startLaeuft = false; }
 }
-import { zeichneGeraeteLeiste } from './ui/geraete-leiste.js';
+import { zeichneGeraeteLeiste, geraeteHinweis } from './ui/geraete-leiste.js';
 import { montiereIcons, svgIcon } from './ui/icons.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
 import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
-import { besteDauerleistung } from './metrics.js';
+import { besteDauerleistung, effektiveFtp, FTP_ANNAHME } from './metrics.js';
 import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
-import { WORKOUTS, EFF_FTP_DEFAULT } from './workouts.js';
+import { WORKOUTS } from './workouts.js';
 import { initAudio } from './signals.js';
 import { starteMessung } from './energie.js';
 
@@ -55,11 +58,15 @@ async function keepAwake(on) {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   if (!screens.ride.hidden) { keepAwake(true); return; }
-  if (reloadAusstehend) location.reload();      // verpasstes Update nachholen
+  ausstehendNachholen();                        // verpasstes Update nachholen
 });
 
 let rideScreen = null;
 let startLaeuft = false;    // Doppel-Tap auf eine Kachel → nur ein Verbindungsaufbau
+
+// Updates laden nie mitten in der Fahrt, beim Verbindungsaufbau oder mit
+// offenem Dialog neu (Dialoge prüft navigation.js selbst)
+setzeReloadRegel(() => !rideScreen && !startLaeuft);
 
 // Gemeinsamer Fahrt-Eintritt für echte Fahrt UND Demo — eine Stelle für
 // Screen-Wechsel, History, UI-State und WakeLock, damit die Demo bei
@@ -71,6 +78,15 @@ function betreteFahrt(session, settings, onEnd, run) {
   keepAwake(true);
   rideScreen = new RideScreen(screens.ride, session, settings, onEnd, run);
   return rideScreen;
+}
+
+// Gegenstück: Fahrbildschirm abbauen und seinen History-Eintrag entfernen
+// (bei Beenden per Doppel-Zurück ist er schon weg)
+function verlasseFahrt() {
+  rideScreen?.destroy();
+  rideScreen = null;
+  keepAwake(false);
+  eintragAbbauen();
 }
 
 async function startRide(programm = null) {
@@ -104,38 +120,29 @@ async function startRideInner(programm) {
   }
   // Vorabcheck: ist der Bluetooth-Adapter überhaupt verfügbar/an?
   if (await navigator.bluetooth.getAvailability?.() === false) {
-    toastErr('Bluetooth ist ausgeschaltet — bitte einschalten.');
+    toastErr('Bluetooth ist ausgeschaltet — bitte einschalten');
     return;
   }
-  // Trainer: verbundenen Pool-Client übernehmen; sonst Schnellverbindung
-  // über die Fassade; letzter Weg: Chooser
+  // Trainer: verbundenen Pool-Client übernehmen; sonst verbinden (gemerkt)
+  // oder Geräteauswahl — die Entscheidung trifft der Manager zentral
   let ftms = geraeteManager.client('trainer');
   try {
     if (!ftms) {
-      // Chooser nur mit frischer User-Geste — nach einem langen (4-s-)
-      // Verbindungsversuch wäre sie verbraucht und requestDevice würde mit
-      // SecurityError platzen. Frisch ist sie in zwei Fällen: nichts gemerkt,
-      // oder gemerkt aber Chrome kennt die Berechtigung nicht mehr
-      // (getDevices leer → verbinde() kann nur scheitern).
-      if ((await geraeteManager.gemerkte('trainer')).length === 0) {
-        ftms = await geraeteManager.koppel('trainer');
-      } else if ((await geraeteManager.autorisiert('trainer')).length === 0) {
-        toast('Bluetooth-Berechtigung abgelaufen — Trainer bitte neu wählen');
-        ftms = await geraeteManager.koppel('trainer');
-      } else {
-        await geraeteManager.verbinde('trainer');
-        ftms = geraeteManager.client('trainer');
-        if (!ftms) throw Object.assign(new Error('Trainer schläft — Pedal kurz drehen, dann erneut starten.'), { name: 'NichtErreichbar' });
+      const r = await geraeteManager.verbindeOderKoppel('trainer', {
+        // Ohne Flag ist der Chooser der normale Weg — nur echte Abläufe erklären
+        vorAuswahl: grund => { if (grund === 'nichtAutorisiert') toast(geraeteHinweis('Trainer', { grund })); },
+      });
+      if (r.ergebnis === 'abgebrochen') {
+        // Chooser abgebrochen ODER keine Berechtigung/kein Gerät — nicht still schlucken
+        toastErr('Kein Trainer gewählt. Trainer wach? Chrome-Berechtigung „Geräte in der Nähe“ erteilt?');
+        return;
       }
+      ftms = geraeteManager.client('trainer');
+      if (!ftms) { toastErr('Trainer schläft — Pedal kurz drehen, dann erneut starten'); return; }
     }
   } catch (err) {
     logError('app', 'Verbindung fehlgeschlagen', `${err.name}: ${err.message}`);
-    if (err.name === 'NotFoundError') {
-      // Chooser abgebrochen ODER keine Berechtigung/kein Gerät — nicht still schlucken
-      $('#bt-support').textContent = 'Kein Gerät gewählt. Trainer wach? Chrome-Berechtigung „Geräte in der Nähe" erteilt?';
-    } else {
-      toastErr('Verbindung fehlgeschlagen: ' + err.message);
-    }
+    toastErr('Verbindung fehlgeschlagen: ' + err.message);
     return;
   }
   $('#bt-support').textContent = '';
@@ -145,17 +152,15 @@ async function startRideInner(programm) {
   const session = new Session(ftms, settings, programm);
   session.seed = seed;                      // Zufallsprogramm exakt wiederholbar
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
-  if (blocks) run = new ProgramRun(session, programm.name, blocks);
+  if (blocks) run = new ProgramRun(session, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
-  betreteFahrt(session, settings, async () => {
-    rideScreen.destroy();
-    rideScreen = null;
+  betreteFahrt(session, settings, async (_, gespeichert) => {
+    verlasseFahrt();
     // Verbindung lebt im Pool weiter — getrennt wird über die Geräte-Leiste.
     // Aber: ohne Fahrt kein Auto-Reconnect mehr (sonst kämpft die App nach
     // Trainer-Standby endlos weiter — Livetest: >25 min Reconnect-Schleife)
     geraeteManager.beendeSession();
-    keepAwake(false);
-    if (session.count > 0) toastOk('Fahrt gespeichert');
+    if (gespeichert && session.count > 0) toastOk('Fahrt gespeichert');
     // FTP-Rampentest: 0,75 × beste 60-s-Leistung als neuen FTP anbieten
     if (programm?.id === 'rampentest' && session.count >= 90) {
       const best = besteDauerleistung(session.samples, session.count);
@@ -174,8 +179,15 @@ function startDialog(programm, settings = {}) {
   const dlg = $('#dlg-start');
   $('#dlg-title').textContent = programm.name;
   const hint = $('#dlg-hint');
-  hint.hidden = !(programm.generieren && !settings.ftp);
-  hint.textContent = `Kein FTP-Wert hinterlegt — Annahme ${EFF_FTP_DEFAULT} W. In den Einstellungen anpassen.`;
+  const hinweise = [];
+  if (programm.generieren && !settings.ftp)
+    hinweise.push(`Kein FTP-Wert hinterlegt — Annahme ${FTP_ANNAHME} W. In den Einstellungen anpassen.`);
+  // Die App kappt jedes Ziel an der Obergrenze — beim Rampentest wird daraus
+  // sonst unbemerkt ein Plateau und der FTP-Vorschlag ist gedeckelt
+  if (programm.id === 'rampentest')
+    hinweise.push(`Die Rampe endet an der Obergrenze aus den Einstellungen (${settings.maxWatt} W).`);
+  hint.hidden = !hinweise.length;
+  hint.textContent = hinweise.join(' ');
   const fields = $('#dlg-fields');
   fields.replaceChildren();
   for (const [key, o] of Object.entries(programm.optionen)) {
@@ -199,7 +211,7 @@ function startDialog(programm, settings = {}) {
     return opts;
   };
   const zeichne = () => {
-    try { drawProfile(preview, baueBlocks(programm, leseOpts(), settings.ftp), settings.ftp || EFF_FTP_DEFAULT); }
+    try { drawProfile(preview, baueBlocks(programm, leseOpts(), settings.ftp), effektiveFtp(settings.ftp)); }
     catch { /* unvollständige Eingabe während des Tippens */ }
   };
   fields.oninput = zeichne;
@@ -212,32 +224,37 @@ function startDialog(programm, settings = {}) {
   };
   // Tap auf die Vorschau: Vollbild mit gut lesbaren Klammern und Zeitachse
   preview.onclick = () => {
-    try {
-      const opts = leseOpts();
-      const blocks = baueBlocks(programm, opts, settings.ftp);
-      const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
-      zeigeGraphOverlay(c => drawProfile(c, blocks, settings.ftp || EFF_FTP_DEFAULT),
-        programm.name, `${min} min${settings.ftp ? '' : ` · FTP-Annahme ${EFF_FTP_DEFAULT} W`}`);
-    } catch { /* unvollständige Eingabe */ }
+    try { zeigeProfilOverlay(programm, baueBlocks(programm, leseOpts(), settings.ftp), settings.ftp); }
+    catch { /* unvollständige Eingabe */ }
   };
 
   return new Promise(resolve => {
+    let abmelden = null;
     dlg.onclose = () => {
-      // History-Eintrag des Dialogs abräumen, wenn per OK/Abbrechen/Esc
-      // geschlossen wurde (bei Zurück-Taste ist er schon gepoppt)
-      if (history.state?.dialog === 'start') history.back();
+      abmelden?.();
       resolve(dlg.returnValue === 'ok' ? leseOpts() : null);
     };
-    history.pushState({ dialog: 'start' }, '');
-    dlg.showModal();
-    // Kein Auto-Fokus ins erste Zahlenfeld — sonst öffnet am Gerät sofort
-    // die Tastatur (gleiche Kur wie im Einstellungen-Dialog)
-    document.activeElement?.blur();
+    oeffneModal(dlg, 'start');
     zeichne();            // erst nach showModal: Canvas braucht sein Layout
+    abmelden = beobachte(preview, zeichne);   // Drehen: Vorschau neu zeichnen
   });
 }
 
+// Programmprofil im Vollbild-Overlay (Startdialog-Vorschau, ?big)
+function zeigeProfilOverlay(programm, blocks, ftp) {
+  const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
+  zeigeGraphOverlay(c => drawProfile(c, blocks, effektiveFtp(ftp)),
+    programm.name, `${min} min${ftp ? '' : ` · FTP-Annahme ${FTP_ANNAHME} W`}`);
+}
+
+// Programm per id — eingebaut oder importiert (?dlg, ?big)
+async function findeProgramm(id) {
+  const customs = (await listProgramme()).map(p => zwoProgramm(p));
+  return [...WORKOUTS, ...PROGRAMME, ...customs].find(x => x.id === id) ?? null;
+}
+
 let tilesKette = Promise.resolve();
+let kachelnAbmelden = [];   // Resize-Beobachtung der Kachel-Profile
 function renderProgrammTiles() {
   tilesKette = tilesKette.then(renderProgrammTilesInner).catch(() => {});
   return tilesKette;
@@ -245,8 +262,12 @@ function renderProgrammTiles() {
 
 async function renderProgrammTilesInner() {
   const settings = await getSettings();
-  const effFtp = settings.ftp || EFF_FTP_DEFAULT;
-  const fill = (sel, list) => {
+  const effFtp = effektiveFtp(settings.ftp);
+  for (const ab of kachelnAbmelden) ab();
+  kachelnAbmelden = [];
+  // loeschen: optionaler Handler — eigener ✕-Knopf NEBEN der Kachel (kein
+  // Knopf im Knopf), Tippfläche 44 px
+  const fill = (sel, list, loeschen = null) => {
     const wrap = $(sel);
     wrap.replaceChildren();     // erneuter Aufruf (z. B. nach FTP-Änderung) ersetzt
     for (const p of list) {
@@ -258,27 +279,34 @@ async function renderProgrammTilesInner() {
       mini.width = 220; mini.height = 36;
       btn.append(mini);
       btn.addEventListener('click', () => startRide(p));
-      wrap.append(btn);
-      try { drawProfile(mini, baueBlocks(p, defaultOpts(p), settings.ftp), effFtp); }
-      catch { mini.remove(); }
+      let element = btn;
+      if (loeschen) {
+        element = document.createElement('div');
+        element.className = 'tile-rahmen';
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'tile-x';
+        x.textContent = '✕';
+        x.setAttribute('aria-label', `„${p.name}“ löschen`);
+        x.onclick = () => loeschen(p);
+        element.append(btn, x);
+      }
+      wrap.append(element);
+      try {
+        const blocks = baueBlocks(p, defaultOpts(p), settings.ftp);
+        const zeichne = () => drawProfile(mini, blocks, effFtp);
+        zeichne();
+        kachelnAbmelden.push(beobachte(mini, zeichne));   // Drehen: scharf neu zeichnen
+      } catch { mini.remove(); }
     }
   };
   fill('#workout-tiles', WORKOUTS);
   fill('#programm-tiles', PROGRAMME);
 
   // Importierte .zwo-Workouts als eigene Kacheln mit Löschknopf
-  const customs = (await listProgramme()).map(p => zwoProgramm(p, EFF_FTP_DEFAULT));
-  fill('#custom-tiles', customs);
-  const wrap = $('#custom-tiles');
-  [...wrap.children].forEach((btn, i) => {
-    const x = document.createElement('span');
-    x.className = 'tile-x';
-    x.textContent = '✕';
-    x.onclick = async e => {
-      e.stopPropagation();
-      if (confirm(`„${customs[i].name}" löschen?`)) { await deleteProgramm(customs[i].id); renderProgrammTiles(); }
-    };
-    btn.append(x);
+  const customs = (await listProgramme()).map(p => zwoProgramm(p));
+  fill('#custom-tiles', customs, async p => {
+    if (confirm(`„${p.name}“ löschen?`)) { await deleteProgramm(p.id); renderProgrammTiles(); }
   });
 
   // „Zuletzt gefahren"-Kachel: letztes Programm mit einem Tap wieder starten
@@ -327,18 +355,18 @@ $('#zwo-file').addEventListener('change', async e => {
   e.target.value = '';
   if (!file) return;
   try {
-    const { name, bloecke } = parseZwo(await file.text());
+    const { name, bloecke, uebersprungen } = parseZwo(await file.text());
     await saveProgramm({ id: `zwo-${Date.now()}`, name, bloecke });
     await renderProgrammTiles();
-    logInfo('app', `.zwo importiert: ${name} (${bloecke.length} Blöcke)`);
-    toastOk(`„${name}" importiert (${bloecke.length} Blöcke)`);
+    logInfo('app', `.zwo importiert: ${name} (${bloecke.length} Blöcke)`, uebersprungen.join(', ') || undefined);
+    toastOk(`„${name}“ importiert (${bloecke.length} Blöcke)`);
+    if (uebersprungen.length) toast(`Nicht unterstützt, übersprungen: ${uebersprungen.join(', ')}`, 'info', 6000);
   } catch (err) {
     toastErr('Import fehlgeschlagen: ' + err.message);
   }
 });
 
 let detailCleanup = null;
-let reloadAusstehend = false;   // SW-Update kam während einer Fahrt an
 let aktuelleDetailId = null;
 
 // --- App-Zustand (M7): Screen + Scroll überleben App-Kill, 30-min-Fenster ---
@@ -389,23 +417,21 @@ async function restoreUiState(roh) {
   return false;
 }
 
-// --- Zurück-Taste (M6): History-Einträge je Screen, double-back in der Fahrt ---
+// --- Zurück-Taste: History-Einträge je Screen/Dialog (navigation.js), ---
+// --- doppeltes Zurück beendet die Fahrt                                ---
 let backArmiertBis = 0;
 
 addEventListener('popstate', () => {
-  // Realen UI-Zustand prüfen statt event.state (robust gegen tote Einträge)
-  for (const id of ['#dlg-mapping', '#dlg-graph', '#dlg-settings', '#dlg-start']) {
-    const dlg = $(id);
-    if (dlg?.open) { dlg.close(); return; }
-  }
+  if (istStill()) return;                    // eigener Abbau, Ansicht steht schon
+  if (schliesseObersten()) return;           // offener Dialog: abbrechen
   if (!screens.detail.hidden) { zurueckAusDetail(); return; }
   if (!screens.fahrten.hidden) { goHome(); return; }
-  if (!screens.ride.hidden) {
+  if (!screens.ride.hidden && rideScreen) {
     if (Date.now() < backArmiertBis) {
-      $('#btn-end').click();                 // sauber beenden + speichern
+      rideScreen.beenden();                  // sauber beenden + speichern, ohne „Sicher?"
     } else {
       backArmiertBis = Date.now() + 2500;
-      toast('Nochmal „Zurück" beendet die Fahrt');
+      toast('Nochmal „Zurück“ beendet die Fahrt');
       history.pushState({ screen: 'ride' }, '');   // re-armieren
     }
   }
@@ -413,8 +439,9 @@ addEventListener('popstate', () => {
 });
 
 async function goHome() {
-  if (reloadAusstehend) { location.reload(); return; }
   demoHistorie = null;                // Home verlässt die Demo-Historie
+  // Demo-Parameter aus der Adresse: Reload/Update landet sonst wieder in der Demo
+  if (new URLSearchParams(location.search).has('demo')) history.replaceState(history.state, '', location.pathname);
   renderProgrammTiles();          // „Zuletzt gefahren" sofort nachführen
   zeichneGeraeteLeiste();
   detailCleanup?.();
@@ -422,16 +449,17 @@ async function goHome() {
   aktuelleDetailId = null;
   show('home');
   speichereUiState();
-  await renderList($('#session-list'), openDetail, () => openFahrten());
+  await renderHome($('#session-list'), openDetail, () => openFahrten());
   aktualisiereStatuszeile();
+  ausstehendNachholen(2500);          // Update nach der Fahrt — „Fahrt gespeichert" noch lesbar
 }
 
-// Statuszeile im Footer: Datenbestand + Speicherschutz, gemerkte Geräte.
-// (Die App-Aktualität daneben pflegt der Update-Watchdog aus version.js.)
+// Statuszeile unter dem Kopf: Datenbestand + Speicherschutz. (Die
+// App-Aktualität daneben pflegt der Update-Watchdog aus version.js.)
 async function aktualisiereStatuszeile() {
   try {
-    const [sessions, s, persistent] = await Promise.all([
-      listSessions(), getSettings(), navigator.storage?.persisted?.() ?? false,
+    const [sessions, persistent] = await Promise.all([
+      listSessions(), navigator.storage?.persisted?.() ?? false,
     ]);
     $('#db-status').textContent =
       `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'} · Speicher ${persistent ? 'geschützt' : 'ungeschützt'}`;
@@ -467,13 +495,11 @@ async function beispielHistorieZeigen() {
 }
 
 // Einzelne Beispielfahrt direkt in der Detailansicht (?demo=fahrt, UI-Arbeit)
+// — derselbe Weg wie jede andere Fahrt, nur mit mitgelieferten Samples
 async function beispielfahrtZeigen() {
   const { session, data } = await beispielFahrt();
-  show('detail');
-  aktuelleDetailId = null;                 // nicht als UI-Zustand merken
-  history.pushState({ screen: 'detail' }, '');
-  detailVonFahrten = false;
-  detailCleanup = await renderDetail(screens.detail, session, goHome, { demo: data });
+  demoHistorie = { sessions: [session], daten: new Map([[session.id, data]]) };
+  await openDetail(session);
 }
 
 async function openDetail(sessionMeta, { push = true } = {}) {
@@ -485,15 +511,16 @@ async function openDetail(sessionMeta, { push = true } = {}) {
   if (push) history.pushState({ screen: 'detail' }, '');
   speichereUiState();
   const demo = demoHistorie?.daten.get(sessionMeta.id) ?? null;
-  detailCleanup = await renderDetail(screens.detail, sessionMeta, zurueckAusDetail, { demo });
+  // Nach dem Löschen: zurück über die History, wie mit dem Zurück-Knopf
+  detailCleanup = await renderDetail(screens.detail, sessionMeta, () => zurueck(zurueckAusDetail), { demo });
 }
 
 $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
-$('#btn-back').addEventListener('click', zurueckAusDetail);
-$('#btn-back-fahrten').addEventListener('click', goHome);
+$('#btn-back').addEventListener('click', () => zurueck(zurueckAusDetail));
+$('#btn-back-fahrten').addEventListener('click', () => zurueck(goHome));
 // Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —
 // sobald die App läuft, weg damit
 $('#seo-intro').hidden = true;
@@ -553,8 +580,7 @@ if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
   let hatteController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hatteController) { hatteController = true; return; }   // Erstinstallation
-    if (screens.ride.hidden) location.reload();
-    else reloadAusstehend = true;               // nie mitten in der Fahrt — nachholen
+    neuLaden('neuer Service Worker aktiv');   // nie mitten in der Fahrt — sonst nachgeholt
   });
 }
 
@@ -568,8 +594,7 @@ else {
 }
 // ?dlg=<id> — Startdialog für UI-Arbeit/Screenshots direkt öffnen
 if (dlgParam) {
-  const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === dlgParam);
-  if (p) getSettings().then(s => startDialog(p, s));
+  findeProgramm(dlgParam).then(async p => { if (p) startDialog(p, await getSettings()); });
 }
 // ?settings — Einstellungsdialog direkt öffnen (UI-Arbeit/Screenshots)
 if (new URLSearchParams(location.search).has('settings')) {
@@ -579,10 +604,9 @@ if (new URLSearchParams(location.search).has('settings')) {
 // ?big=<id> — Graph-Vollbild direkt öffnen (UI-Arbeit/Screenshots)
 const bigParam = new URLSearchParams(location.search).get('big');
 if (bigParam) {
-  const p = [...WORKOUTS, ...PROGRAMME].find(x => x.id === bigParam);
-  if (p) getSettings().then(s => {
-    const blocks = baueBlocks(p, defaultOpts(p), s.ftp);
-    const min = Math.round(blocks.reduce((a, b) => a + b.dauer, 0) / 60);
-    zeigeGraphOverlay(c => drawProfile(c, blocks, s.ftp || EFF_FTP_DEFAULT), p.name, `${min} min`);
+  findeProgramm(bigParam).then(async p => {
+    if (!p) return;
+    const { ftp } = await getSettings();
+    zeigeProfilOverlay(p, baueBlocks(p, defaultOpts(p), ftp), ftp);
   });
 }

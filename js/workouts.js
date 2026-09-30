@@ -9,7 +9,7 @@
 // und keine 10-s-Sprints; 30/30 und 40/20 sind die ERG-taugliche Untergrenze).
 // Strukturen und Quellen: docs/programme.md
 
-const EFF_FTP_DEFAULT = 170;   // Annahme für Freizeitfahrer ohne FTP-Wert (~2 W/kg)
+import { effektiveFtp } from './metrics.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const block = (sekunden, watt) => ({ dauer: Math.round(sekunden), watt: Math.max(30, Math.round(watt / 5) * 5) });
@@ -182,7 +182,7 @@ export const WORKOUTS = [
   },
   {
     id: 'recovery',
-    name: 'Recovery',
+    name: 'Regeneration',
     sub: 'Locker rollen, max. 55 % FTP',
     optionen: {
       dauer: { label: 'Dauer (min)', min: 15, max: 60, default: 30 },
@@ -200,7 +200,6 @@ export const WORKOUTS = [
 ];
 
 function eff(ftp, o) {
-  return (ftp || EFF_FTP_DEFAULT) * (o.intensitaet ?? 100) / 100;
+  return effektiveFtp(ftp) * (o.intensitaet ?? 100) / 100;
 }
 
-export { EFF_FTP_DEFAULT };

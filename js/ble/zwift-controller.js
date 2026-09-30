@@ -12,6 +12,7 @@
 // neuere Firmware (ab Jan 2025) stattdessen 0xFC82 — beide werden probiert.
 
 import { logInfo, logWarn, hex } from '../logger.js';
+import { STANDARD_TASTEN } from '../storage.js';
 import RIDE_TASTEN from './zwift-ride-tasten.json' with { type: 'json' };
 
 // Klartextname einer Ride-Taste für Lern-Modus und Belegungsanzeige.
@@ -58,7 +59,7 @@ const PRELL_ANDERE_QUELLE_MS = 150;    // Relay-Doppel des zweiten Pads
 // Paddles: Takt folgt dem Druck (Schwelle → langsam, Vollausschlag → schnell).
 const WIEDERHOLBAR = new Set(['plus', 'minus']);
 const HALTEN_PAUSE_MS = 500;
-const HALTEN_TAKT_MS = 400;
+export const HALTEN_TAKT_MS = 400;     // auch Text in den Einstellungen
 const PADDLE_TAKT_MS = { langsam: 600, schnell: 150 };
 const PADDLE_PAUSE_MIN_MS = 400;       // kurzes Antippen löst nur einmal aus
 // Sicherheitsgrenze: geht die Loslass-Meldung verloren (Funkloch), würde die
@@ -71,6 +72,10 @@ const paddleTakt = druck => {
 };
 
 export class ZwiftController extends EventTarget {
+  // Geräteauswahl (Chooser) für den GeraeteManager — Services hier, damit
+  // eine neue UUID nur an EINER Stelle ergänzt wird
+  static CHOOSER = { filters: [{ namePrefix: 'Zwift' }], optionalServices: [SERVICE_ALT, SERVICE_FC82] };
+
   #device = null;
   #clickState = { plus: false, minus: false };
   #rideBitmap = 0xffffffff;    // alle Bits 1 = nichts gedrückt
@@ -82,7 +87,7 @@ export class ZwiftController extends EventTarget {
   // halten: { tasten, paddles } — Halten wiederholt ± (Einstellungen)
   constructor(map = {}, halten = {}) {
     super();
-    this.map = { plus: 4, minus: 0, ...map };
+    this.map = { ...STANDARD_TASTEN, ...map };
     this.halten = { tasten: halten.tasten ?? true, paddles: halten.paddles ?? true };
   }
 
@@ -90,7 +95,20 @@ export class ZwiftController extends EventTarget {
   get deviceName() { return this.#device?.name ?? null; }
   get device() { return this.#device; }
 
+  // Scheitert der Aufbau (z. B. Handshake bei wackeligem Link), wird alles
+  // Angehängte wieder abgebaut — sonst bliebe eine Geister-Instanz am selben
+  // Characteristic-Objekt hängen und gewänne über die geteilte Entprellung
+  // die Flanken der neuen Instanz (Chip grün, Lenker wirkungslos)
   async connect(device) {
+    try {
+      await this.#verbinde(device);
+    } catch (err) {
+      this.disconnect({ gatt: false });
+      throw err;
+    }
+  }
+
+  async #verbinde(device) {
     this.#device = device;                     // Chooser läuft in der Fassade
     const server = await this.#device.gatt.connect();
     this.#statusGeloggt = false;
@@ -114,10 +132,12 @@ export class ZwiftController extends EventTarget {
     await asyncCh.startNotifications();
 
     if (txCh) {
-      txCh.addEventListener('characteristicvaluechanged', e => {
+      this.#txCh = txCh;
+      this.#onTxFn = e => {
         const b = new Uint8Array(e.target.value.buffer);
         logInfo('ctrl', 'Handshake-Antwort', new TextDecoder().decode(b.slice(0, 6)));
-      });
+      };
+      txCh.addEventListener('characteristicvaluechanged', this.#onTxFn);
       await txCh.startNotifications();
     }
 
@@ -136,6 +156,8 @@ export class ZwiftController extends EventTarget {
   #onDisconnect = null;
   #onNotifyFn = null;
   #asyncCh = null;
+  #onTxFn = null;
+  #txCh = null;
 
   #onNotify(b) {
     if (b[0] === 0x23) {
@@ -263,7 +285,8 @@ export class ZwiftController extends EventTarget {
           this.#loslassen(taste);
           return;
         }
-        this.dispatchEvent(new Event(aktion));
+        // Wiederholung kenntlich machen: sie darf z. B. einen Not-Stopp nie aufheben
+        this.dispatchEvent(new CustomEvent(aktion, { detail: { wiederholung: true } }));
         planen(takt());
       }, ms);
     };
@@ -288,6 +311,7 @@ export class ZwiftController extends EventTarget {
     // Chrome liefert beim Reconnect dieselben Characteristic-Objekte —
     // ohne Abbau würde eine ersetzte Instanz weiter Notifications empfangen
     if (this.#onNotifyFn) this.#asyncCh?.removeEventListener('characteristicvaluechanged', this.#onNotifyFn);
+    if (this.#onTxFn) this.#txCh?.removeEventListener('characteristicvaluechanged', this.#onTxFn);
     if (gatt) {
       try { this.#device?.gatt.disconnect(); } catch { /* schon getrennt */ }
     }

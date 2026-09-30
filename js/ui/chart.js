@@ -11,12 +11,20 @@ import { zoneIndex } from '../metrics.js';
 
 // Canvas auf Anzeigegröße × devicePixelRatio bringen (nur bei Änderung neu
 // allokieren) und einen pro Aufruf gecachten CSS-Variablen-Getter liefern.
+// Breite und Höhe kommen immer aus DERSELBEN Quelle: Layout, oder — solange
+// die Canvas nicht im Layout ist (versteckte Kachel) — die Attribute. Hat
+// sie Layout, aber keine Höhe (sehr flaches Querfenster), wird nicht
+// gezeichnet: gemischt wuchs die Bitmap-Höhe sonst mit jedem Aufruf um dpr.
+// Liefert null, wenn nichts zu zeichnen ist.
 function prepCanvas(canvas) {
+  const imLayout = canvas.clientWidth > 0 || canvas.clientHeight > 0;
+  if (imLayout && !(canvas.clientWidth > 0 && canvas.clientHeight > 0)) return null;
   const ctx = canvas.getContext('2d');
   const dpr = devicePixelRatio || 1;
-  const w = canvas.clientWidth || canvas.width;
-  const h = canvas.clientHeight || canvas.height;
-  if (canvas.clientWidth &&
+  const w = imLayout ? canvas.clientWidth : canvas.width;
+  const h = imLayout ? canvas.clientHeight : canvas.height;
+  if (!w || !h) return null;
+  if (imLayout &&
       (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr))) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
@@ -28,8 +36,21 @@ function prepCanvas(canvas) {
   return { ctx, w, h, css };
 }
 
+// Canvas bei jeder Größenänderung (Drehen, Fokus-Wechsel, Fenster) neu
+// zeichnen — sonst streckt der Browser die alte Bitmap. Liefert die
+// Abmeldefunktion.
+export function beobachte(canvas, zeichne) {
+  let raf = 0;
+  const ro = new ResizeObserver(() => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => zeichne(canvas));
+  });
+  ro.observe(canvas);
+  return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+}
+
 // Powerzone → CSS-Variablenname (Grenzen zentral in metrics.js)
-function zoneVar(watt, ftp) {
+export function zoneVar(watt, ftp) {
   const z = zoneIndex(watt, ftp);
   return z < 0 ? '--accent' : `--z${z + 1}`;
 }
@@ -54,7 +75,8 @@ const labelFont = s => Math.min(14, Math.round(10 * Math.sqrt(s)) + (s > 1.4 ? 2
 // Mit blocks: Ticks sitzen an den Blockgrenzen (dort passiert etwas), das
 // Raster füllt nur lange grenzenlose Strecken; zu dichte Grenzen verlieren
 // ihr Label, behalten aber den Tick.
-function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null) {
+// von: Zeit am linken Rand (rollierendes Fenster beim freien Fahren).
+function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null, von = 0) {
   const y = h - fuss + 0.5;
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink3');
@@ -65,7 +87,8 @@ function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null) {
   ctx.beginPath();
   ctx.moveTo(0, y);
   ctx.lineTo(w, y);
-  const step = [60, 120, 300, 600, 900, 1200, 1800, 3600].find(x => x / total * w >= 34 * s) ?? 3600;
+  const spanne = total - von;
+  const step = [60, 120, 300, 600, 900, 1200, 1800, 3600].find(x => x / spanne * w >= 34 * s) ?? 3600;
   const fmt = t => String(Math.round(t / 60));
   let ticks;
   if (blocks) {
@@ -85,11 +108,11 @@ function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null) {
     ticks.sort((a, b) => a - b);
   } else {
     ticks = [];
-    for (let t = step; t < total; t += step) ticks.push(t);
+    for (let t = Math.floor(von / step) * step + step; t < total; t += step) ticks.push(t);
   }
   let letztesLabelX = -Infinity;
   for (const t of ticks) {
-    const x = t / total * w;
+    const x = (t - von) / spanne * w;
     if (x > w - 46 * s) break;               // Platz fürs Endlabel lassen
     ctx.moveTo(x, y);
     ctx.lineTo(x, y + 3 * s);
@@ -131,10 +154,12 @@ function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
 }
 
 // Achsentext mit Hof in Canvas-Hintergrundfarbe: bleibt lesbar, auch wenn
-// eine Linie darunter durchläuft
+// eine Linie darunter durchläuft. Transparente Canvas (Fahrbildschirm)
+// nimmt den Seitenhintergrund.
 function beschrifte(ctx, css, text, x, y) {
+  const bg = css('background-color');
   ctx.save();
-  ctx.strokeStyle = css('background-color');
+  ctx.strokeStyle = !bg || bg === 'transparent' || bg.endsWith(', 0)') ? css('--bg') : bg;
   ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
   ctx.strokeText(text, x, y);
@@ -321,7 +346,9 @@ function zeichneLeistungslinie(ctx, css, samples, count, xFn, yFn, breite = 1.5,
 // Intensitätsprofil eines Programms: Zielblöcke als zonengefärbte Balken.
 // Ab ~56 px Höhe zusätzlich Zeitachse, bei Gruppen Wiederholungsklammern.
 export function drawProfile(canvas, blocks, ftp) {
-  const { ctx, w, h, css } = prepCanvas(canvas);
+  const p = prepCanvas(canvas);
+  if (!p) return;
+  const { ctx, w, h, css } = p;
   const total = blocks.reduce((a, b) => a + b.dauer, 0);
   if (!total) return;
   const s = scaleOf(h);
@@ -358,30 +385,32 @@ export class WorkoutChart {
   // zeitMap: Aufzeichnungszeit → Programmzeit (stückweise Offsets aus dem
   // ProgramRun) — Linie und Cursor liegen damit auch nach Zeitsprüngen exakt
   // auf der Programmachse. blink: Cursor nach einem Zeitsprung hervorheben.
-  // Skaliert mit der Canvas-Höhe: klein (Fahrbildschirm) bleibt reduziert,
-  // groß (Vollbild-Overlay) bekommt Wattachse, FTP-Linie und Blocklabels —
-  // dieselbe Detailstufe wie drawProfile, nur live.
-  draw(blocks, total, samples, count, offset, ftp, zeitMap = t => t, blink = false, istPause = null) {
-    const { ctx, w, h, css } = prepCanvas(this.canvas);
+  // Detailstufe (Wattachse, FTP-Linie, Blocklabels — wie drawProfile, nur
+  // live): gross=true erzwingt sie (Graph-Fokus im Fahrbildschirm), sonst ab
+  // 220 px Höhe; der kleine Fahrbildschirm-Chart bleibt reduziert.
+  draw(blocks, total, samples, count, offset, ftp, zeitMap = t => t, blink = false, istPause = null, gross = null) {
+    const p = prepCanvas(this.canvas);
+    if (!p) return;
+    const { ctx, w, h, css } = p;
     const s = scaleOf(h);
-    // Detailstufe erst ab ~220 px: der kleine Portrait-Ride-Chart (≤180 px)
-    // bleibt reduziert, Querformat-Ride und Vollbild-Overlay bekommen
-    // Wattachse, FTP-Linie und Blocklabels
-    const gross = h >= 220;
+    gross ??= h >= 220;
     const gruppen = sammleGruppen(blocks);
-    const kopf = gruppen.size ? 13 * s : 0;
+    // Oberkante der Watt-Skala: Platz für Wiederholungsklammern + Polster —
+    // dieselbe Abbildung für Balken, Linie, Achse, FTP-Linie und Labels
+    const kopf = (gruppen.size ? 13 * s : 0) + 6 * s;
     const fuss = 13 * s;
+    // Skala über ALLE Samples (nicht nur die letzten): sonst springt sie,
+    // sobald eine Spitze aus dem Fenster fällt
     let maxW = 150;
     for (const b of blocks) maxW = Math.max(maxW, b.watt + offset);
-    for (let k = Math.max(0, count - 50); k < count; k++)
-      maxW = Math.max(maxW, samples[k * FIELDS + 1]);
+    for (let k = 0; k < count; k++) maxW = Math.max(maxW, samples[k * FIELDS + 1]);
     maxW *= 1.15;
     // Ausfahren nach Programmende: Achse wächst mit, statt die Linie rechts
     // aus dem Canvas laufen zu lassen (Livetest: „nichts mehr getrackt")
     const letzteT = count ? zeitMap(samples[(count - 1) * FIELDS]) : 0;
     const anzeigeTotal = Math.max(total, letzteT);
     const x = t => t / anzeigeTotal * w;
-    const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - 6 * s - kopf);
+    const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - kopf);
     // Blocklabels/Balken zeigen die effektiven Watt (inkl. ±-Offset)
     const effBlocks = offset ? blocks.map(b => ({ ...b, watt: b.watt + offset })) : blocks;
 
@@ -423,52 +452,61 @@ export class WorkoutChart {
   }
 }
 
-// Rollierendes 10-Minuten-Fenster beim freien Fahren:
-// Zielleistung als Stufenfläche, Ist-Leistung als Linie.
+// Rollierendes 10-Minuten-Fenster beim freien Fahren: Zielleistung als
+// Stufenfläche, Ist-Leistung als Linie. Achsen aus denselben Bausteinen wie
+// die übrigen Charts; Detailstufe (Beschriftung, FTP-Linie, Zeitachse) im
+// Graph-Fokus bzw. ab 220 px Höhe.
 const WINDOW_S = 600;
 
 export class LiveChart {
   constructor(canvas) { this.canvas = canvas; }
 
-  draw(samples, count, target) {
-    const { ctx, w, h, css } = prepCanvas(this.canvas);
-    if (!count) return;
+  draw(samples, count, target, ftp = 0, gross = null) {
+    const p = prepCanvas(this.canvas);
+    if (!p || !count) return;
+    const { ctx, w, h, css } = p;
+    const s = scaleOf(h);
+    gross ??= h >= 220;
     const from = Math.max(0, count - WINDOW_S);
     let maxW = target;
     for (let k = from; k < count; k++)
       maxW = Math.max(maxW, samples[k * FIELDS + 1], samples[k * FIELDS + 2]);
     maxW = Math.max(150, Math.ceil(maxW * 1.15 / 50) * 50);
+    const kopf = 6 * s;
+    const fuss = gross ? 13 * s : 0;
     const x = k => (k - from) / WINDOW_S * w;
-    const y = v => h - v / maxW * (h - 8);
+    const y = v => (h - fuss) - v / maxW * (h - fuss - kopf);
 
-    // Rasterlinien alle 50 W, dezent
-    ctx.strokeStyle = css('--line');
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let v = 50; v < maxW; v += 50) { ctx.moveTo(0, y(v)); ctx.lineTo(w, y(v)); }
-    ctx.stroke();
+    zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien');
 
     // Zielleistung als gefüllte Stufenfläche
     ctx.fillStyle = css('--target-fill');
     ctx.beginPath();
-    ctx.moveTo(x(from), h);
+    ctx.moveTo(x(from), h - fuss);
     for (let k = from; k < count; k++) {
       const v = samples[k * FIELDS + 2];
       ctx.lineTo(x(k), y(v));
       ctx.lineTo(x(k + 1), y(v));
     }
-    ctx.lineTo(x(count), h);
+    ctx.lineTo(x(count), h - fuss);
     ctx.closePath();
     ctx.fill();
 
     zeichneLeistungslinie(ctx, css, samples.subarray(from * FIELDS), count - from,
       k => x(from + k), y, 2);
 
-    ctx.fillStyle = css('--ink3');
-    ctx.font = '10px system-ui';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`${maxW} W`, 4, 12);
+    if (gross) {
+      zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
+      zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
+      zeichneZeitachse(ctx, css, w, h, fuss, from + WINDOW_S, s, null, from);
+    } else {
+      // Reduziert: nur die Skalen-Obergrenze als Orientierung
+      ctx.fillStyle = css('--ink3');
+      ctx.font = `${axisFont(1)}px system-ui`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      beschrifte(ctx, css, `${maxW} W`, 4, 2);
+    }
   }
 }
 
@@ -497,8 +535,9 @@ function glaette(samples, count, feld, fenster, mitNullen = true) {
 // opts: ftp (Zonenfarben + FTP-Linie), programmEnde (Sekunde, ab der
 // ausgefahren wurde — null bei freiem Fahren/alten Fahrten)
 export function drawSessionChart(canvas, samples, count, { ftp = 0, programmEnde = null } = {}) {
-  const { ctx, w, h, css } = prepCanvas(canvas);
-  if (!count) return;
+  const p = prepCanvas(canvas);
+  if (!p || !count) return;
+  const { ctx, w, h, css } = p;
   const s = scaleOf(h);
   const gross = h >= 160;                    // Achsen + FTP-Linie
   const kopf = 6 * s;

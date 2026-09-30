@@ -64,15 +64,15 @@
          über Fahrten bestehen (Fassade: js/ble/geraete.js GeraeteManager) -->
     <div class="gl" id="geraete-leiste" aria-label="Geräte"></div>
     <details class="rubrik" id="rubrik-workouts" open>
-      <summary class="listhead">Nach Zeit &amp; Typ</summary>
+      <summary class="listhead">Nach FTP <span class="listhead-zusatz">· Dauer &amp; Typ wählbar</span></summary>
       <div class="tiles-programme" id="workout-tiles"></div>
     </details>
     <details class="rubrik" id="rubrik-klassik" open>
-      <summary class="listhead">Klassische Programme</summary>
+      <summary class="listhead">Feste Watt</summary>
       <div class="tiles-programme" id="programm-tiles"></div>
     </details>
     <details class="rubrik" id="rubrik-custom" open>
-      <summary class="listhead">Eigene Workouts <button type="button" class="chip" id="btn-zwo">+ .zwo importieren</button></summary>
+      <summary class="listhead">Eigene Programme <button type="button" class="chip" id="btn-zwo">+ .zwo importieren</button></summary>
       <div class="tiles-programme" id="custom-tiles"></div>
     </details>
     <input type="file" id="zwo-file" accept=".zwo,.xml" hidden>
@@ -112,7 +112,7 @@
         <span><i class="si si-hf" data-icon="herzpuls"></i><b id="m-hr">–</b> bpm</span>
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
-        <span id="m-total" hidden><b id="m-total-time">0:00</b> gesamt</span>
+        <span id="m-total" hidden><b id="m-total-time">0:00</b> <span id="m-total-label">Rest gesamt</span></span>
         <!-- Initialtext setzt der RideScreen aus dem echten Verbindungszustand -->
         <span id="m-status" class="status" aria-live="polite" hidden></span>
       </div>
@@ -204,14 +204,18 @@
   <form method="dialog">
     <h2>Einstellungen</h2>
     <div class="dlg-fields">
-      <label>FTP (Watt, 0 = unbekannt)<input type="number" id="set-ftp" min="0" max="500" step="5"></label>
+      <label>FTP (Watt, 0 = unbekannt)<input type="number" id="set-ftp" min="0" max="500" step="1"></label>
       <label>Wattschritt für ±<input type="number" id="set-schritt" min="1" max="50" step="1"></label>
-      <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="10"></label>
-      <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="5"></label>
+      <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="1"></label>
+      <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="1"></label>
     </div>
     <details class="diagnose">
       <summary>Erweitert</summary>
       <div class="dlg-fields" style="margin-top:.5rem">
+        <label class="schalter-zeile">
+          <span class="schalter-text">Signaltöne<small>Countdown und Ton beim Blockwechsel</small></span>
+          <input type="checkbox" class="schalter" id="set-ton">
+        </label>
         <label class="schalter-zeile">
           <span class="schalter-text">Sprachansagen<small>bei jedem Blockwechsel Dauer und Watt ansagen</small></span>
           <input type="checkbox" class="schalter" id="set-sprache">
@@ -234,7 +238,7 @@
       <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht <code>chrome://flags/#enable-web-bluetooth-new-permissions-backend</code>
         <button type="button" class="copy-btn" aria-label="Flag-Adresse kopieren" title="kopieren"><i class="si" data-icon="copy"></i></button>
         — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
-      <p class="hint">Zwift-Lenker: linkes und rechtes Pad sind eigene Geräte — beim Koppeln den Eintrag „Zwift Ride" wählen (kryptische Namen sind Nebenkanäle), danach „+ 2. Pad" für die andere Seite.</p>
+      <p class="hint">Zwift-Lenker: beim Koppeln den Eintrag „Zwift Ride“ wählen (kryptische Namen sind Nebenkanäle). Linkes und rechtes Pad melden sich als eigene Geräte; „+ 2. Pad“ koppelt die andere Seite zusätzlich.</p>
       <ul id="geraete-liste" class="geraete"></ul>
       <p class="gruppe-titel belegung-titel">Tastenbelegung</p>
       <div id="ctrl-map-karte"></div>
@@ -247,9 +251,9 @@
       </div>
       <div class="einstell-gruppe">
         <p class="gruppe-titel">Gedrückt halten</p>
-        <p class="hint">Gilt für die Tasten, die mit „Watt hoch" und „Watt runter" belegt sind: Halten ändert die Leistung fortlaufend statt nur einmal.</p>
+        <p class="hint">Gilt für die Tasten, die mit „Watt hoch“ und „Watt runter“ belegt sind: Halten ändert die Leistung fortlaufend statt nur einmal.</p>
         <label class="schalter-zeile">
-          <span class="schalter-text">Tasten<small>ein Wattschritt alle 0,4 s</small></span>
+          <span class="schalter-text">Tasten<small id="halten-takt">ein Wattschritt je Takt</small></span>
           <input type="checkbox" class="schalter" id="set-halten-tasten">
         </label>
         <label class="schalter-zeile">
@@ -277,7 +281,7 @@
 <dialog id="dlg-mapping">
   <h2>Tasten zuordnen</h2>
   <p id="map-schritt" style="font-size:1.1rem;margin:.8rem 0"></p>
-  <p class="hint" id="map-status">Controller wird verbunden …</p>
+  <p class="hint" id="map-status">Lenker wird verbunden …</p>
   <div id="map-karte"></div>
   <div class="dlg-actions">
     <button type="button" id="btn-map-skip" class="ghost">Ohne Belegung weiter</button>

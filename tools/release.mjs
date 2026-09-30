@@ -9,9 +9,15 @@
 // Aufruf:
 //   node tools/release.mjs           nächste Version (v1.0 → v1.1)
 //   node tools/release.mjs v2.0      explizite Version
-//   node tools/release.mjs --check   nur prüfen, ob beide Stempel gleich sind
+//   node tools/release.mjs --check   nur prüfen: Stempel gleich, Offline-Shell vollständig
+//
+// Vor jedem Bump und bei --check wird die SHELL-Liste in sw.js gegen die
+// Dateien in js/, css/, icons/ und audio/ abgeglichen: ein vergessenes Modul
+// hieße offline beim zweiten Start weißer Bildschirm (passierte bei
+// backup.js/zwo.js).
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const DATEIEN = {
   'sw.js':         /(const VERSION = ')v[\d.]+(')/,
@@ -28,12 +34,38 @@ const lies = pfad => {
 const sw = lies('sw.js');
 const shell = lies('js/version.js');
 
+// Alle auszuliefernden Dateien gegen die SHELL-Liste — fehlende und verwaiste Einträge
+function pruefeShell(swText) {
+  const shell = new Set([...swText.match(/const SHELL = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]));
+  const dateien = [];
+  const sammle = (dir, re) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) sammle(p, re);
+      else if (re.test(e.name)) dateien.push(p);
+    }
+  };
+  sammle('js', /\.(js|json)$/);
+  sammle('css', /\.css$/);
+  sammle('icons', /\.(png|svg)$/);
+  sammle('audio', /\.ogg$/);
+  const fehlend = dateien.filter(d => !shell.has(d));
+  const verwaist = [...shell].filter(u => u !== '.' && !u.includes('.webmanifest') && u !== 'index.html'
+    && !dateien.includes(u));
+  if (fehlend.length || verwaist.length) {
+    if (fehlend.length) console.error(`sw.js SHELL fehlt: ${fehlend.join(', ')}`);
+    if (verwaist.length) console.error(`sw.js SHELL verweist auf nicht vorhandene Dateien: ${verwaist.join(', ')}`);
+    process.exit(1);
+  }
+}
+pruefeShell(sw.text);
+
 if (process.argv[2] === '--check') {
   if (sw.v !== shell.v) {
     console.error(`Versions-Drift: sw.js=${sw.v}, js/version.js=${shell.v}`);
     process.exit(1);
   }
-  console.log(`ok — beide auf ${sw.v}`);
+  console.log(`ok — beide auf ${sw.v}, Offline-Shell vollständig`);
   process.exit(0);
 }
 

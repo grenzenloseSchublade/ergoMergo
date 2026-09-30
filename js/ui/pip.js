@@ -16,7 +16,7 @@ function tokens() {
     ink: t('--ink') || '#ecf3f5',
     ink2: t('--ink2') || '#9fb0b6',
     accent: t('--accent') || '#45c7d4',
-    danger: t('--danger') || '#ef6b5e',
+    hr: t('--hr-line') || '#ff6f8a',
   };
 }
 
@@ -27,6 +27,7 @@ export class PiP {
   #datenFn = null;
   aktiv = false;
   onEnde = null;                 // UI-Callback, wenn das Fenster geschlossen wird
+  onAuto = null;                 // UI-Callback, wenn Chrome das Fenster selbst öffnet
 
   constructor() {
     this.#canvas.width = 480;
@@ -124,7 +125,7 @@ export class PiP {
 // Ziel klein darunter, unten eine Zeile mit Intervall-Rest, rpm und —
 // nur wenn ein Gurt Werte liefert — Herzfrequenz. Mehr passt in ein
 // PiP-Fenster (real oft nur 120–260 px breit) nicht lesbar hinein.
-export function zeichnePipBild(canvas, d) {
+function zeichnePipBild(canvas, d) {
   const c = canvas.getContext('2d');
   const { width: w } = canvas;
   const farbe = tokens();
@@ -156,14 +157,14 @@ export function zeichnePipBild(canvas, d) {
   const segmente = [];
   if (d.rest) segmente.push({ wert: d.rest, slot: '00:00', icon: 'timer', farbe: farbe.ink });
   segmente.push({ wert: String(d.rpm || '–'), slot: '000', icon: 'rotate', farbe: farbe.ink });
-  if (d.hr) segmente.push({ wert: String(d.hr), slot: '000', icon: 'herzpuls', farbe: farbe.danger });
+  if (d.hr) segmente.push({ wert: String(d.hr), slot: '000', icon: 'herzpuls', farbe: farbe.hr });
   c.textAlign = 'left';
   c.font = WERT_F;
   for (const s of segmente) s.wb = ICON + ICON_ABSTAND + c.measureText(s.slot).width;
   const gesamt = segmente.reduce((a, s) => a + s.wb, 0) + LUECKE * (segmente.length - 1);
   let x = (w - gesamt) / 2;
   for (const s of segmente) {
-    zeichneIcon(c, s.icon, x, 246 - 32, ICON, s.icon === 'herzpuls' ? farbe.danger : farbe.ink2);
+    zeichneIcon(c, s.icon, x, 246 - 32, ICON, s.icon === 'herzpuls' ? farbe.hr : farbe.ink2);
     c.fillStyle = s.farbe;
     c.font = WERT_F;
     const slotB = s.wb - ICON - ICON_ABSTAND;

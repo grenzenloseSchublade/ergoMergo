@@ -1,5 +1,9 @@
 // Vollbild-Overlay für Graphen: beliebige Zeichenfunktion auf großem Canvas,
-// Tap irgendwo schließt. Genutzt von Programm-Vorschau und Detailansicht.
+// Tap irgendwo schließt, Zurück-Taste ebenso (History-Eintrag über
+// oeffneModal). Genutzt von Programm-Vorschau und Detailansicht.
+
+import { beobachte } from './chart.js';
+import { oeffneModal } from '../navigation.js';
 
 // titel fett, zusatz grau dahinter — beides als Text, nie als HTML
 // (Titel sind oft Programmnamen aus importierten .zwo-Dateien)
@@ -9,12 +13,10 @@ export function zeigeGraphOverlay(zeichne, titel = '', zusatz = '') {
   const grau = document.createElement('span');
   grau.textContent = zusatz ? ` · ${zusatz}` : '';
   document.querySelector('#graph-title').replaceChildren(titel, grau);
-  // Drehen/Größenänderung: neu zeichnen, sonst streckt der Browser das alte
-  // Bild auf die neue Canvas-Größe
-  const neu = () => zeichne(canvas);
-  addEventListener('resize', neu);
-  dlg.addEventListener('close', () => removeEventListener('resize', neu), { once: true });
   dlg.onclick = () => dlg.close();
-  dlg.showModal();
+  oeffneModal(dlg, 'graph');
   zeichne(canvas);       // nach showModal: Canvas braucht sein Layout
+  // Drehen/Größenänderung: neu zeichnen, sonst streckt der Browser das alte Bild
+  const abmelden = beobachte(canvas, zeichne);
+  dlg.addEventListener('close', abmelden, { once: true });
 }

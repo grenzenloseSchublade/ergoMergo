@@ -1,53 +1,17 @@
-// Trainingsliste (Start) und Detailansicht mit Export/Löschen.
+// Fahrten-Listen: Startbildschirm (Wochendiagramm + letzte Fahrten) und
+// Screen „Fahrten" (Monate/Wochen). Die Detailansicht lebt in detail.js.
 
-import { listSessions, getSamples, deleteSession, saveSession, getSettings, FIELDS } from '../storage.js';
-import { logInfo, logError } from '../logger.js';
-import { toastOk, toastErr } from './toast.js';
-import { toTCX, download } from '../export.js';
-import { drawSessionChart } from './chart.js';
-import { zeigeGraphOverlay } from './overlay.js';
+import { listSessions, getSamples, saveSession } from '../storage.js';
 import { fmtTime, fmtKm, fmtDauer, esc } from '../format.js';
-import { kennwerte } from '../metrics.js';
+import { fahrtStats } from '../metrics.js';
 
 // Zeit-in-Zonen als schmaler Farbbalken (HTML, nutzt --z1..--z6)
-function zonenBalken(zonenSek, hoehe = 6) {
+export function zonenBalken(zonenSek, hoehe = 6) {
   if (!zonenSek || !zonenSek.some(s => s > 0)) return '';
   const total = zonenSek.reduce((a, b) => a + b, 0);
   const teile = zonenSek.map((s, z) => s > 0
     ? `<i style="flex:${s / total};background:var(--z${z + 1})"></i>` : '').join('');
   return `<span class="zonen" style="height:${hoehe}px">${teile}</span>`;
-}
-
-// Compliance-Report: Blöcke aus den Ziel-Samples ableiten (Lauflängen der
-// Zielleistung) und je Block Ziel gegen gefahrenen Schnitt stellen.
-function complianceReport(samples, count) {
-  const bloecke = [];
-  let start = 0;
-  for (let k = 1; k <= count; k++) {
-    if (k === count || samples[k * FIELDS + 2] !== samples[start * FIELDS + 2]) {
-      const dauer = k - start;
-      if (dauer >= 30) {                     // Rampen-/Übergangsstückchen ignorieren
-        let sum = 0;
-        for (let i = start; i < k; i++) sum += samples[i * FIELDS + 1];
-        bloecke.push({ dauer, ziel: samples[start * FIELDS + 2], ist: Math.round(sum / dauer) });
-      }
-      start = k;
-    }
-  }
-  return bloecke;
-}
-
-function complianceHtml(samples, count) {
-  const bloecke = complianceReport(samples, count);
-  if (bloecke.length < 2) return '';
-  const zeilen = bloecke.map((b, i) => {
-    const diff = b.ziel ? Math.round((b.ist / b.ziel - 1) * 100) : 0;
-    const cls = Math.abs(diff) <= 5 ? 'ok' : diff < 0 ? 'unter' : 'ueber';
-    return `<tr><td>${i + 1}</td><td>${fmtTime(b.dauer)}</td><td>${b.ziel} W</td><td>${b.ist} W</td><td class="${cls}">${diff > 0 ? '+' : ''}${diff} %</td></tr>`;
-  }).join('');
-  return `<details class="compliance"><summary>Intervall-Report (${bloecke.length} Blöcke)</summary>
-    <table><thead><tr><th>#</th><th>Dauer</th><th>Ziel</th><th>Ø Ist</th><th>Δ</th></tr></thead>
-    <tbody>${zeilen}</tbody></table></details>`;
 }
 
 // ---------- Wochen ----------
@@ -77,7 +41,7 @@ function kalenderwoche(ws) {
   return 1 + Math.round(((d - jan4) / 864e5 - 3 + (jan4.getDay() + 6) % 7) / 7);
 }
 
-export function wochenSumme(sessions) {
+function wochenSumme(sessions) {
   return sessions.reduce((a, s) => ({
     n: a.n + 1, sek: a.sek + s.dauer, kJ: a.kJ + s.kJ, tss: a.tss + (s.tss ?? 0),
     km: a.km + (s.km ?? 0),
@@ -128,14 +92,19 @@ function wochenKopf(ws, fahrten) {
 // Fahrten unter dieser Dauer (Probefahrten, Fehlstarts) gedimmt listen
 const KURZ_SEK = 120;
 
+// Programmende einer gespeicherten Fahrt: neue Fahrten speichern es, ältere
+// nur die Ausfahr-Dauer
+export const programmEndeVon = s => s.programmEndeBei ?? (s.ausgefahrenSek ? s.dauer - s.ausgefahrenSek : null);
+
 // Kennwerte, die ältere Versionen noch nicht gespeichert haben (NP, km, HF,
-// Zonen), aus den Rohsamples nachrechnen und persistieren. Liefert true,
-// wenn etwas ergänzt wurde.
-async function ergaenzeKennwerte(session, data) {
+// Zonen), aus den Rohsamples nachrechnen und persistieren — mit derselben
+// Rechnung wie beim Speichern (Programmfenster!). Liefert true, wenn etwas
+// ergänzt wurde.
+export async function ergaenzeKennwerte(session, data) {
   if (session.np !== undefined && session.km !== undefined) return false;
   data ??= await getSamples(session.id);
   if (!data) return false;
-  Object.assign(session, kennwerte(data.samples, data.count, session.ftp ?? 0));
+  Object.assign(session, fahrtStats(data.samples, data.count, programmEndeVon(session), session.ftp ?? 0));
   await saveSession(session);
   return true;
 }
@@ -167,7 +136,7 @@ const HOME_FAHRTEN = 3;
 
 // Startbildschirm: Wochendiagramm + die letzten Fahrten + „Alle Fahrten ›".
 // Bleibt gleich lang, egal wie viele Fahrten gespeichert sind.
-export async function renderList(ul, onOpen, onAlle) {
+export async function renderHome(ul, onOpen, onAlle) {
   const sessions = await ladeFahrten();
   const bilanzEl = document.querySelector('#wochenbilanz');
   bilanzEl.hidden = !sessions.length;
@@ -195,9 +164,11 @@ export async function renderList(ul, onOpen, onAlle) {
 
 const monatsKey = t => { const d = new Date(t); return d.getFullYear() * 12 + d.getMonth(); };
 // Auf-/Zugeklappte Monate überleben das Neuzeichnen (Rückkehr aus der
-// Detailansicht, Löschen) — getrennt für echte und Demo-Fahrten;
-// null = noch nie gerendert, Default setzen
-const offen = { echt: null, demo: null };
+// Detailansicht, Löschen) — getrennt für echte und Demo-Fahrten. gesehen:
+// Monate, die schon einmal gezeigt wurden; ein neuer Monat (Monatswechsel
+// ohne App-Neustart) klappt von selbst auf.
+const offen = { echt: new Set(), demo: new Set() };
+const gesehen = { echt: new Set(), demo: new Set() };
 
 // Monatsinhalt: Wochen-Kopfzeilen (Summen nur über die Fahrten dieses
 // Monats — eine Woche kann über den Monatswechsel reichen) + Fahrten
@@ -230,12 +201,15 @@ export async function renderFahrten(root, onOpen, { demo = null } = {}) {
   }
   // Default: aktueller und letzter Kalendermonat offen — bei längerer
   // Pause wenigstens der jüngste Monat mit Fahrten
-  if (!offen[modus]) {
-    const jetzt = monatsKey(Date.now());
-    offen[modus] = new Set([...monate.keys()].filter(k => k >= jetzt - 1));
-    if (!offen[modus].size && monate.size) offen[modus].add([...monate.keys()][0]);
-  }
   const offeneMonate = offen[modus];
+  const erstesMal = !gesehen[modus].size;
+  const jetzt = monatsKey(Date.now());
+  for (const k of monate.keys()) {
+    if (gesehen[modus].has(k)) continue;
+    gesehen[modus].add(k);
+    if (k >= jetzt - 1) offeneMonate.add(k);
+  }
+  if (erstesMal && !offeneMonate.size && monate.size) offeneMonate.add([...monate.keys()][0]);
   const wrap = root.querySelector('#fahrten-monate');
   wrap.replaceChildren();
   if (!sessions.length) {
@@ -260,90 +234,4 @@ export async function renderFahrten(root, onOpen, { demo = null } = {}) {
     fuelle();
     wrap.append(det);
   }
-}
-
-// demo: Beispielfahrt aus ?demo=fahrt — Samples kommen mit, nichts wird
-// gelesen, gespeichert, gelöscht oder hochgeladen
-export async function renderDetail(root, session, onClose, { demo = null } = {}) {
-  root.querySelector('#d-title').textContent =
-    new Date(session.start).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
-  root.querySelector('#d-demo').hidden = !demo;
-  const data = demo ?? await getSamples(session.id);
-  const settings = await getSettings();
-
-  if (data && !demo) await ergaenzeKennwerte(session, data);
-
-  const stats = [
-    ['Dauer', fmtTime(session.dauer)], ['Ø', `${session.avgW} W`], ['max', `${session.maxW} W`],
-    ['Arbeit', `${session.kJ} kJ`], ['Ø Kadenz', `${session.avgRpm} rpm`],
-  ];
-  if (session.km) stats.push(['Distanz', `${fmtKm(session.km)} km`]);
-  if (session.np) stats.push(['NP', `${session.np} W`]);
-  if (session.if) stats.push(['IF', session.if], ['TSS', session.tss]);
-  if (session.hrAvg) stats.push(['Ø HF', `${session.hrAvg} bpm`, 'hf'], ['max HF', `${session.hrMax} bpm`, 'hf']);
-  if (session.akkuProStunde) stats.push(['Akku', `≈ ${session.akkuProStunde} %/h`]);
-  root.querySelector('#d-stats').innerHTML =
-    stats.map(([k, v, cls]) => `<span${cls ? ` class="${cls}"` : ''}>${k} <b>${v}</b></span>`).join('')
-    + zonenBalken(session.zonenSek, 8);
-  let cleanup = () => {};
-  if (data) {
-    const canvas = root.querySelector('#detail-chart');
-    // Programmende: neue Fahrten speichern es, ältere nur die Ausfahr-Dauer
-    const opts = {
-      ftp: session.ftp || settings.ftp,
-      programmEnde: session.programmEndeBei
-        ?? (session.ausgefahrenSek ? session.dauer - session.ausgefahrenSek : null),
-    };
-    const redraw = () => drawSessionChart(canvas, data.samples, data.count, opts);
-    redraw();
-    canvas.onclick = () => zeigeGraphOverlay(
-      c => drawSessionChart(c, data.samples, data.count, opts),
-      session.programm, `${fmtTime(session.dauer)} · Ø ${session.avgW} W · max ${session.maxW} W`);
-    // Bei Orientierungswechsel neu zeichnen; Aufrufer baut den Listener ab
-    addEventListener('resize', redraw);
-    cleanup = () => removeEventListener('resize', redraw);
-  }
-
-  root.querySelector('#d-compliance').innerHTML =
-    data ? complianceHtml(data.samples, data.count) : '';
-
-  root.querySelector('#btn-tcx').onclick = () => {
-    if (!data) return;
-    download(`ergomergo-${session.id.slice(0, 19).replaceAll(':', '-')}.tcx`,
-      toTCX(session, data.samples, data.count));
-    toastOk('TCX heruntergeladen');
-  };
-
-  // Upload zu intervals.icu (Basic Auth, CORS nur auf /api/v1/-Endpunkten)
-  const icuBtn = root.querySelector('#btn-icu');
-  icuBtn.hidden = !settings.icuApiKey || !data || !!demo;
-  icuBtn.onclick = async () => {
-    icuBtn.disabled = true;
-    try {
-      const fd = new FormData();
-      fd.append('file', new Blob([toTCX(session, data.samples, data.count)], { type: 'application/xml' }),
-        `ergomergo-${session.id.slice(0, 19).replaceAll(':', '-')}.tcx`);
-      fd.append('name', `ergoMergo: ${session.programm}`);
-      const resp = await fetch('https://intervals.icu/api/v1/athlete/0/activities', {
-        method: 'POST',
-        headers: { Authorization: 'Basic ' + btoa('API_KEY:' + settings.icuApiKey) },
-        body: fd,
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      logInfo('icu', 'Upload ok', session.id);
-      icuBtn.textContent = '✓ hochgeladen';
-      toastOk('Bei intervals.icu hochgeladen');
-    } catch (err) {
-      logError('icu', 'Upload fehlgeschlagen', err.message);
-      toastErr('intervals.icu-Upload fehlgeschlagen: ' + err.message);
-      icuBtn.disabled = false;
-    }
-  };
-  icuBtn.disabled = false;
-  icuBtn.textContent = '→ intervals.icu';
-  root.querySelector('#btn-delete').hidden = !!demo;
-  root.querySelector('#btn-delete').onclick = async () => {
-    if (confirm('Fahrt endgültig löschen?')) { await deleteSession(session.id); onClose(); }
-  };
-  return cleanup;
 }

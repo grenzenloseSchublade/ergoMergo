@@ -10,19 +10,21 @@ const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
 const RAMP_MS = 2000;         // Zielsprünge als Rampe, nicht als Sprung
 const RESUME_RAMP_MS = 10000; // Wiedereinstieg nach Stopp: sanft hochfahren
 const AUTOSAVE_MS = 5000;
+const DATEN_VERALTET_MS = 3000;   // keine Trainerdaten mehr → Livewerte gelten nicht mehr
+const HF_VERALTET_MS = 5000;      // kein HF-Wert mehr → Lücke statt eingefrorener Linie
 
 export class Session extends EventTarget {
   constructor(ftms, settings, programm = null) {
     super();
     this.ftms = ftms;
     this.settings = settings;
-    this.programm = programm;                 // V2: Programm-Engine hängt sich hier ein
+    this.programm = programm;                 // Programm-Definition (Name/id für die gespeicherte Fahrt)
     this.seed = null;                         // Startwert eines Zufallsprogramms (Fartlek)
     this.id = new Date().toISOString();
     this.start = Date.now();
     this.status = 'riding';                   // riding | paused | done
     this.target = settings.startWatt;
-    this.samples = new Int16Array(4 * 3600 * FIELDS);   // 4 h Vorrat
+    this.samples = new Int16Array(4 * 3600 * FIELDS);   // 4 h Vorrat, wächst bei Bedarf
     this.count = 0;
     this.live = { watt: 0, rpm: 0, hr: 0, kmh: 0 };
     this.kj = 0;
@@ -31,6 +33,9 @@ export class Session extends EventTarget {
     this.#startLoops();
     ftms.addEventListener('data', this.#onData);
   }
+
+  #letzteDaten = performance.now();
+  #letzteHf = 0;
 
   #ramp = null;               // { from, to, t0 }
   #onReconnect = () => { this.#lastWritten = -1; };
@@ -43,14 +48,28 @@ export class Session extends EventTarget {
     const d = { ...e.detail };
     if (this.#hrExternal) delete d.hr;      // Gurt schlägt Trainer-Bridge
     Object.assign(this.live, d);
+    this.#letzteDaten = performance.now();
+    if (d.hr) this.#letzteHf = this.#letzteDaten;
+    // Laufende Rampe (v. a. der sanfte Wiedereinstieg nach Not-Stopp) im
+    // Takt der BLE-Notifications weiterschreiben — Timer sind im
+    // Hintergrund gedrosselt, Notifications kommen weiter
+    if (this.#ramp) this.#schreibeZiel();
   };
 
   #hrAbos = [];   // [client, typ, fn] — Pool-Clients leben über Sessions hinaus
+  #hrClients = new Set();
 
   attachHR(hrClient) {
     this.#hrExternal = true;
-    const onHr = e => { this.live.hr = e.detail; };
-    const onWeg = () => { this.#hrExternal = false; };
+    this.#hrClients.add(hrClient);
+    const onHr = e => { this.live.hr = e.detail; this.#letzteHf = performance.now(); };
+    const onWeg = () => {
+      // Gurt weg: HF sofort als Lücke (0) statt eingefrorenem Wert; die
+      // Trainer-Bridge darf nur übernehmen, wenn kein anderer Gurt mehr hängt
+      this.#hrClients.delete(hrClient);
+      this.#hrExternal = [...this.#hrClients].some(c => c.device?.gatt?.connected);
+      this.live.hr = 0;
+    };
     hrClient.addEventListener('hr', onHr);
     hrClient.addEventListener('disconnected', onWeg);
     this.#hrAbos.push([hrClient, 'hr', onHr], [hrClient, 'disconnected', onWeg]);
@@ -59,6 +78,7 @@ export class Session extends EventTarget {
   detachHR() {
     for (const [c, typ, fn] of this.#hrAbos) c.removeEventListener(typ, fn);
     this.#hrAbos = [];
+    this.#hrClients.clear();
   }
 
   setTarget(watt, { instant = false, rampMs = RAMP_MS } = {}) {
@@ -123,11 +143,13 @@ export class Session extends EventTarget {
         Math.max(WRITE_INTERVAL - abstand, 50) + 10);
       return;
     }
-    // Hintergrund: Rampe überspringen UND beenden (ihr Timer ist
+    // Hintergrund: normale Rampen überspringen UND beenden (ihr Timer ist
     // gedrosselt; stehen bleibend würde sie beim Sichtbarwerden einen
-    // niedrigeren Zwischenwert nachschreiben) — plus Diagnosespur
-    if (document.hidden) this.#ramp = null;
-    const w = document.hidden ? this.target : this.#currentRampValue();
+    // niedrigeren Zwischenwert nachschreiben) — plus Diagnosespur. Der
+    // sanfte Wiedereinstieg nach Not-Stopp bleibt: er läuft im Takt der
+    // BLE-Notifications weiter (#onData), sonst stünde sofort volle Last an
+    if (document.hidden && this.#ramp?.ms !== RESUME_RAMP_MS) this.#ramp = null;
+    const w = this.#currentRampValue();
     if (w === this.#lastWritten) return;
     this.#letzterWriteT = jetzt;
     this.#lastWritten = w;
@@ -146,13 +168,30 @@ export class Session extends EventTarget {
     this.ftms.addEventListener('reconnected', this.#onReconnect);
 
     this.#tickTimer = setInterval(() => this.#tick(), 1000);
-    this.#autosaveTimer = setInterval(() => this.save(), AUTOSAVE_MS);
+    // Autosave-Fehler (Speicher voll o. Ä.) nicht als unbehandelte Rejection
+    // verlieren: melden, beim nächsten Intervall erneut versuchen
+    this.#autosaveTimer = setInterval(() => this.save().catch(err => {
+      logWarn('session', 'Autosave fehlgeschlagen', err.message);
+      this.dispatchEvent(new CustomEvent('error', { detail: `Speichern fehlgeschlagen: ${err.message}` }));
+    }), AUTOSAVE_MS);
   }
 
   #tick() {
     if (this.status !== 'riding') return;
     const i = this.count * FIELDS;
-    if (i + FIELDS > this.samples.length) return;
+    if (i + FIELDS > this.samples.length) {
+      // Über 4 h: Puffer verdoppeln statt still einzufrieren
+      const neu = new Int16Array(this.samples.length * 2);
+      neu.set(this.samples);
+      this.samples = neu;
+      logInfo('session', `Sample-Puffer auf ${neu.length / FIELDS / 3600} h erweitert`);
+    }
+    // Keine frischen Daten (Trainer getrennt/still, Gurt weg): nicht die
+    // letzten Werte minutenlang weiterschreiben — sonst wachsen kJ, NP, TSS
+    // und km, und die HF-Linie wird flach statt zur Lücke
+    const jetzt = performance.now();
+    if (jetzt - this.#letzteDaten > DATEN_VERALTET_MS) Object.assign(this.live, { watt: 0, rpm: 0, kmh: 0 });
+    if (jetzt - this.#letzteHf > HF_VERALTET_MS) this.live.hr = 0;
     const s = this.samples;
     s[i] = this.elapsed;
     s[i + 1] = this.live.watt;

@@ -5,6 +5,8 @@
 // Importierte Workouts landen als eigene Programme im programme-Store und
 // skalieren zur hinterlegten FTP (ohne FTP: 170-W-Annahme wie der Generator).
 
+import { effektiveFtp } from './metrics.js';
+
 const RAMPEN_STUFEN = 6;
 
 export function parseZwo(xmlText) {
@@ -15,6 +17,7 @@ export function parseZwo(xmlText) {
   if (!workout) throw new Error('Kein <workout>-Element gefunden');
 
   const bloecke = [];   // { dauer (s), pct (FTP-Bruchteil), rpm? {low, high} }
+  const uebersprungen = [];   // unbekannte Elemente mit Dauer (Hinweis beim Import)
   const num = (el, attr, fallback = 0) => {
     const v = parseFloat(el.getAttribute(attr));
     return Number.isFinite(v) ? v : fallback;
@@ -61,17 +64,20 @@ export function parseZwo(xmlText) {
         bloecke.push({ dauer, pct: 0.6 });     // freie Fahrt: neutrale Z2-Vorgabe
         break;
       default:
-        break;                                  // textevent etc. ignorieren
+        // Unbekannte Elemente mit Dauer (z. B. MaxEffort) nicht still
+        // verlieren — der Import meldet sie; textevent o. Ä. ohne Dauer zählt nicht
+        if (dauer > 0) uebersprungen.push(`${el.tagName} (${Math.round(dauer)} s)`);
+        break;
     }
   }
 
   const gueltig = bloecke.filter(b => b.dauer >= 1);
   if (!gueltig.length) throw new Error('Workout enthält keine Blöcke');
-  return { name, bloecke: gueltig };
+  return { name, bloecke: gueltig, uebersprungen };
 }
 
 // Gespeichertes Import-Programm → Programmobjekt für Kacheln/Startdialog
-export function zwoProgramm(gespeichert, EFF_FTP_DEFAULT) {
+export function zwoProgramm(gespeichert) {
   const totalMin = Math.round(gespeichert.bloecke.reduce((a, b) => a + b.dauer, 0) / 60);
   let gruppenSeq = 0;
   return {
@@ -83,7 +89,7 @@ export function zwoProgramm(gespeichert, EFF_FTP_DEFAULT) {
       intensitaet: { label: 'Intensität (%)', min: 50, max: 130, default: 100 },
     },
     generieren(o, ftp) {
-      const f = (ftp || EFF_FTP_DEFAULT) * (o.intensitaet ?? 100) / 100;
+      const f = effektiveFtp(ftp) * (o.intensitaet ?? 100) / 100;
       const gruppenIds = new Map();
       return gespeichert.bloecke.map(b => {
         const block = {

@@ -3,13 +3,14 @@
 // FTP-Änderung) laufen über injizierte Callbacks.
 
 import { getSettings, setSetting, getLogs, clearLogs } from '../storage.js';
-import { esc } from '../format.js';
+import { esc, dateiStempel } from '../format.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';
-import { tastenName } from '../ble/zwift-controller.js';
+import { tastenName, tasteInfo, HALTEN_TAKT_MS } from '../ble/zwift-controller.js';
 import { tastenSymbol } from './tasten-symbol.js';
 import { lenkerKarte } from './lenker-karte.js';
-import { CONTROLLER_AKTIONEN, istBelegt } from './controller-aktionen.js';
-import { GL_ROLLEN, GL_ICONS } from './geraete-leiste.js';
+import { CONTROLLER_AKTIONEN, istBelegt, istBelegbar } from './controller-aktionen.js';
+import { GL_ROLLEN, GL_ICONS, koppelMitRueckmeldung, geraeteHinweis } from './geraete-leiste.js';
+import { oeffneModal } from '../navigation.js';
 import { toast, toastOk, toastErr } from './toast.js';
 import { download } from '../export.js';
 import { formatLog } from '../logger.js';
@@ -17,8 +18,6 @@ import { exportiereAlles, importiereAlles } from '../backup.js';
 import { initAudio, tick } from '../signals.js';
 
 const $ = s => document.querySelector(s);
-
-
 
 export async function openSettings({ nachSpeichern } = {}) {
   const s = await getSettings();
@@ -30,7 +29,7 @@ export async function openSettings({ nachSpeichern } = {}) {
     $('#log-view').scrollTop = $('#log-view').scrollHeight;
   });
   $('#btn-log-export').onclick = async () =>
-    download(`ergomergo-log-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.txt`,
+    download(`ergomergo-log-${dateiStempel()}.txt`,
       formatLog(await getLogs()), 'text/plain');
   $('#btn-log-clear').onclick = async () => {
     await clearLogs();
@@ -66,15 +65,7 @@ export async function openSettings({ nachSpeichern } = {}) {
         };
       } else {
         aktion.textContent = 'Koppeln';
-        aktion.onclick = async () => {
-          try {
-            await geraeteManager.koppel(rolle);
-            toastOk(`${label} gekoppelt & verbunden`);
-            zeichneGeraete();
-          } catch (err) {
-            if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
-          }
-        };
+        aktion.onclick = () => koppelMitRueckmeldung(rolle, label);
       }
       li.append(aktion);
       // Lenker: zweites Pad nachkoppeln (linke + rechte Seite sind eigene Geräte)
@@ -84,21 +75,17 @@ export async function openSettings({ nachSpeichern } = {}) {
         pad2.className = 'ghost';
         pad2.textContent = '+ 2. Pad';
         pad2.title = 'Zweite Lenkerseite koppeln (eigenes BLE-Gerät)';
-        pad2.onclick = async () => {
-          try {
-            await geraeteManager.koppel('controller');
-            toastOk('Zweites Pad gekoppelt & verbunden');
-            zeichneGeraete();
-          } catch (err) {
-            if (err.name !== 'NotFoundError') toastErr('Koppeln fehlgeschlagen: ' + err.message);
-          }
-        };
+        pad2.onclick = () => koppelMitRueckmeldung('controller', 'Zweites Pad');
         li.append(pad2);
       }
       liste.append(li);
     }
   };
   zeichneGeraete();
+  // Koppeln/Trennen (auch aus dem Lern-Modus) sofort in der Liste zeigen
+  geraeteManager.addEventListener('change', zeichneGeraete);
+  dlg.addEventListener('close', () => geraeteManager.removeEventListener('change', zeichneGeraete), { once: true });
+  $('#halten-takt').textContent = `ein Wattschritt alle ${String(HALTEN_TAKT_MS / 1000).replace('.', ',')} s`;
 
   // Tastenbelegung des Controllers: Anzeige + Lern-Modus
   const zeigeMap = map => {
@@ -110,22 +97,19 @@ export async function openSettings({ nachSpeichern } = {}) {
   };
   zeigeMap(s.controllerMap);
   $('#btn-map-lernen').onclick = () => lerneTasten(zeigeMap);
-  history.pushState({ dialog: 'settings' }, '');
-  dlg.addEventListener('close', () => {
-    if (history.state?.dialog === 'settings') history.back();
-  }, { once: true });
   $('#set-ftp').value = s.ftp;
   $('#set-schritt').value = s.wattSchritt;
   $('#set-max').value = s.maxWatt;
   $('#set-start').value = s.startWatt;
   $('#set-sprache').checked = s.sprachansagen;
+  $('#set-ton').checked = s.tonAn !== false;
   $('#set-halten-tasten').checked = s.haltenTasten;
   $('#set-halten-paddles').checked = s.haltenPaddles;
   $('#set-icukey').value = s.icuApiKey;
 
   // Sicherung: Export/Import der kompletten Datenbank
   $('#btn-backup').onclick = async () => {
-    download(`ergomergo-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    download(`ergomergo-backup-${dateiStempel()}.json`,
       await exportiereAlles(), 'application/json');
     toastOk('Sicherung heruntergeladen');
   };
@@ -134,19 +118,31 @@ export async function openSettings({ nachSpeichern } = {}) {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
+    if (!confirm('Sicherung importieren? Einstellungen werden überschrieben, Fahrten ergänzt.')) return;
+    // Dialog ohne Speichern schließen — sonst überschriebe „Speichern" die
+    // importierten Einstellungen mit den alten Formularwerten
+    dlg.close('cancel');
     try {
       const n = await importiereAlles(await file.text());
       toastOk(`Wiederhergestellt: ${n} Fahrten — lade neu …`);
-      setTimeout(() => location.reload(), 1200);
-    } catch (err) { toastErr('Import fehlgeschlagen: ' + err.message); }
+    } catch (err) {
+      toastErr('Import fehlgeschlagen: ' + err.message);
+    }
+    // Auch nach Teilimport neu laden: die App zeigt sonst einen Mischzustand
+    setTimeout(() => location.reload(), 1500);
   };
   dlg.onclose = async () => {
     if (dlg.returnValue !== 'ok') return;
-    await setSetting('ftp', Number($('#set-ftp').value) || 0);
-    await setSetting('wattSchritt', Math.max(1, Number($('#set-schritt').value) || 10));
-    await setSetting('maxWatt', Math.max(100, Number($('#set-max').value) || 400));
-    await setSetting('startWatt', Math.max(20, Number($('#set-start').value) || 100));
+    // Werte in JS klemmen und runden — die Felder erzwingen keine Schritte
+    // mehr (ein Rampentest-FTP wie 248 blockierte sonst jedes Speichern)
+    const zahl = (id, min, max, standard) =>
+      Math.min(max, Math.max(min, Math.round(Number($(id).value)) || standard));
+    await setSetting('ftp', zahl('#set-ftp', 0, 500, 0));
+    await setSetting('wattSchritt', zahl('#set-schritt', 1, 50, 10));
+    await setSetting('maxWatt', zahl('#set-max', 100, 1000, 400));
+    await setSetting('startWatt', zahl('#set-start', 20, 300, 100));
     await setSetting('sprachansagen', $('#set-sprache').checked);
+    await setSetting('tonAn', $('#set-ton').checked);
     await setSetting('icuApiKey', $('#set-icukey').value.trim());
     const halten = { tasten: $('#set-halten-tasten').checked, paddles: $('#set-halten-paddles').checked };
     await setSetting('haltenTasten', halten.tasten);
@@ -155,11 +151,7 @@ export async function openSettings({ nachSpeichern } = {}) {
     nachSpeichern?.();          // Zonenfarben/Profile an neue FTP anpassen
     toastOk('Einstellungen gespeichert');
   };
-  dlg.showModal();
-  // showModal fokussiert sonst das erste Eingabefeld (FTP) — am Gerät
-  // klappt sofort die Tastatur auf und verdeckt den Dialog. Fokus lösen;
-  // die Tastatur kommt erst, wenn bewusst in ein Feld getippt wird.
-  document.activeElement?.blur();
+  oeffneModal(dlg, 'settings');
 }
 
 // Tasten-Lern-Modus: verbindet den Controller und fragt Aktion für Aktion
@@ -209,6 +201,10 @@ async function lerneTasten(zeigeMap) {
     // stehen (zwei Bits in einer Notification) — hart abfangen
     if (fertig || i >= schritte.length) return;
     const bit = e.detail;
+    if (!istBelegbar(tasteInfo(bit))) {
+      $('#map-status').textContent = 'Ein/Aus schaltet das Pad aus — bitte eine andere Taste drücken.';
+      return;
+    }
     if (Object.values(map).includes(bit)) {
       zeigeKarte(bit);
       $('#map-status').innerHTML = `${tastenSymbol(bit)} ${tastenName(bit)} ist schon belegt — andere Taste drücken.`;
@@ -220,27 +216,26 @@ async function lerneTasten(zeigeMap) {
     $('#map-status').innerHTML = `${tastenSymbol(bit)} ${tastenName(bit)} zugeordnet.`;
     weiter();
   };
-  dlg.showModal();
+  oeffneModal(dlg, 'mapping');
   zeigeSchritt();
   zeigeKarte();
   try {
-    if ((await geraeteManager.gemerkte('controller')).length === 0) {
-      await geraeteManager.koppel('controller');   // frische Geste → Chooser ok
-    } else {
-      await geraeteManager.verbinde('controller');
-    }
+    // Dieselbe Entscheidung wie überall: verbinden oder — ohne Berechtigung —
+    // Geräteauswahl (Tap auf „Tasten zuordnen" ist die frische Geste)
+    const r = await geraeteManager.verbindeOderKoppel('controller');
     if (fertig) return;                          // Abbruch — Pool behält die Verbindung
+    if (r.ergebnis === 'abgebrochen') { ende(); return; }
     if (!geraeteManager.clients('controller').length) {
-      $('#map-status').textContent = 'Controller nicht erreichbar — Gerät wecken und erneut öffnen.';
+      $('#map-status').textContent = geraeteHinweis('Lenker', r) ?? 'Lenker nicht erreichbar — Gerät wecken und erneut öffnen.';
       return;
     }
     const clients = geraeteManager.clients('controller');
     for (const c of clients) { c.addEventListener('button', onButton); lauscher.push([c, onButton]); }
-    const namen = clients.map(c => c.deviceName ?? 'Controller').join(' + ');
+    const namen = clients.map(c => c.deviceName ?? 'Lenker').join(' + ');
     $('#map-status').textContent =
-      `Verbunden: ${namen} — jetzt drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für Ride nötig.)`;
+      `Verbunden: ${namen} — jetzt drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für den Ride nötig.)`;
   } catch (err) {
-    if (err.name !== 'NotFoundError') toastErr('Controller-Verbindung fehlgeschlagen: ' + err.message);
+    toastErr('Lenker-Verbindung fehlgeschlagen: ' + err.message);
     ende();
   }
 }

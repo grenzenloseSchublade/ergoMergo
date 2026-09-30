@@ -20,6 +20,12 @@ export function fmtDauer(sec) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h`;
 }
 
+// Datei-Stempel in Ortszeit: „2026-09-30_18-45" (toISOString wäre UTC)
+export function dateiStempel(d = new Date()) {
+  const z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}_${z(d.getHours())}-${z(d.getMinutes())}`;
+}
+
 export function fmtKm(km) {
   return (km ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }

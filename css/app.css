@@ -7,7 +7,7 @@
   --surface2: #1b2629;
   --ink: #ecf3f5;
   --ink2: #9fb0b6;
-  --ink3: #64767d;
+  --ink3: #74868d;     /* ≥ 4,5:1 auf --bg/--surface — auch kleine Schrift lesbar */
   --line: #223034;
   --accent: #45c7d4;
   --danger: #ef6b5e;
@@ -77,6 +77,7 @@ button { font: inherit; color: inherit; border: 0; cursor: pointer; }
 details.rubrik { border: 0; }
 details.rubrik summary.listhead {
   cursor: pointer; list-style: none; user-select: none; margin: .4rem 0 .5rem;
+  padding: .55rem 0;   /* Tippfläche ≥ 44 px */
 }
 details.rubrik summary.listhead::-webkit-details-marker { display: none; }
 details.rubrik summary.listhead::before {
@@ -93,15 +94,20 @@ details.rubrik[open] summary.listhead::before { transform: rotate(90deg); }
 .tile-title { font-size: 1.5rem; font-weight: 700; }
 .tile-sub { font-size: .85rem; color: var(--ink2); }
 
-.gear { margin-left: auto; background: none; color: var(--ink3); font-size: 1.3rem; padding: .2rem .4rem; }
+.gear {
+  margin: -.5rem -.5rem -.5rem auto; background: none; color: var(--ink3); font-size: 1.3rem;
+  min-width: 44px; min-height: 44px; display: grid; place-items: center;   /* Tippfläche */
+}
 .tiles-programme { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
 .tiles-programme .tile { padding: .8rem 1rem; }
 .tiles-programme .tile-title { font-size: 1.1rem; }
 .tile-profile { width: 100%; height: 36px; margin-top: .45rem; display: block; }
-.tile { position: relative; }
+/* Eigene Workouts: Löschknopf NEBEN der Kachel (kein Knopf im Knopf), 44 px */
+.tile-rahmen { position: relative; display: grid; }
+.tile-rahmen > .tile { height: 100%; }
 .tile-x {
-  position: absolute; top: .35rem; right: .5rem; color: var(--ink3);
-  font-size: .8rem; padding: .2rem .4rem; cursor: pointer;
+  position: absolute; top: 0; right: 0; width: 44px; height: 44px;
+  background: none; border: 0; color: var(--ink3); font-size: .85rem; cursor: pointer;
 }
 .tile-x:hover { color: var(--danger); }
 .listhead .chip { margin-left: .6rem; vertical-align: middle; }
@@ -134,7 +140,7 @@ dialog h2 { margin: 0 0 .8rem; font-size: 1.15rem; }
 #dlg-graph { width: min(96vw, 60rem); max-width: 96vw; min-width: 0; padding: .8rem; }
 #dlg-graph:focus, #dlg-graph:focus-visible { outline: none; }
 .diagnose { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .6rem; }
-.diagnose summary { cursor: pointer; font-size: .85rem; color: var(--ink2); }
+.diagnose summary { cursor: pointer; font-size: .85rem; color: var(--ink2); padding: .6rem 0; }   /* Tippfläche */
 #log-view {
   max-height: 40dvh; overflow: auto; background: var(--surface2); border-radius: 8px;
   padding: .5rem .6rem; font-family: monospace; font-size: .68rem; line-height: 1.45;
@@ -286,7 +292,8 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .dlg-actions .ghost { background: none; color: var(--ink2); }
 .dlg-actions .primary { background: var(--accent); color: var(--bg); }
 
-.listhead { font-size: .8rem; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; margin: 1.6rem 0 .5rem; }
+.listhead-zusatz { text-transform: none; letter-spacing: 0; opacity: .8; }
+.listhead { font-size: .8rem; font-weight: 400; color: var(--ink3); text-transform: uppercase; letter-spacing: .08em; margin: 1.6rem 0 .5rem; }
 .bilanz {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
   padding: .55rem .9rem .6rem; margin: 0 0 .5rem; font-size: .85rem;
@@ -334,8 +341,12 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
   font-variant-numeric: tabular-nums;
 }
 .monat > summary::-webkit-details-marker { display: none; }
-.monat > summary::before { content: '▸'; color: var(--accent); margin-right: .45rem; font-size: .8rem; }
-.monat[open] > summary::before { content: '▾'; }
+/* Aufklapp-Symbol wie bei den Rubriken auf Home: ▸, gedreht wenn offen */
+.monat > summary::before {
+  content: '▸'; display: inline-block; color: var(--accent); margin-right: .45rem; font-size: .8rem;
+  transition: transform .15s;
+}
+.monat[open] > summary::before { transform: rotate(90deg); }
 .monat .m-titel { font-size: .85rem; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: .06em; margin-right: auto; }
 .monat .m-summe { font-size: .8rem; color: var(--ink3); margin-left: .8rem; white-space: nowrap; }
 .monat > .sessions { margin-top: .3rem; }
@@ -380,7 +391,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   /* Festes Ziffernfeld: 99→100 darf Nachbarn nicht verschieben */
   min-width: 3ch; text-align: center;
 }
-.value-time { min-width: 4.5ch; }
+.metric .value-time { min-width: 4.5ch; }
 .metric .unit { font-size: .75rem; color: var(--ink3); }
 .metric-power { grid-area: power; }
 .metric-power .value { font-size: clamp(4.5rem, 22vmin, 9rem); transition: color .5s; }
@@ -442,6 +453,12 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
    darf die Werte darüber/darunter nicht verschieben */
 .row-secondary .status[hidden] { display: block !important; visibility: hidden; }
 .row-secondary .status { min-height: 1.2em; }
+/* Chips: Basis zuerst, Varianten danach (sonst gewinnt die spätere
+   Basisregel — .chip-fahrt war blass statt gefüllt) */
+.chip {
+  background: none; border: 1px solid var(--line); color: var(--ink3);
+  border-radius: 999px; padding: .15rem .6rem; font-size: .78rem;
+}
 /* Aktions-Chips in eigener Zeile, fahrtauglich groß */
 .row-actions {
   display: flex; flex-wrap: wrap; justify-content: center;
@@ -453,19 +470,11 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 }
 /* Fahr-Aktionen (häufig) gefüllt und zuerst; Verbinden (einmalig) zurückhaltend */
 .chip-fahrt { background: var(--surface2); border-color: var(--ink3); color: var(--ink); font-weight: 600; }
-/* Geräte-Chips (Trainer/Herzgurt/Lenker): Icon + Zustandspunkt wie die
-   Geräte-Leiste auf dem Home; Abstand trennt die Gruppen Fahrt | Geräte | Schalter */
+/* Geräte-Chips (Trainer/Herzgurt/Lenker): Icon + Zustandspunkt; Zustände
+   gemeinsam mit der Geräte-Leiste auf dem Home ([data-zustand], unten) */
 .row-actions .chip-geraet { gap: .4rem; padding-inline: .75rem; color: var(--ink2); }
 .chip-geraet > span { display: flex; }
 .chip-geraet svg { width: 20px; height: 20px; }
-.chip-geraet .dot { width: 8px; height: 8px; }
-.chip-geraet.fehlt { border-style: dashed; color: var(--ink3); }
-.chip-geraet.verbunden { border-color: var(--ok); color: var(--ink); }
-.chip-geraet.verbunden .dot { background: var(--ok); }
-.chip-geraet.verbindet .dot { background: var(--z4); animation: punkt-puls 1s ease-in-out infinite; }
-.chip-geraet.fehler { border-color: var(--danger); color: var(--danger); }
-.chip-geraet.fehler .dot { background: var(--danger); }
-@keyframes punkt-puls { 50% { opacity: .25; } }
 /* Gruppe ohne sichtbare Chips (Fahrt-Chips beim freien Fahren) nimmt keinen Platz */
 .chip-gruppe { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
 .chip-gruppe:not(:has(> :not([hidden]))) { display: none; }
@@ -473,11 +482,6 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   color: var(--ink2); font-weight: 600;
   display: inline-block; min-width: 2.5ch; text-align: right;
 }
-.chip {
-  background: none; border: 1px solid var(--line); color: var(--ink3);
-  border-radius: 999px; padding: .15rem .6rem; font-size: .78rem;
-}
-.chip.on { border-color: var(--ok); color: var(--ok); }
 .status { color: var(--ink3); }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--danger); }
@@ -564,12 +568,14 @@ button:disabled { cursor: default; }
     grid-template-columns: auto auto auto;
     grid-template-areas: "power target time" "sec sec sec";
     column-gap: clamp(1rem, 5vw, 3rem);
-    justify-content: center; align-items: center;
+    /* oben ausgerichtet: Beschriftungen auf einer Linie statt treppenförmig
+       (der Restbalken unter der Zeit machte die Spalte höher) */
+    justify-content: center; align-items: start;
     padding: .3rem .6rem 0;
   }
   /* Metrikzeile ist flach: Badge-Zusatztext würde drücken — nur „DEMO" zeigen;
      Badge und Beispielfahrten nebeneinander, die Höhe gehört dem Graphen */
-  .demo-badge-hint { display: none; }
+  .demo-leiste .demo-badge-hint { display: none; }
   .demo-leiste { flex-direction: row; gap: .4rem; }
   .metrics:has(.demo-leiste:not([hidden])),
   .ride-grid.fokus-graph .metrics:has(.demo-leiste:not([hidden])) { padding-top: 2rem; }
@@ -605,6 +611,21 @@ button:disabled { cursor: default; }
   .ride-grid.fokus-werte, .ride-grid.fokus-graph { grid-template-rows: auto minmax(0, 1fr) auto; }
   .ride-grid.fokus-graph .metric-power .value { font-size: clamp(1.8rem, 8vmin, 2.6rem); }
   .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.1rem, 5vmin, 1.6rem); }
+  /* Graph-Fokus quer: der Graph soll der größte sein — Geräte- und
+     Schalter-Chips weg (Block-Aktionen bleiben), Sekundärzeile kleiner */
+  .ride-grid.fokus-graph .chip-gruppe:nth-child(n+2) { display: none; }
+  .ride-grid.fokus-graph .row-secondary { font-size: .8rem; }
+  .ride-grid.fokus-graph .metric .unit { display: none; }
+  /* +10 oben, −10 direkt über STOPP: verrutscht der Daumen Richtung STOPP,
+     trifft er die harmlose Richtung */
+  .controls #btn-plus { order: -1; }
+}
+
+/* Niedrige Bildschirme hochkant: Chips kompakter, damit −10/+10/STOPP im Bild bleiben */
+@media (orientation: portrait) and (max-height: 600px) {
+  .row-actions { margin-top: .3rem; gap: .35rem .6rem; }
+  .row-actions .chip { min-height: 40px; min-width: 40px; padding-block: .25rem; }
+  .metric-power .value { font-size: clamp(3.4rem, 17vmin, 6rem); }
 }
 
 /* ---------- Detail ---------- */
@@ -618,6 +639,7 @@ button:disabled { cursor: default; }
 .compliance summary { padding: .55rem .8rem; cursor: pointer; font-size: .85rem; }
 .compliance table { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
 .compliance th, .compliance td { text-align: right; padding: .3rem .8rem; border-top: 1px solid var(--line); }
+.compliance tr.stopp td { color: var(--ink3); text-align: left; }
 .compliance th:first-child, .compliance td:first-child { text-align: left; }
 .compliance th { color: var(--ink3); font-weight: 500; font-size: .72rem; }
 .compliance .ok { color: var(--ok); }
@@ -631,7 +653,7 @@ button:disabled { cursor: default; }
 }
 .d-actions .danger { color: var(--danger); }
 
-/* Statuszeile oben: Aktualität · Datenbestand/Speicherschutz · Geräte */
+/* Statuszeile oben: Aktualität · Datenbestand/Speicherschutz */
 .statuszeile {
   display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; align-items: center;
   margin: -.3rem 0 .8rem; font-size: .74rem; color: var(--ink3);
@@ -641,12 +663,14 @@ button:disabled { cursor: default; }
 .statuszeile span:not(:last-child):not(:empty)::after { content: '·'; margin-left: 1.1rem; opacity: .5; }
 .chip.update { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
-/* Toasts: unten mittig, über allem, kurz sichtbar */
+/* Toasts: unten mittig, über allem, kurz sichtbar — im Fahrbildschirm
+   oben, sonst verdecken sie −10/+10/STOPP */
 .toasts {
   position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom));
   transform: translateX(-50%); z-index: 100; display: grid; gap: .4rem;
   width: min(92vw, 26rem); pointer-events: none;
 }
+body:has(#screen-ride:not([hidden])) .toasts { bottom: auto; top: calc(.5rem + env(safe-area-inset-top)); }
 .toast {
   background: var(--surface2); color: var(--ink); border: 1px solid var(--line);
   border-left: 3px solid var(--accent); border-radius: 10px; padding: .6rem .9rem;
@@ -657,7 +681,12 @@ button:disabled { cursor: default; }
 .toast.ok { border-left-color: var(--ok); }
 .toast.err { border-left-color: var(--danger); }
 
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* Weniger Bewegung: Übergänge und Animationen aus — nur das kurze
+   Aufblitzen des Zielwerts bleibt (einzige Rückmeldung eines Lenker-Drucks) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  #m-target.blitz { animation: zielblitz .3s ease-out !important; }
+}
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Controller-Tastendruck: Zielwert blitzt kurz in Akzentfarbe */
@@ -693,13 +722,21 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   background: var(--surface); border: 1px solid var(--line); color: var(--ink2);
   border-radius: 999px; padding: .4rem .7rem; font-size: .8rem; min-height: 40px;
 }
-.gl button.fehlt { border-style: dashed; color: var(--ink3); }
-.gl button.verbunden { border-color: var(--ok); color: var(--ink); }
-.gl button.verbindet { opacity: .6; }
-.gl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink3); flex: 0 0 auto; }
-.gl button.verbunden .dot { background: var(--ok); }
-.gl button.verbindet .dot { background: var(--z4); }
-.gl .zusatz { font-size: .78rem; padding: .3rem .6rem; min-height: 34px; }
+.gl .zusatz { font-size: .78rem; padding: .3rem .6rem; min-height: 40px; }
+
+/* Geräte-Zustand — EINE Regel für Home-Leiste und Fahrbildschirm:
+   fehlt (gestrichelt) | gemerkt (durchgezogen) | verbindet (Punkt gelb,
+   pulsiert) | verbunden (grün) | teilweise (Lenker: 1 von 2 Pads) |
+   fehler (rot, Trainer nicht erreichbar) */
+[data-zustand] .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink3); flex: 0 0 auto; }
+[data-zustand="fehlt"] { border-style: dashed; color: var(--ink3); }
+[data-zustand="verbunden"], [data-zustand="teilweise"] { border-color: var(--ok); color: var(--ink); }
+[data-zustand="verbunden"] .dot { background: var(--ok); }
+[data-zustand="teilweise"] .dot { background: linear-gradient(90deg, var(--ok) 50%, var(--ink3) 50%); }
+[data-zustand="verbindet"] .dot { background: var(--z4); animation: punkt-puls 1s ease-in-out infinite; }
+[data-zustand="fehler"] { border-color: var(--danger); color: var(--danger); }
+[data-zustand="fehler"] .dot { background: var(--danger); }
+@keyframes punkt-puls { 50% { opacity: .25; } }
 
 
 /* Lucide-Icons in Geräte-Leiste, Geräteliste und Zahnrad */
@@ -710,4 +747,4 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Mini-Icons (Lucide) vor den Sekundärwerten: rpm/HF/Energie */
 .row-secondary .si { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; margin-right: .2rem; color: var(--ink3); font-style: normal; }
 .row-secondary .si svg { display: block; width: 100%; height: 100%; }
-.row-secondary .si-hf { color: var(--danger); }
+.row-secondary .si-hf { color: var(--hr-line); }   /* HF überall in derselben Farbe */

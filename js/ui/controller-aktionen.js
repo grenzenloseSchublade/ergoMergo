@@ -11,3 +11,7 @@ export const CONTROLLER_AKTIONEN = [
 ];
 
 export const istBelegt = (map, key) => map?.[key] !== undefined && map[key] !== null;
+
+// Ein/Aus (Gruppe „system") schaltet das Pad beim Halten aus — nie belegbar,
+// in der Lenkeransicht ausgeblendet und im Lern-Modus ignoriert
+export const istBelegbar = t => t?.gruppe !== 'system';

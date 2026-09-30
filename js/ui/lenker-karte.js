@@ -6,7 +6,7 @@
 
 import { alleTasten } from '../ble/zwift-controller.js';
 import { tastenSymbol } from './tasten-symbol.js';
-import { CONTROLLER_AKTIONEN, istBelegt } from './controller-aktionen.js';
+import { CONTROLLER_AKTIONEN, istBelegt, istBelegbar } from './controller-aktionen.js';
 
 const ZONEN = [
   ['oben', 'Griff oben'],
@@ -42,8 +42,7 @@ const piktogramm = zone =>
 export function lenkerKarte(map = {}, { blink = null } = {}) {
   const aktionJeBit = new Map(CONTROLLER_AKTIONEN
     .filter(a => istBelegt(map, a.key)).map(a => [map[a.key], a.key]));
-  // Ein/Aus ist ungeprüft und für ergoMergo nicht belegbar — nicht zeigen
-  const tasten = alleTasten().filter(t => t.gruppe !== 'system');
+  const tasten = alleTasten().filter(istBelegbar);
 
   const taste = t => {
     const aktion = aktionJeBit.get(t.bit);

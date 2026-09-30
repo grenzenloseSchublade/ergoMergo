@@ -19,6 +19,9 @@ import { logInfo, logWarn, logError } from '../logger.js';
 const MAX_RECONNECT = 30;
 
 export class FTMS extends EventTarget {
+  // Geräteauswahl (Chooser) für den GeraeteManager
+  static CHOOSER = { filters: [{ namePrefix: 'KICKR' }, { services: [FTMS_SERVICE] }], optionalServices: [FTMS_SERVICE, DIS_SERVICE] };
+
   #device = null;
   #cp = null;
   #pending = null;        // { opcode, resolve, reject, timer } — genau ein ausstehender Write
@@ -205,7 +208,7 @@ export class FTMS extends EventTarget {
 }
 
 // Indoor Bike Data (0x2AD2), flag-basiert; toleriert fehlende Felder.
-export function parseBikeData(dv) {
+function parseBikeData(dv) {
   const flags = dv.getUint16(0, true);
   let i = 2;
   const out = {};
@@ -220,7 +223,7 @@ export function parseBikeData(dv) {
   if (flags & 0x0080) i += 2;                                       // Average Power
   if (flags & 0x0100) i += 5;                                       // Expended Energy: Total + /h + /min
   if (flags & 0x0200) { out.hr = dv.getUint8(i); i += 1; }
-  if (flags & 0x0400) i += 2;                                       // Metabolic Equivalent
+  if (flags & 0x0400) i += 1;                                       // Metabolic Equivalent (uint8)
   if (flags & 0x0800) i += 2;                                       // Elapsed Time
   if (flags & 0x1000) i += 2;                                       // Remaining Time
   return out;

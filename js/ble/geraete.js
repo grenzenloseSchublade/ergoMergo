@@ -4,7 +4,7 @@
 // sobald Chrome das default ausliefert). Ohne getDevices degradiert alles
 // sauber auf den bisherigen Chooser-Weg.
 
-import { getSettings, setSetting } from '../storage.js';
+import { getSettings, setSetting, STANDARD_TASTEN } from '../storage.js';
 import { logInfo, logWarn } from '../logger.js';
 import { FTMS } from './ftms.js';
 import { HeartRate } from './hr.js';
@@ -20,12 +20,28 @@ async function findeGemerktesGeraet(id) {
   } catch { return null; }
 }
 
+// gatt.connect() mit Obergrenze: Android bricht einen Verbindungsversuch zu
+// einem schlafenden Gerät erst nach ~30 s ab — das blockierte den Fahrtstart
+const ERSTVERBINDUNG_MS = 10000;
+function verbindeMitFrist(device, ms) {
+  let timer;
+  return Promise.race([
+    device.gatt.connect(),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        try { device.gatt.disconnect(); } catch { /* egal */ }
+        reject(new Error('Zeitüberschreitung beim Verbinden'));
+      }, ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 // Verbindet ein bereits autorisiertes Gerät: erst direkt, sonst auf
 // Advertisement warten (Gerät muss wach sein), dann verbinden.
 // Kurzes Fenster: ein schlafendes Gerät darf den Kaltstart nicht lange bremsen
 async function verbindeBekanntes(device, timeoutMs = 4000) {
   try {
-    await device.gatt.connect();
+    await verbindeMitFrist(device, ERSTVERBINDUNG_MS);
     return device;
   } catch { /* noch nicht in Reichweite — auf Advertisement warten */ }
   if (!device.watchAdvertisements) throw new Error('Gerät nicht erreichbar');
@@ -80,11 +96,8 @@ async function vergissGeraet(rolle) {
 // Einstellungen und Fahrbildschirm sind nur noch Renderer darüber.
 // Verbindungen leben im Pool über Fahrten hinweg, bis der Nutzer trennt.
 
-const CHOOSER_FILTER = {
-  trainer: { filters: [{ namePrefix: 'KICKR' }, { services: [0x1826] }], optionalServices: [0x1826, 0x180a] },
-  hr: { filters: [{ services: [0x180d] }] },
-  controller: { filters: [{ namePrefix: 'Zwift' }], optionalServices: ['00000001-19ca-4651-86e5-fa29dcdd09d1', 0xfc82] },
-};
+// Chooser-Filter leben bei den Clients (Services an EINER Stelle)
+const CHOOSER_FILTER = { trainer: FTMS.CHOOSER, hr: HeartRate.CHOOSER, controller: ZwiftController.CHOOSER };
 
 class GeraeteManager extends EventTarget {
   #clients = { trainer: [], hr: [], controller: [] };   // gehaltene Clients je Rolle
@@ -92,7 +105,7 @@ class GeraeteManager extends EventTarget {
   #watchdog = null;
   #snapshot = '';
   #sessionAktiv = false;    // Fahrt läuft → Trainer darf/soll selbst reconnecten
-  #befunde = { trainer: null, hr: null, controller: null };  // letzter verbinde()-Fehlgrund
+  #generation = { trainer: 0, hr: 0, controller: 0 };   // trenne() zählt hoch → laufendes verbinde() verwirft sein Ergebnis
 
   // Reconnect-Absicht an den Fahrt-Lebenszyklus koppeln: während der Fahrt
   // kämpft der Trainer um die Verbindung, danach ist eine Trennung final
@@ -105,10 +118,12 @@ class GeraeteManager extends EventTarget {
   beendeSession() {
     this.#sessionAktiv = false;
     for (const c of this.#clients.trainer) c.stoppeReconnect();
-    // Wer beim Fahrtende gerade getrennt war (Reconnect lief noch), ist jetzt
-    // eine Leiche — raus, sonst hält er den Watchdog ewig am Laufen
-    const tote = this.#clients.trainer.filter(c => !c.device?.gatt.connected);
-    for (const c of tote) c.disconnect({ gatt: false });
+    // Wer beim Fahrtende gerade getrennt war (Reconnect lief noch) oder zwar
+    // einen GATT-Link, aber keine FTMS-Kontrolle hat (halb gescheiterter
+    // Reconnect), ist jetzt eine Leiche — raus, sonst übernähme die nächste
+    // Fahrt einen Trainer ohne ERG
+    const tote = this.#clients.trainer.filter(c => !c.device?.gatt.connected || !c.connected);
+    for (const c of tote) c.disconnect({ gatt: !!c.device?.gatt.connected });
     if (tote.length) {
       this.#clients.trainer = this.#clients.trainer.filter(c => !tote.includes(c));
       this.#change();
@@ -126,7 +141,7 @@ class GeraeteManager extends EventTarget {
     const aktiv = Object.values(this.#clients).some(l => l.length);
     if (aktiv && !this.#watchdog) {
       this.#watchdog = setInterval(() => {
-        const snap = ['trainer', 'hr', 'controller']
+        const snap = Object.keys(this.#clients)
           .map(r => this.clients(r).length).join(',');
         if (snap !== this.#snapshot) { this.#snapshot = snap; this.#change(); }
       }, 5000);
@@ -136,7 +151,11 @@ class GeraeteManager extends EventTarget {
     }
   }
 
-  clients(rolle) { return this.#clients[rolle].filter(c => c.device?.gatt.connected); }
+  // Verbunden = GATT-Link steht; beim Trainer zusätzlich FTMS-Kontrolle
+  // (connected), sonst gälte ein Trainer ohne ERG als verbunden
+  clients(rolle) {
+    return this.#clients[rolle].filter(c => c.device?.gatt.connected && (rolle !== 'trainer' || c.connected));
+  }
   client(rolle) { return this.clients(rolle)[0] ?? null; }
 
   async gemerkte(rolle) {
@@ -163,14 +182,36 @@ class GeraeteManager extends EventTarget {
     } catch { return []; }
   }
 
-  // Warum hat das letzte verbinde() der Rolle nichts geliefert?
-  // null | 'nichtAutorisiert' | 'schlaeft'
-  befund(rolle) { return this.#befunde[rolle]; }
+  // EINE Entscheidung „verbinden oder Geräteauswahl?" für alle Oberflächen
+  // (Start, Fahrbildschirm, Geräte-Leiste, Lern-Modus). Muss aus einer
+  // frischen User-Geste kommen — der Chooser braucht sie. auswahl=true
+  // erzwingt den Chooser (z. B. zweiter Tap nach Fehlschlag).
+  // Ergebnis: { ergebnis: 'verbunden' | 'gekoppelt' | 'schlaeft' | 'abgebrochen',
+  //             grund: null | 'keinMerken' | 'nichtAutorisiert' }
+  // vorAuswahl(grund): wird direkt vor dem Chooser aufgerufen (Hinweis, warum
+  // er erscheint)
+  async verbindeOderKoppel(rolle, { auswahl = false, vorAuswahl = null } = {}) {
+    const gemerkt = (await this.gemerkte(rolle)).length > 0;
+    const autorisiert = gemerkt && (await this.autorisiert(rolle)).length > 0;
+    if (auswahl || !autorisiert) {
+      const grund = !gemerkt || auswahl ? null : kannMerken() ? 'nichtAutorisiert' : 'keinMerken';
+      vorAuswahl?.(grund);
+      try {
+        await this.koppel(rolle);
+      } catch (err) {
+        if (err.name === 'NotFoundError') return { ergebnis: 'abgebrochen', grund };
+        throw err;
+      }
+      return { ergebnis: 'gekoppelt', grund };
+    }
+    const n = await this.verbinde(rolle);
+    return { ergebnis: n ? 'verbunden' : 'schlaeft', grund: null };
+  }
 
   // Gelernte Tastenbelegung sofort an verbundene Controller durchreichen —
   // die Instanzen lesen ihre Map sonst nur beim Verbindungsaufbau
   setzeControllerMap(map) {
-    for (const c of this.#clients.controller) c.map = { plus: 4, minus: 0, ...map };
+    for (const c of this.#clients.controller) c.map = { ...STANDARD_TASTEN, ...map };
   }
 
   // Halten-Verhalten (Einstellungen) ebenso sofort durchreichen
@@ -239,30 +280,35 @@ class GeraeteManager extends EventTarget {
   }
 
   async #verbindeInner(rolle) {
-    this.#befunde[rolle] = null;
+    const gen = this.#generation[rolle];
     const verbundeneIds = new Set(this.clients(rolle).map(c => c.device?.id));
     for (const eintrag of await this.gemerkte(rolle)) {
       if (verbundeneIds.has(eintrag.id)) continue;
       try {
+        // Chrome kennt die id nicht mehr (Berechtigung nicht persistiert) —
+        // hier hilft nur der Chooser (verbindeOderKoppel entscheidet das)
         const device = await findeGemerktesGeraet(eintrag.id);
-        if (!device) {
-          // Chrome kennt die id nicht mehr (Berechtigung nicht persistiert) —
-          // hier hilft nur der Chooser, nicht „Gerät aufwecken"
-          this.#befunde[rolle] ??= 'nichtAutorisiert';
-          continue;
-        }
+        if (!device) continue;
         await verbindeBekanntes(device);
-        await this.#verbindeClient(rolle, device);
+        const client = await this.#verbindeClient(rolle, device);
+        if (gen !== this.#generation[rolle]) {
+          // Während des Aufbaus getrennt/vergessen: Ergebnis verwerfen
+          client.disconnect();
+          this.#clients[rolle] = this.#clients[rolle].filter(c => c !== client);
+          break;
+        }
+        // Firmware nach einem Update in den Einstellungen nachführen
+        if (rolle === 'trainer' && client.firmware && client.firmware !== eintrag.fw)
+          await merkeGeraet(rolle, device, { fw: client.firmware });
       } catch (err) {
-        this.#befunde[rolle] = 'schlaeft';
         logWarn('geraete', `${rolle} verbinden fehlgeschlagen (${eintrag.name ?? eintrag.id})`, err.message);
       }
     }
-    if (this.clients(rolle).length) this.#befunde[rolle] = null;
     return this.clients(rolle).length;
   }
 
   trenne(rolle) {
+    this.#generation[rolle]++;
     for (const c of this.#clients[rolle]) c.disconnect();
     this.#clients[rolle] = [];
     this.#change();
