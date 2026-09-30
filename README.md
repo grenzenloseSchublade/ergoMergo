@@ -39,11 +39,28 @@ dem Gerät.
 |---|---|
 | ERG-Steuerung | Ziel-Watt mit sanften Rampen, ±-Tasten (Touch, Tastatur, Zwift Click/Ride), Not-Stopp mit geschütztem WEITER |
 | Programme | Zeitbasierte Generatoren (Sprint 30/30, HIIT 40/20, VO2max 4×4, Schwelle, Ausdauer, Recovery), klassische Programme, FTP-Rampentest, `.zwo`-Import |
-| Fahrbildschirm | Live-Graph mit Programmprofil und Positionscursor, Blocksteuerung (überspringen/zurück/+30 s), Kadenz-Zielbereiche, Fokus-Modus (Tap auf Werte oder Graph kippt die Gewichtung), Bild-in-Bild (Experiment) |
+| Fahrbildschirm | Live-Graph mit Programmprofil und Positionscursor, Blocksteuerung (überspringen/zurück/+30 s), Kadenz-Zielbereiche, Fokus-Modus (Tap auf Werte oder Graph kippt die Gewichtung), LED-Statuszeile, Gerätezustand oben links, Bild-in-Bild (Experiment) |
 | Ansagen & Töne | Countdown vor jedem Wechsel, unterscheidbare Signale für härter/leichter (Dur-Dreiklang rauf bzw. Töne abwärts), Sprachansagen aus vorgerenderten Audio-Bausteinen — funktionieren auch mit Bildschirm aus |
 | Geräte | Trainer, Herzfrequenz-Gurt, Zwift Click/Ride; Tasten frei belegbar per Lern-Modus; Schnellverbindung ohne Geräteauswahl (mit Chrome-Flag) |
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
+
+## Neu in 2.0
+
+- **Fahrbildschirm aufgeräumt:** Oben links zeigen drei Symbole mit Punkt den
+  Zustand von Trainer, Herzgurt und Lenker; ein Tipp verbindet oder koppelt.
+  „⋯" oben rechts öffnet ein Panel mit den Geräten im Klartext (Name, Zustand,
+  was ein Tipp bewirkt), Signaltönen, Sprachansagen und Bild-in-Bild. Das Panel
+  sperrt nichts: STOPP und ± bleiben daneben sofort bedienbar.
+- **LED-Statuszeile:** Meldungen der Fahrt (Block übersprungen, Gerät getrennt,
+  Not-Stopp …) laufen als Punktmatrix-Laufschrift durch eine feste Mulde statt
+  als Toast — nichts springt, nichts verdeckt.
+- **Ruhiges Layout:** Feste Feldbreiten und ein festes Raster für die
+  Detailwerte (hochkant 2×2, quer 4 nebeneinander); in allen Ausrichtungen und
+  Fokus-Modi geprüft, dass nichts springt und STOPP immer im Bild ist.
+- **Fahrten-Historie:** Eigener Screen mit Monaten und Wochensummen,
+  Detail-Graph mit Herzfrequenz, Zielblöcken und Not-Stopp-Streifen.
+- **Demo:** Beispielfahrten direkt aus der Demo-Fahrt erreichbar, mit Rückweg.
 
 ## Getestet mit
 
