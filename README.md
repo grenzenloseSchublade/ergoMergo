@@ -46,6 +46,19 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.1
+
+- **Plan-Länge** wählbar: 4, 8 oder 12 Wochen oder fortlaufend; am Ende eine
+  Bilanz mit „4 Wochen weiter“ oder „Neuer Plan“. Die Karte zeigt „Woche 3 von 8“.
+- **Pausieren** ohne Grund; beim Fortsetzen richtet sich der Einstieg nach
+  der Pausenlänge (nahtlos · Woche wiederholen · leichte Woche mit FTP-Test ·
+  Neubeginn). Nach 7 Tagen ohne Fahrt bietet die Karte das selbst an.
+- **Planfahrten sichtbar:** Marke „Plan“ in der Fahrtenliste, „(2 im Plan)“
+  im Wochenkopf, in der Detailansicht „Trainingsplan · Woche 3 von 8 ·
+  Intervalle“ — auch „statt …“, wenn frei an einem Plantag gefahren wurde.
+- Eine abgebrochene Planfahrt (unter 15 min, FTP-Test unter 5 min) gilt nicht
+  mehr als erledigt.
+
 ## Neu in 3.0
 
 - **Trainingsplan:** Wochentage, Dauer (30/45/60 min) und Ziel (Fitness,
