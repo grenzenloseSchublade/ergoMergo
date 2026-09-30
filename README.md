@@ -27,9 +27,9 @@ ergoMergo ist genau das: eine einzige statische Web-App (Vanilla JS, Web
 Bluetooth/FTMS, keine Buildkette, kein Backend), alle Daten bleiben lokal auf
 dem Gerät.
 
-| | | | |
-|---|---|---|---|
-| ![Startbildschirm](docs/img/start.png) | ![Fahrbildschirm](docs/img/fahrt.png) | ![Panel „Geräte und Töne"](docs/img/panel.png) | ![Fahrten-Historie](docs/img/fahrten.png) |
+| | | | | |
+|---|---|---|---|---|
+| ![Startbildschirm mit Trainingsplan](docs/img/start.png) | ![Einheit ändern](docs/img/plan.png) | ![Fahrbildschirm](docs/img/fahrt.png) | ![Panel „Geräte und Töne"](docs/img/panel.png) | ![Fahrten-Historie](docs/img/fahrten.png) |
 
 ![Fahrmodus im Querformat](docs/img/quer.png)
 
@@ -38,12 +38,35 @@ dem Gerät.
 | Bereich | Was drin ist |
 |---|---|
 | ERG-Steuerung | Ziel-Watt mit sanften Rampen, ±-Tasten (Touch, Tastatur, Zwift Click/Ride), Not-Stopp mit geschütztem WEITER |
+| Trainingsplan | Tage/Dauer/Ziel wählen, Wochen mit Aufbau und leichter Testwoche, heutige Einheit mit einem Tipp, verschieben/kürzer/leichter/auslassen mit Rückgängig |
 | Programme | Zeitbasierte Generatoren (Sprint 30/30, HIIT 40/20, VO2max 4×4, Schwelle, Ausdauer, Recovery), klassische Programme, FTP-Rampentest, `.zwo`-Import (Einstellungen → Erweitert, standardmäßig aus) |
 | Fahrbildschirm | Live-Graph mit Programmprofil und Positionscursor, Blocksteuerung (überspringen/zurück/+30 s), Kadenz-Zielbereiche, Fokus-Modus (Tap auf Werte oder Graph kippt die Gewichtung), LED-Statuszeile, Gerätezustand oben links, Bild-in-Bild (Experiment) |
 | Ansagen & Töne | Countdown vor jedem Wechsel, unterscheidbare Signale für härter/leichter (Dur-Dreiklang rauf bzw. Töne abwärts), Sprachansagen aus vorgerenderten Audio-Bausteinen — funktionieren auch mit Bildschirm aus |
 | Geräte | Trainer, Herzfrequenz-Gurt, Zwift Click/Ride; Tasten frei belegbar per Lern-Modus; Schnellverbindung ohne Geräteauswahl (mit Chrome-Flag) |
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
+
+## Neu in 3.0
+
+- **Trainingsplan:** Wochentage, Dauer (30/45/60 min) und Ziel (Fitness,
+  Leistung, Ausdauer) wählen — die App stellt jede Woche zusammen. Höchstens
+  zwei harte Einheiten mit Ruhetag dazwischen, 4-Wochen-Blöcke mit leichter
+  Woche und FTP-Rampentest, ohne bekannte FTP zuerst der Test. Auf Home steht
+  „Heute: …" (ein Tipp startet die Einheit) und ein Wochenstreifen in
+  Zonenfarben. Grundlagen und Quellen: [docs/trainingsplan.md](docs/trainingsplan.md).
+- **Einheiten ändern:** Tag im Wochenstreifen antippen — heute fahren,
+  verschieben (belegter Tag = Tausch; zu nah an einer harten Einheit =
+  gesperrt, mit Grund), kürzer, leichter, auslassen. Jede Änderung lässt sich
+  rückgängig machen. Verpasste harte Einheiten wandern automatisch auf den
+  nächsten passenden Tag; eine harte Fahrt außerhalb des Plans zählt mit.
+- **Design-System:** Farben, Schrift, Radien, Abstände nur noch aus
+  `css/tokens.css`; lebendiger Style Guide
+  ([docs/stil.html](https://grenzenloseschublade.github.io/ergoMergo/docs/stil.html)),
+  eine Prüfung verhindert feste Werte. Alle Tippflächen ≥ 44 px.
+- **`.zwo`-Import** ist jetzt eine Einstellung (Erweitert), standardmäßig aus.
+- **Tests im Repo:** `npm test` prüft Stil, Plan-Regeln (alle
+  Wochentag-Kombinationen, Verpass-Muster, Verschiebungen), Abläufe und
+  Layout.
 
 ## Neu in 2.0
 
