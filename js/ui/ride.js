@@ -15,6 +15,7 @@ import { effektiveFtp, kadenzBereich } from '../metrics.js';
 import { logError } from '../logger.js';
 import { toast, toastErr } from './toast.js';
 import { geraeteHinweis } from './geraete-leiste.js';
+import { LedZeile } from './led-zeile.js';
 
 const STOPP_SPERRE_MS = 3000;     // Panik-Schutz nach Not-Stopp
 const HALTEN_PAUSE_MS = 500;      // ±-Knopf halten: erste Wiederholung
@@ -49,6 +50,7 @@ export class RideScreen {
     this.tonAn = settings.tonAn !== false;
     this.ansagenAn = !!settings.sprachansagen;
     initAnsagen(signal.audioCtx());
+    this.#led = new LedZeile(this.$('#m-status'));
     this.#zuruecksetzen();
     if (run) this.#bindProgramm();
     this.#bindGeraete();
@@ -70,6 +72,7 @@ export class RideScreen {
   }
 
   #pip = null;                // Bild-in-Bild-Instanz (lazy)
+  #led = null;                // Statuszeile als LED-Laufschrift
   #abos = [];                 // [target, typ, fn] — Listener auf langlebigen Pool-Clients
   #uebernommen = new Set();   // Client-Objekte, die diese Fahrt schon verdrahtet hat
   #tot = false;               // destroy() gelaufen — späte Promises ignorieren
@@ -123,11 +126,9 @@ export class RideScreen {
   }
 
   #zeigeStatus() {
-    const el = this.$('#m-status');
+    // Die Mulde bleibt immer stehen (feste Höhe) — nur die LED-Schrift wechselt
     const m = this.#infoMeldung ?? STATUS_PRIO.map(a => this.#zustaende.get(a)).find(Boolean);
-    el.hidden = !m;
-    el.textContent = m?.text ?? '';
-    el.className = 'status ' + (m?.cls ?? '');
+    this.#led.setze(m?.text ?? '', m?.cls ?? '');
   }
 
   // --- Programm: Ansagen, Töne, Programmende --------------------------------
@@ -689,6 +690,7 @@ export class RideScreen {
     signal.audioSchlafen();            // Audiofokus zurück an die Musik-App
     this.#halteAlleAn();
     this.#abmelden?.();
+    this.#led.destroy();
     this.#pip?.destroy();
     this.#pip = null;
     removeEventListener('keydown', this.#keys);

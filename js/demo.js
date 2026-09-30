@@ -105,8 +105,11 @@ export async function startDemo(variante, { betreteFahrt }) {
   ftms.dispatchEvent(new Event('connected'));
   $('#m-demo').hidden = false;                 // persistenter Badge, unabhängig vom Status
   // Sprung zu den gespeicherten Beispielfahrten — per Neuladen, das räumt wie
-  // „Beenden" alle Demo-Timer ab
-  $('#btn-demo-beispiel').onclick = () => { location.replace(`${location.pathname}?demo=fahrten`); };
+  // „Beenden" alle Demo-Timer ab. von= merkt die Variante: Zurück aus den
+  // Beispielfahrten führt wieder in diese Demo-Fahrt
+  $('#btn-demo-beispiel').onclick = () => {
+    location.replace(`${location.pathname}?demo=fahrten&von=${encodeURIComponent(variante || 'frei')}`);
+  };
 }
 
 // ---------- Gespeicherte Demo-Fahrten (Detailansicht + Fahrten-Historie) ----------

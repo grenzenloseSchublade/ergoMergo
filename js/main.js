@@ -425,7 +425,7 @@ addEventListener('popstate', () => {
   if (istStill()) return;                    // eigener Abbau, Ansicht steht schon
   if (schliesseObersten()) return;           // offener Dialog: abbrechen
   if (!screens.detail.hidden) { zurueckAusDetail(); return; }
-  if (!screens.fahrten.hidden) { goHome(); return; }
+  if (!screens.fahrten.hidden) { zurueckAusFahrten(); return; }
   if (!screens.ride.hidden && rideScreen) {
     if (Date.now() < backArmiertBis) {
       rideScreen.beenden();                  // sauber beenden + speichern, ohne „Sicher?"
@@ -489,9 +489,23 @@ function zurueckAusDetail() {
 
 // Beispielfahrten (Button unter „Letzte Fahrten", Demo-Fahrbildschirm, ?demo=fahrten):
 // derselbe Fahrten-Screen und dieselbe Detailansicht wie für echte Fahrten
+// von: Demo-Fahrt, aus der die Historie geöffnet wurde (?demo=fahrten&von=…)
+// — Zurück führt dann dorthin statt nach Home
 async function beispielHistorieZeigen() {
   demoHistorie = await beispielHistorie();
+  demoHistorie.vonFahrt = new URLSearchParams(location.search).get('von');
   await openFahrten();
+}
+
+// Wechsel in die Demo-Fahrt (per Neuladen — die Fahrt braucht frischen Zustand)
+function zurDemoFahrt(variante) {
+  location.replace(`${location.pathname}?demo=${encodeURIComponent(variante)}`);
+}
+
+// Zurück aus dem Fahrten-Screen: Home, oder — aus der Demo-Fahrt gekommen — dorthin
+function zurueckAusFahrten() {
+  if (demoHistorie?.vonFahrt) zurDemoFahrt(demoHistorie.vonFahrt);
+  else goHome();
 }
 
 // Einzelne Beispielfahrt direkt in der Detailansicht (?demo=fahrt, UI-Arbeit)
@@ -520,7 +534,8 @@ $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
 $('#btn-back').addEventListener('click', () => zurueck(zurueckAusDetail));
-$('#btn-back-fahrten').addEventListener('click', () => zurueck(goHome));
+$('#btn-back-fahrten').addEventListener('click', () => zurueck(zurueckAusFahrten));
+$('#btn-demo-zur-fahrt').addEventListener('click', () => zurDemoFahrt(demoHistorie?.vonFahrt ?? 'vo2max'));
 // Statischer Intro-Absatz ist nur für Crawler/JS-lose Erstbesucher —
 // sobald die App läuft, weg damit
 $('#seo-intro').hidden = true;

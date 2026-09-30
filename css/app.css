@@ -19,7 +19,9 @@
   --taste-gruen: #4cc76e; --taste-magenta: #e0489a; --taste-blau: #4a9bd8; --taste-orange: #f0892f;
   --power-line: #ecf3f5;
   --target-fill: rgba(69, 199, 212, .18);
-  --hr-line: #ff6f8a;          /* Herzfrequenz-Kurve + HF-Werte in der Detailansicht */
+  --hr-line: #ff6f8a;
+  --status-mulde: #050809;     /* eingelassene Statuszeile im Fahrbildschirm */
+  --led-aus: rgba(236, 243, 245, .06);   /* unbeleuchtete LED-Punkte */          /* Herzfrequenz-Kurve + HF-Werte in der Detailansicht */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -413,6 +415,9 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
    Datum wäre bei 360 px kein Platz */
 #screen-detail .brand, #screen-fahrten .brand { flex-wrap: wrap; }
 .brand .demo-badge { order: 3; margin-top: -.5rem; }
+/* Beispielfahrten: Badge + Sprung in die Demo-Fahrt als eigene Zeile */
+.brand .demo-kopf { order: 3; margin-top: -.5rem; display: flex; gap: .4rem; flex-basis: 100%; }
+.brand .demo-kopf .demo-badge { order: 0; margin-top: 0; }
 .metrics { position: relative; cursor: pointer; }
 /* Platz schaffen, wenn die Demo-Leiste eingeblendet ist */
 /* Hochkant: Beispielfahrten-Knopf unter dem Badge; Platz über den Werten schaffen */
@@ -445,14 +450,19 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   gap: .3rem 1.6rem; margin-top: .4rem;
   color: var(--ink3); font-size: .9rem; font-variant-numeric: tabular-nums;
 }
+/* Statuszeile: eingelassene LED-Tafel mit FESTER Höhe — immer sichtbar,
+   damit klar ist, wo Meldungen erscheinen; eine Meldung verschiebt nichts.
+   Schrift als Punktmatrix (led-zeile.js): rot = Problem, grün = kurze Info. */
 .row-secondary .status {
-  flex-basis: 100%; text-align: center;
-  max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-basis: 100%; max-width: 16rem; margin: .2rem auto 0; box-sizing: border-box;
+  height: 1.9rem; padding: .15rem .5rem; position: relative;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: var(--status-mulde);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .6);
 }
-/* Platz bleibt reserviert: das Erscheinen der Meldung (STOPP, verbunden …)
-   darf die Werte darüber/darunter nicht verschieben */
-.row-secondary .status[hidden] { display: block !important; visibility: hidden; }
-.row-secondary .status { min-height: 1.2em; }
+.status .led { display: block; width: 100%; height: 100%; }
+/* Text nur für Screenreader (die LED-Schrift ist ein Bild) */
+.sr-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Chips: Basis zuerst, Varianten danach (sonst gewinnt die spätere
    Basisregel — .chip-fahrt war blass statt gefüllt) */
 .chip {
@@ -478,10 +488,19 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 /* Gruppe ohne sichtbare Chips (Fahrt-Chips beim freien Fahren) nimmt keinen Platz */
 .chip-gruppe { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
 .chip-gruppe:not(:has(> :not([hidden]))) { display: none; }
+/* Feste Feldbreiten für den größten Wert (Ziffern sind tabellarisch):
+   2- oder 3-stellige Werte, „85–95" oder „100–110", „33:17" oder „1:02:15"
+   verschieben weder Nachbarn noch den Zeilenumbruch */
 .row-secondary b {
   color: var(--ink2); font-weight: 600;
-  display: inline-block; min-width: 2.5ch; text-align: right;
+  display: inline-block; text-align: right;
 }
+/* Mindestbreiten für die üblichen Maxima (seltene Ausreißer wie > 99,9 km
+   dürfen wachsen statt den Nachbarn zu überlappen) */
+#m-rpm, #m-hr { min-width: 3ch; }
+#m-kj, #m-km { min-width: 4ch; }
+#m-total-time { min-width: 7ch; }
+#m-total-label { display: inline-block; width: 10.5ch; text-align: left; }
 .status { color: var(--ink3); }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--danger); }
@@ -539,7 +558,6 @@ button:disabled { cursor: default; }
 /* Sekundärzeile vollwertig und fahrtauglich groß (inkl. kJ und gesamt) —
    die Icons skalieren per em mit */
 .ride-grid.fokus-werte .row-secondary { font-size: clamp(1.1rem, 4.2vmin, 1.6rem); gap: .3rem 1.2rem; }
-.ride-grid.fokus-werte .row-secondary .status { font-size: .72em; }
 .ride-grid.fokus-werte .row-secondary .si,
 .ride-grid.fokus-graph .row-secondary .si { width: 1em; height: 1em; vertical-align: -.12em; }
 
@@ -706,7 +724,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .chip-icon.on { opacity: 1; border-color: var(--accent); color: var(--accent); }
 
 /* Kadenz-Vorgabe dezent neben der rpm-Zahl */
-.rpm-range { font-style: normal; color: var(--ink3); font-size: .78em; }
+.rpm-range { font-style: normal; color: var(--ink3); font-size: .78em; display: inline-block; width: 7ch; text-align: left; }
+.rpm-range[hidden] { display: inline-block !important; visibility: hidden; }   /* Platz bleibt reserviert */
 
 /* Statischer Intro-Absatz: nur für Crawler/Erstbesuch relevant, dezent */
 .seo-intro { color: var(--ink3); font-size: .8rem; margin: -.2rem 0 .8rem; max-width: 44rem; }

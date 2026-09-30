@@ -113,8 +113,8 @@
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
         <span id="m-total" hidden><b id="m-total-time">0:00</b> <span id="m-total-label">Rest gesamt</span></span>
-        <!-- Initialtext setzt der RideScreen aus dem echten Verbindungszustand -->
-        <span id="m-status" class="status" aria-live="polite" hidden></span>
+        <!-- Statuszeile: Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
+        <span id="m-status" class="status" aria-live="polite" role="status"></span>
       </div>
     </div>
     <!-- Drei Gruppen, die jeweils als Ganzes umbrechen: Fahrt | Geräte | Schalter -->
@@ -156,7 +156,10 @@
   <header class="brand">
     <button class="back" id="btn-back-fahrten">‹ Zurück</button>
     <h1>Fahrten</h1>
-    <span class="demo-badge" id="f-demo" hidden>DEMO<span class="demo-badge-hint"> — Beispielfahrten</span></span>
+    <span class="demo-kopf" id="f-demo" hidden>
+      <span class="demo-badge">DEMO<span class="demo-badge-hint"> — Beispielfahrten</span></span>
+      <button type="button" class="demo-beispiel" id="btn-demo-zur-fahrt">Demo-Fahrt ›</button>
+    </span>
   </header>
   <div id="fahrten-diagramm" class="bilanz"></div>
   <div id="fahrten-monate"></div>

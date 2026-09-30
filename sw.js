@@ -11,7 +11,7 @@ const SHELL = [
   'js/program.js', 'js/workouts.js', 'js/signals.js', 'js/ble/ftms.js', 'js/ble/hr.js', 'js/ble/zwift-controller.js', 'js/ble/zwift-ride-tasten.json',
   'js/ui/ride.js', 'js/ui/overlay.js', 'js/ui/toast.js', 'js/ui/chart.js', 'js/ui/list.js',
   'js/ansagen.js', 'js/ui/pip.js', 'js/energie.js',
-  'js/ui/settings.js', 'js/ui/geraete-leiste.js', 'js/ui/detail.js', 'js/navigation.js', 'js/demo.js', 'js/format.js', 'js/ui/icons.js', 'js/ui/tasten-symbol.js', 'js/ui/lenker-karte.js', 'js/ui/controller-aktionen.js',
+  'js/ui/settings.js', 'js/ui/geraete-leiste.js', 'js/ui/detail.js', 'js/ui/led-zeile.js', 'js/navigation.js', 'js/demo.js', 'js/format.js', 'js/ui/icons.js', 'js/ui/tasten-symbol.js', 'js/ui/lenker-karte.js', 'js/ui/controller-aktionen.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
   // Sprach-Bausteine (Piper-TTS) — hintergrundfeste Ansagen
   'audio/acht.ogg', 'audio/achtzehn.ogg', 'audio/achtzig.ogg', 'audio/drei.ogg', 'audio/dreissig.ogg', 'audio/dreizehn.ogg', 'audio/ein.ogg', 'audio/eine.ogg', 'audio/eins.ogg', 'audio/elf.ogg', 'audio/fertig.ogg', 'audio/fuenf.ogg', 'audio/fuenfzehn.ogg', 'audio/fuenfzig.ogg', 'audio/hundert.ogg', 'audio/minute.ogg', 'audio/minuten.ogg', 'audio/neun.ogg', 'audio/neunzehn.ogg', 'audio/neunzig.ogg', 'audio/sechs.ogg', 'audio/sechzehn.ogg', 'audio/sechzig.ogg', 'audio/sekunden.ogg', 'audio/sieben.ogg', 'audio/siebzehn.ogg', 'audio/siebzig.ogg', 'audio/und.ogg', 'audio/vier.ogg', 'audio/vierzehn.ogg', 'audio/vierzig.ogg', 'audio/watt.ogg', 'audio/weiter.ogg', 'audio/zehn.ogg', 'audio/zwanzig.ogg', 'audio/zwei.ogg', 'audio/zwoelf.ogg',
