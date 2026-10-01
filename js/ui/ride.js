@@ -117,7 +117,7 @@ export class RideScreen {
     this.#zeigeStatus();
   }
 
-  // Einmalige Meldung (läuft zweimal durch). Öffentlich als melde() für main.js.
+  // Einmalige Meldung (läuft zweimal durch).
   // Ist das Panel offen, steht sie zusätzlich dort (die LED kann darunter liegen).
   #info(text, cls = 'ok') {
     if (this.$('#dlg-fahrt-optionen').open) {
@@ -129,7 +129,6 @@ export class RideScreen {
     this.#zeigeStatus();
   }
 
-  melde(text, cls = 'ok') { this.#info(text, cls); }
 
   #zeigeStatus() {
     // Die Mulde bleibt immer stehen (feste Höhe) — nur die LED-Schrift wechselt
@@ -631,14 +630,12 @@ export class RideScreen {
     const endBtn = this.$('#btn-end');
     const entarme = () => {
       clearTimeout(this.#endArm);
-      endBtn.dataset.armiert = '';
       endBtn.textContent = 'Beenden';
       endBtn.classList.remove('armiert');
     };
     entarme();
     endBtn.onclick = () => {
-      if (endBtn.dataset.armiert === '1') { entarme(); this.beenden(); return; }
-      endBtn.dataset.armiert = '1';
+      if (endBtn.classList.contains('armiert')) { entarme(); this.beenden(); return; }
       endBtn.textContent = 'Sicher?';
       endBtn.classList.add('armiert');
       clearTimeout(this.#endArm);

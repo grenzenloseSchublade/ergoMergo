@@ -9,7 +9,7 @@
 //   · Wochenumfang wächst im Block höchstens um ~25 %
 // Aufruf: node test/plan.mjs   (reines Node, kein Browser)
 
-import { planAnlegen, einheitAm, wocheAb, wocheWirksam, wocheMitAnpassungen, verschiebeZiele, mitAnpassung, ohneLetzteAnpassung,
+import { planAnlegen, einheitAm, wocheAb, wocheWirksam, wocheMitAnpassungen, verschiebeZiele, mitAnpassung,
   kuerzerDauer, istHart, tagIso, planWoche, pausieren, wiedereinstieg, istAbgeschlossen, planBilanz,
   erledigtDurch, zaehltFuerPlan, planInfo, planBeschreibung,
   WOCHENTAGE, DAUERN, ZIELE, TYPEN, programmFuer } from '../js/plan.js';
@@ -155,8 +155,8 @@ for (let maske = 0; maske < 128; maske++) {
           if (z.zustand !== 'gesperrt' && verletzt) fehler.push(`${name}: freigegeben, aber harte Einheiten ohne Ruhetag`);
           if (z.zustand === 'gesperrt' && !verletzt) fehler.push(`${name}: gesperrt ohne Konflikt (${z.grund})`);
           if (z.zustand === 'tausch' && !basis.find(x => x.datum === z.datum).einheit) fehler.push(`${name}: Tausch auf freien Tag`);
-          // Rückgängig stellt die Woche exakt wieder her
-          const zurueck = wocheWirksam(ohneLetzteAnpassung(neu, mo), mo, [], heute, 220);
+          // Rückgängig = alten Plan zurückschreiben: der darf durch die Anpassung nicht verändert sein
+          const zurueck = wocheWirksam(plan, mo, [], heute, 220);
           if (JSON.stringify(zurueck.map(x => x.einheit?.typ ?? null)) !== JSON.stringify(basis.map(x => x.einheit?.typ ?? null)))
             fehler.push(`${name}: Rückgängig stellt nicht wieder her`);
         }

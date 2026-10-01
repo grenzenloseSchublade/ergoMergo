@@ -63,7 +63,7 @@ async function pruefe(srv, [breite, hoehe]) {
         ['Geräte-Symbol', `document.querySelector('#btn-hr').click()`, ''],
         ['STOPP', `document.querySelector('#btn-stop').click()`, ''],
         ...(modus !== 'werte' ? [['Skip', `document.querySelector('#btn-skip').click()`, ''], ['+30 s', `document.querySelector('#btn-ext').click()`, '']] : []),
-        ['Beenden armiert', `document.querySelector('#btn-end').click()`, `{ const e = document.querySelector('#btn-end'); delete e.dataset.armiert; e.textContent = 'Beenden'; e.classList.remove('armiert'); }`],
+        ['Beenden armiert', `document.querySelector('#btn-end').click()`, `{ const e = document.querySelector('#btn-end'); e.textContent = 'Beenden'; e.classList.remove('armiert'); }`],
         ['3-stellige Werte', `for (const [s, t] of [['#m-rpm','105'],['#m-hr','172'],['#m-kj','999'],['#m-km','99,9'],['#m-watt','888'],['#m-target','400']]) document.querySelector(s).textContent = t`, ''],
       ];
       for (const [was, an, aus] of ereignisse) {

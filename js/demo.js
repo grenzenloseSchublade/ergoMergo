@@ -130,7 +130,7 @@ function demoFahrt({ id, start, programm, ziele, programmEndeBei = null, ftp, se
   // Metadaten in derselben Form wie Session.save()
   const session = {
     id, start, programm: programm.name, programmId: programm.id ?? null, seed: null,
-    geraet: 'Demo-Trainer', fw: null, ftp: ftp || null, akkuProStunde: null,
+    ftp: ftp || null, akkuProStunde: null,
     programmEndeBei, final: true, ...fahrtStats(samples, count, programmEndeBei, ftp),
   };
   return { session, data: { samples, count } };

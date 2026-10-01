@@ -77,9 +77,7 @@ export function fahrtStats(samples, count, programmEndeBei, ftp) {
     kJ: Math.round(sumAlle / 1000),  // 1 Sample = 1 s → Watt·s/1000
     avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
     ...kennwerte(samples, n, ftp),
-    // Distanz über die ganze Fahrt inkl. Ausfahren — konsistent zum
-    // TCX-Export; überschreibt bewusst das aufs Programmfenster begrenzte
-    // km aus kennwerte()
+    // Distanz über die ganze Fahrt inkl. Ausfahren — konsistent zum TCX-Export
     km: Math.round(distanzKm(samples, count) * 100) / 100,
   };
 }
@@ -89,7 +87,6 @@ export function fahrtStats(samples, count, programmEndeBei, ftp) {
 function kennwerte(samples, count, ftp = 0) {
   const out = { np: 0, hrAvg: 0, hrMax: 0, zonenSek: null };
   if (!count) return out;
-  out.km = Math.round(distanzKm(samples, count) * 100) / 100;
 
   // Präfixsummen für den 30-s-Rolling-Mean
   let rollSum = 0, potSum = 0, potN = 0;

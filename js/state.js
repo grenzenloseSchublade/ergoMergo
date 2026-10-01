@@ -235,8 +235,6 @@ export class Session extends EventTarget {
         const plan = this.planInfo && zaehltFuerPlan({ dauer: this.count, programmId: this.programm?.id }) ? this.planInfo : null;
         return { planRef: plan?.ref ?? null, plan };
       })(),
-      geraet: this.ftms.deviceName ?? null,
-      fw: this.ftms.firmware ?? null,
       ftp: this.settings.ftp || null,
       akkuProStunde: this.akkuProStunde ?? null,
       programmEndeBei: this.programmEndeBei,   // Detail-Graph: Ausfahr-Bereich absetzen

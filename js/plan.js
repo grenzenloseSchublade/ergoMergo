@@ -370,7 +370,8 @@ export function wocheWirksam(plan, datum, sessions, heute = new Date(), ftpJetzt
 //   { art: 'verschieben', von, nach } (belegter Zieltag = Tausch)
 //   { art: 'auslassen' | 'kuerzer' | 'leichter', datum }
 // Sie gelten nur für ihre Woche und werden nach dem Erzeugen angewendet —
-// der Generator bleibt unverändert. Rückgängig = letzten Eintrag entfernen.
+// der Generator bleibt unverändert. Anpassungen erzeugen immer eine neue
+// Plan-Kopie — Rückgängig schreibt einfach die alte zurück.
 const umdatieren = (e, datum, von) => {
   const herkunft = e.verschobenVon ?? von;
   const neu = { ...e, datum, ref: `plan:${datum}`, manuell: true, verschobenVon: herkunft };
@@ -429,11 +430,6 @@ export function mitAnpassung(plan, datum, op) {
   const grenze = tagIso(plusTage(montag(datum), -56));
   const alle = Object.fromEntries(Object.entries(plan.anpassungen ?? {}).filter(([k]) => k >= grenze));
   return { ...plan, anpassungen: { ...alle, [woche]: [...(alle[woche] ?? []), op] } };
-}
-export function ohneLetzteAnpassung(plan, datum) {
-  const woche = tagIso(montag(datum));
-  const liste = (plan.anpassungen?.[woche] ?? []).slice(0, -1);
-  return { ...plan, anpassungen: { ...plan.anpassungen, [woche]: liste } };
 }
 export function ohneAnpassungen(plan, datum) {
   const anpassungen = { ...plan.anpassungen };
