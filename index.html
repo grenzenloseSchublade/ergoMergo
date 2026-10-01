@@ -52,7 +52,9 @@
     Trainer per Bluetooth verbinden, Programm oder Wattzahl wählen, treten.</p>
   <p class="statuszeile" aria-live="polite">
     <span id="version-status">…</span>
+    <button type="button" class="text-aktion" id="btn-daten"><i class="si" data-icon="schloss"></i>Nur auf diesem Gerät ›</button>
     <span id="db-status"></span>
+    <button type="button" class="text-aktion warnung" id="btn-speicher" hidden>nicht dauerhaft gespeichert ›</button>
   </p>
   <div class="tiles">
     <!-- Trainingsplan: heutige Einheit + Wochenstreifen (js/ui/plan-ui.js) -->
@@ -241,7 +243,7 @@
 </section>
 
 <!-- ============ START-DIALOG PROGRAMM ============ -->
-<dialog id="dlg-start">
+<dialog id="dlg-start" closedby="any">
   <form method="dialog">
     <div class="dlg-kopf">
       <h2 id="dlg-title"></h2>
@@ -299,7 +301,7 @@
 </dialog>
 
 <!-- ============ PLAN-EINHEIT ÄNDERN (Blatt von unten) ============ -->
-<dialog id="dlg-einheit" class="sheet" aria-labelledby="ein-titel">
+<dialog id="dlg-einheit" class="sheet" closedby="any" aria-labelledby="ein-titel">
   <form method="dialog">
     <h2 id="ein-titel"></h2>
     <p class="hint" id="ein-sub"></p>
@@ -316,6 +318,25 @@
   </form>
 </dialog>
 
+<!-- ============ DEINE DATEN (Blatt von unten, Statuszeile/Einstellungen) ============ -->
+<dialog id="dlg-daten" class="sheet" closedby="any" aria-labelledby="daten-titel">
+  <form method="dialog">
+    <h2 id="daten-titel">Deine Daten bleiben bei dir</h2>
+    <ul class="daten-saetze">
+      <li>Die App schickt deine Daten nirgendwohin — kein Server, kein Konto, keine Analyse, keine Cookies.</li>
+      <li>Fahrten (mit Herzfrequenz) und Einstellungen liegen nur in diesem Browser auf diesem Gerät.</li>
+      <li>Online fragt die App nur nach Updates, nie während der Fahrt. Andere Verbindungen sperrt der Browser.</li>
+    </ul>
+    <p class="gruppe-titel" id="daten-speicher-titel"></p>
+    <p class="hint" id="daten-speicher"></p>
+    <p class="hint"><a href="https://github.com/grenzenloseSchublade/ergoMergo/blob/main/docs/sicherheit.md" target="_blank" rel="noopener noreferrer">Prüfbericht und „So prüfst du es selbst“ ›</a></p>
+    <div class="dlg-actions">
+      <button value="cancel" class="ghost">Schließen</button>
+      <button type="button" class="ghost" id="daten-sicherung" hidden>Sicherung speichern</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- ============ EINSTELLUNGEN ============ -->
 <dialog id="dlg-settings">
   <form method="dialog">
@@ -326,6 +347,13 @@
       <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="1"></label>
       <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="1"></label>
     </div>
+    <details class="diagnose">
+      <summary>Datenschutz &amp; Sicherheit</summary>
+      <p class="hint">Deine Daten bleiben auf diesem Gerät. <button type="button" class="text-aktion" id="btn-daten-mehr">Was das genau heißt ›</button></p>
+      <div class="dlg-actions">
+        <button type="button" id="btn-alles-loeschen" class="ghost danger">Alle Daten löschen</button>
+      </div>
+    </details>
     <details class="diagnose">
       <summary>Erweitert</summary>
       <div class="dlg-fields">
@@ -380,16 +408,6 @@
           <span class="schalter-text">Orange Paddles<small>Tempo nach Druck: leicht langsam, fest schnell</small></span>
           <input type="checkbox" class="schalter" id="set-halten-paddles">
         </label>
-      </div>
-    </details>
-    <details class="diagnose">
-      <summary>Datenschutz &amp; Sicherheit</summary>
-      <p class="hint">Die App schickt deine Daten nirgendwohin — kein Server, kein Konto, keine Analyse, keine Cookies.
-        Fahrten (mit Herzfrequenz) und Einstellungen liegen nur in diesem Browser. Der Browser erlaubt der App nur
-        Verbindungen zu ihrer eigenen Adresse; online wird nur nach Updates gefragt, nie während der Fahrt.</p>
-      <p class="hint"><a href="https://github.com/grenzenloseSchublade/ergoMergo/blob/main/docs/sicherheit.md" target="_blank" rel="noopener noreferrer">Prüfbericht und „So prüfst du es selbst“ ›</a></p>
-      <div class="dlg-actions">
-        <button type="button" id="btn-alles-loeschen" class="ghost danger">Alle Daten löschen</button>
       </div>
     </details>
     <details class="diagnose">

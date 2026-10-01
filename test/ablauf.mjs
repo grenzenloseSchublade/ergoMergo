@@ -19,12 +19,21 @@ const bildschirm = () => b.ev(`['home','fahrten','detail','ride'].filter(k => !d
 const suche = () => b.ev('location.search');
 const ftp = () => b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.ftp)`);
 const zurueck = (ms = 800) => b.ev('history.back()').then(() => sleep(ms));
-// „Heute fahren ›" → Startdialog → Abbrechen: Woche wieder wie vorher
+// Echter Tipp oben an den Bildschirmrand — neben jedes Blatt und jeden Dialog
+// (Light Dismiss über closedby="any" braucht echte Zeigerereignisse)
+const tippDaneben = async (br, ms = 600) => {
+  for (const type of ['mousePressed', 'mouseReleased'])
+    await br.cdp('Input.dispatchMouseEvent', { type, x: 200, y: 5, button: 'left', clickCount: 1 });
+  await sleep(ms);
+};
+const offen = (br, id) => br.ev(`document.querySelector('#${id}').open`);
+// „Heute fahren ›" → Startdialog → Tipp daneben (= Abbrechen): Woche wieder wie vorher
 async function heuteFahrenAbbrechen(br, streifenVorher) {
   await br.klick('#plan-starten', 1000);
-  soll('Startdialog für die verschobene Einheit', await br.ev(`document.querySelector('#dlg-start').open`), true);
-  await br.ev(`document.querySelector('#dlg-start').close('cancel')`); await sleep(1000);
-  soll('Abbrechen nimmt die Verschiebung zurück', await br.ev(`[...document.querySelectorAll('.plan-tag')].map(l => l.title).join('|')`), streifenVorher);
+  soll('Startdialog für die verschobene Einheit', await offen(br, 'dlg-start'), true);
+  await tippDaneben(br, 1000);
+  soll('Tipp neben den Startdialog schließt ihn', await offen(br, 'dlg-start'), false);
+  soll('… und nimmt die Verschiebung zurück', await br.ev(`[...document.querySelectorAll('.plan-tag')].map(l => l.title).join('|')`), streifenVorher);
 }
 
 try {
@@ -68,6 +77,23 @@ try {
   soll('returnValue beim Öffnen leer', await b.ev(`document.querySelector('#dlg-settings').returnValue`), '');
   await zurueck(600);
   soll('FTP bleibt 248', await ftp(), 248);
+  // Eingaben gehen nicht durch einen Fehltipp verloren: Einstellungen bleiben offen
+  await b.klick('#btn-settings', 600);
+  await tippDaneben(b);
+  soll('Tipp neben die Einstellungen schließt sie nicht', await offen(b, 'dlg-settings'), true);
+  // „Deine Daten" aus den Einstellungen: Blatt darüber, Tipp daneben schließt nur das Blatt
+  await b.klick('#btn-daten-mehr', 600);
+  soll('Daten-Blatt über den Einstellungen', await offen(b, 'dlg-daten'), true);
+  await tippDaneben(b);
+  soll('Tipp daneben schließt nur das Blatt', [await offen(b, 'dlg-daten'), await offen(b, 'dlg-settings')].join(), 'false,true');
+  await zurueck(600);
+  soll('Zurück schließt dann die Einstellungen', await offen(b, 'dlg-settings'), false);
+  // … und aus der Statuszeile
+  await b.klick('#btn-daten', 600);
+  soll('Daten-Blatt aus der Statuszeile', await b.ev(`document.querySelector('#daten-speicher-titel').textContent`), t => /dauerhaft gespeichert$/.test(t));
+  await tippDaneben(b);
+  soll('Tipp neben das Daten-Blatt schließt es', await offen(b, 'dlg-daten'), false);
+  soll('… ohne History-Rest', await b.ev('history.state?.dialog ?? null'), null);
 
   // --- Trainingsplan: anlegen, heutige Einheit, Start vorbelegt, ändern, beenden ---
   soll('Ohne Plan: Anlegen-Knopf', await b.ev(`!document.querySelector('#plan-anlegen').hidden`), true);
@@ -123,6 +149,9 @@ try {
   soll('Rückgängig angeboten', await b.ev(`!!document.querySelector('.toast.mit-aktion .toast-aktion')`), true);
   await b.ev(`document.querySelector('.toast-aktion').click()`); await sleep(900);
   soll('Rückgängig stellt her', await b.ev(`document.querySelector('.plan-tag.heute').dataset.status`), 'geplant');
+  await b.klick('#plan-aendern', 600);
+  await tippDaneben(b);
+  soll('Tipp neben das Blatt schließt es', await offen(b, 'dlg-einheit'), false);
   // Freie Fahrt an einem Plantag gilt als Ersatz für die offene Einheit
   soll('Freie Fahrt heute = Ersatz', await b.ev(`import('./js/ui/plan-ui.js').then(m => m.planErsatzHeute()).then(i => !!i?.ersatz && i.statt.length > 0)`), true);
   soll('Kopf zeigt die Plan-Länge', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => /Woche 1 von 8/.test(t));

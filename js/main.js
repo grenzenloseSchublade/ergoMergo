@@ -14,7 +14,7 @@ import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version
 import { toast, toastOk, toastErr } from './ui/toast.js';
 import { oeffneModal, schliesseObersten, istStill, eintragAbbauen, zurueck,
   setzeReloadRegel, neuLaden, ausstehendNachholen } from './navigation.js';
-import { openSettings } from './ui/settings.js';
+import { openSettings, zeigeDatenBlatt } from './ui/settings.js';
 import { startDemo, beispielFahrt, beispielHistorie } from './demo.js';
 
 // Demo starten (Button auf Home + ?demo-Parameter) — durch denselben
@@ -483,7 +483,8 @@ async function aktualisiereStatuszeile() {
       listSessions(), navigator.storage?.persisted?.() ?? false,
     ]);
     $('#db-status').textContent =
-      `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'} · Speicher ${persistent ? 'geschützt' : 'ungeschützt'}`;
+      `${sessions.length} ${sessions.length === 1 ? 'Fahrt' : 'Fahrten'}`;
+    $('#btn-speicher').hidden = persistent;
   } catch { /* Statuszeile ist nie kritisch */ }
 }
 
@@ -554,6 +555,8 @@ $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
+$('#btn-daten').addEventListener('click', zeigeDatenBlatt);
+$('#btn-speicher').addEventListener('click', zeigeDatenBlatt);
 // Trainingsplan anlegen bzw. ändern — danach die Karte neu aufbauen
 const planDialog = () => oeffnePlanDialog().then(geaendert => { if (geaendert) renderPlan({ starte: startRide, oeffneFahrt: s => openDetail(s) }); });
 $('#plan-anlegen').addEventListener('click', planDialog);
@@ -577,9 +580,9 @@ heileVersionsDrift();
 // installiert) und nach einer App-Installation direkt erneut
 requestPersistence();
 addEventListener('appinstalled', async () => {
-  await navigator.storage?.persist?.();
+  const dauerhaft = await navigator.storage?.persist?.().catch(() => false);
   aktualisiereStatuszeile();
-  toastOk('App installiert — Speicher geschützt');
+  toastOk(dauerhaft ? 'App installiert — Fahrten dauerhaft gespeichert' : 'App installiert');
 });
 
 

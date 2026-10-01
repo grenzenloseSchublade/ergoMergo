@@ -389,6 +389,7 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .plan-tag.gewaehlt:not(.heute) button { outline: 1px solid var(--accent); outline-offset: -1px; border-radius: var(--radius-s); }
 .plan-aktionen { display: flex; align-items: center; margin: calc(-1 * var(--abstand-1)) calc(-1 * var(--abstand-2)); }
 /* Leise Text-Aktionen wie „Alle Fahrten ›": keine Fläche, Tippfläche trotzdem 44 px */
+.text-aktion { display: inline-flex; align-items: center; min-height: var(--tippflaeche); padding: 0 var(--abstand-1); background: none; border: 0; color: var(--accent); font: inherit; }
 .plan-haupt, .plan-neben { min-height: var(--tippflaeche); padding: 0 var(--abstand-2); background: none; font-size: var(--text-md); }
 .plan-haupt { margin-left: auto; color: var(--accent); font-weight: 600; }
 .plan-haupt:disabled { color: var(--ink3); font-weight: 400; }
@@ -799,8 +800,17 @@ button:disabled { cursor: default; }
   margin: calc(-1 * var(--abstand-1)) 0 var(--abstand-3); font-size: var(--text-xs); color: var(--ink3);
   font-variant-numeric: tabular-nums;
 }
-.statuszeile span:empty { display: none; }   /* leeres Versions-Segment ohne Waisen-Punkt */
-.statuszeile span:not(:last-child):not(:empty)::after { content: '·'; margin-left: var(--abstand-4); opacity: .5; }
+.statuszeile span:empty { display: none; }
+/* Punkt nur zwischen sichtbaren Segmenten — leere und versteckte zählen nicht */
+.statuszeile > :not(:empty):not([hidden]):not(.warnung) ~ :not(:empty):not([hidden]):not(.warnung)::before { content: '·'; margin-right: var(--abstand-4); opacity: .5; color: var(--ink3); }
+/* „Nur auf diesem Gerät ›" — das Datenschutz-Versprechen sichtbar ohne Tipp.
+   Tippfläche 44 px, optisch so hoch wie die Zeile (negativer Rand) */
+.statuszeile .text-aktion { font-size: var(--text-xs); color: var(--ink2); padding: 0; margin-block: calc(-1 * var(--abstand-3)); }
+/* Warnung in eigener Zeile darunter, ohne Trennpunkt */
+.statuszeile .text-aktion.warnung { color: var(--warn); order: 1; flex-basis: 100%; justify-content: flex-start; }
+.hint .text-aktion { background: none; border: 0; padding: 0 var(--abstand-1); }   /* schlägt die Rubrik-Regel „.diagnose button" */
+.text-aktion .si { width: 1em; height: 1em; margin-right: var(--abstand-1); color: var(--ok); }
+.daten-saetze { margin: var(--abstand-3) 0; padding-left: var(--abstand-5); display: grid; gap: var(--abstand-2); color: var(--ink2); }
 .chip.update { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 /* Toasts: unten mittig, über allem, kurz sichtbar — im Fahrbildschirm

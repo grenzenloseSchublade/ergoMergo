@@ -25,6 +25,27 @@ import { initAudio, tick } from '../signals.js';
 
 const $ = s => document.querySelector(s);
 
+async function sicherungSpeichern() {
+  download(`ergomergo-backup-${dateiStempel()}.json`,
+    await exportiereAlles(), 'application/json');
+  toastOk('Sicherung heruntergeladen');
+}
+
+// „Deine Daten": was die App mit den Daten macht und ob der Browser sie
+// dauerhaft aufhebt (navigator.storage.persisted — ohne darf er sie bei
+// Platzmangel löschen). Geöffnet aus der Statuszeile und den Einstellungen.
+export async function zeigeDatenBlatt() {
+  const dlg = $('#dlg-daten');
+  const dauerhaft = await navigator.storage?.persisted?.().catch(() => false) ?? false;
+  $('#daten-speicher-titel').textContent = dauerhaft ? 'Dauerhaft gespeichert' : 'Noch nicht dauerhaft gespeichert';
+  $('#daten-speicher').textContent = dauerhaft
+    ? 'Der Browser hebt deine Fahrten auf, bis du sie selbst löschst. Gegen den Verlust des Geräts hilft eine Sicherung (Einstellungen → Sicherung).'
+    : 'Wird der Platz auf dem Gerät knapp, darf der Browser die Fahrten löschen. Abhilfe: die App installieren (Chrome-Menü → „App installieren“) — dann hebt Chrome sie in der Regel dauerhaft auf — oder ab und zu eine Sicherung speichern.';
+  $('#daten-sicherung').hidden = dauerhaft;
+  $('#daten-sicherung').onclick = sicherungSpeichern;
+  oeffneModal(dlg, 'daten');
+}
+
 export async function openSettings({ nachSpeichern } = {}) {
   const s = await getSettings();
   const dlg = $('#dlg-settings');
@@ -107,11 +128,8 @@ export async function openSettings({ nachSpeichern } = {}) {
   for (const [id, k] of Object.entries(SCHALTER)) $(id).checked = s[k];
 
   // Sicherung: Export/Import der kompletten Datenbank
-  $('#btn-backup').onclick = async () => {
-    download(`ergomergo-backup-${dateiStempel()}.json`,
-      await exportiereAlles(), 'application/json');
-    toastOk('Sicherung heruntergeladen');
-  };
+  $('#btn-backup').onclick = sicherungSpeichern;
+  $('#btn-daten-mehr').onclick = zeigeDatenBlatt;
   // Alles löschen ist unumkehrbar — deshalb hier (und nur hier) eine Rückfrage
   $('#btn-alles-loeschen').onclick = async () => {
     if (!confirm('Alle Fahrten, Einstellungen, Programme, den Trainingsplan und das Log auf diesem Gerät endgültig löschen?\n\nTipp: vorher unter „Sicherung" exportieren.')) return;

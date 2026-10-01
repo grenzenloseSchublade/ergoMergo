@@ -24,6 +24,12 @@ mit schweißigen Daumen. Daraus folgt alles Weitere:
 - **STOPP ist immer erreichbar.** Kein Panel, Toast oder Dialog liegt über
   −10/+10/STOPP/Beenden; ein Tipp daneben schließt ein Panel und wirkt
   trotzdem, wenn er die Bedienleiste trifft.
+- **Ein Tipp daneben schließt — wenn nichts verloren geht.** Fenster zum
+  Ansehen und Wählen (Graph im Vollbild, Blätter von unten, Startdialog,
+  Panel in der Fahrt) schließen bei einem Tipp daneben wie „Abbrechen“
+  (`<dialog closedby="any">`). Fenster mit Eingaben, die verloren gingen
+  (Einstellungen, Plan anlegen/ändern, Tasten lernen), schließen nur über
+  Abbrechen, Zurück oder Esc.
 - **Wenig gleichzeitig.** Was selten gebraucht wird, liegt hinter „⋯“.
 
 ## Tokens
@@ -87,7 +93,8 @@ Rollen:
 | Chip | `.chip`, `.chip-fahrt` | Aktionen in einer Leiste |
 | Bedientaste | `.ctl` | nur −10/+10/STOPP/Beenden |
 | Geräte-Zustand | `[data-zustand]` | Home-Leiste, Kopfzeile, Panel — eine Regel für alle |
-| Blatt von unten | `dialog.sheet` | Aktionen zu einem Eintrag (Plan-Einheit ändern); Aktionen als Aktions-Zeilen |
+| Blatt von unten | `dialog.sheet` + `closedby="any"` | Aktionen oder Erklärung zu einem Eintrag (Plan-Einheit ändern, „Deine Daten“); Aktionen als Aktions-Zeilen; Tipp daneben schließt |
+| Leise Text-Aktion | `.text-aktion` (Warnung: `.warnung`) | Verweis „… ›“ in einer Statuszeile oder einem Hinweis; keine Fläche, Tippfläche 44 px |
 | Auswahl | `.tag-wahl`, `.segment`, `.ziel-wahl` | Wochentage, Dauer, Ziel — gewählt = Akzentrahmen + `--accent-flaeche` |
 | Wochenstreifen | `.plan-woche` / `.plan-tag` | Balken in Zonenfarbe, Höhe = Dauer; Tage mit Einheit sind Knöpfe |
 

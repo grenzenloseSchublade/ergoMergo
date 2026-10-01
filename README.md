@@ -65,6 +65,17 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.3.1
+
+- **„Nur auf diesem Gerät ›“** steht jetzt sichtbar oben auf dem
+  Startbildschirm. Ein Tipp erklärt in drei Sätzen, was mit deinen Daten
+  passiert, mit Link zum Prüfbericht.
+- **Verständlich statt „Speicher ungeschützt“:** Hebt der Browser die
+  Fahrten noch nicht dauerhaft auf, steht dort „nicht dauerhaft gespeichert ›“
+  samt Erklärung und Abhilfe (App installieren oder Sicherung speichern).
+- **Ein Tipp daneben schließt** Blätter und den Startdialog. Einstellungen und
+  Plan-Dialog bleiben offen, damit keine Eingabe verloren geht.
+
 ## Neu in 3.3
 
 - **Datenschutz & Sicherheit nachweisbar:** Eine Content-Security-Policy
