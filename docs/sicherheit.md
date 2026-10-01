@@ -39,6 +39,8 @@ neue Netzstelle ohne Freigabe lässt die Prüfung scheitern.
 
 ## Was wird gespeichert? (nur auf deinem Gerät)
 
+Alles auf einmal: **Einstellungen → Datenschutz & Sicherheit → Alle Daten löschen**.
+
 | Wo | Was | Löschen |
 |---|---|---|
 | IndexedDB `ergomergo` · sessions | je Fahrt: Zeit, Dauer, Programm, Kennwerte (Watt, kJ, km, NP, TSS), **Herzfrequenz-Mittel/-Maximum**, Zonenzeiten, Plan-Zuordnung | Fahrt öffnen → Löschen |
@@ -71,6 +73,7 @@ Anforderungen sind „n/a — kein Backend".
 | STO-01 | keine Cookies | `test/netz.mjs` |
 | STO-02 | Speicher nur wie oben dokumentiert | `test/netz.mjs` |
 | STO-03 | Sicherung ohne gerätebezogene Daten | `test/sicherheit.mjs` |
+| STO-04 | alle Daten mit einem Knopf löschbar (Einstellungen → Datenschutz & Sicherheit) | `test/sicherheit.mjs` |
 | DOM-01 | präparierte Sicherung führt keinen Code aus und wird bereinigt | `test/sicherheit.mjs` |
 | DOM-02 | jede Bildschirmausgabe aus Fremddaten über `textContent` oder `esc()` | Code-Review + CSP |
 | BLE-01 | Bluetooth nur per Tipp, Gerätewahl im Chrome-Dialog, minimale Dienste | Code-Review `js/ble/*` |

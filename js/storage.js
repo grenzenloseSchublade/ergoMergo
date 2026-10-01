@@ -111,6 +111,22 @@ export async function getSettings() {
   if (veraltet.length) await tx('settings', 'readwrite', st => veraltet.forEach(k => st.delete(k)));
   return s;
 }
+// Alle Daten der App auf diesem Gerät löschen: Datenbank (Fahrten, Einstellungen,
+// Programme, Log) und die kleinen Merker im Browser-Speicher. Die App-Dateien
+// im Offline-Speicher bleiben — sie enthalten keine persönlichen Daten.
+export async function alleDatenLoeschen() {
+  const d = await dbPromise?.catch(() => null);
+  d?.close();
+  dbPromise = null;
+  await new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = resolve;
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('Datenbank noch in einem anderen Tab geöffnet — dort schließen'));
+  });
+  try { localStorage.clear(); sessionStorage.clear(); } catch { /* optional */ }
+}
+
 export const setSetting = (key, value) => tx('settings', 'readwrite', st => st.put({ key, value }));
 // Mehrere Einstellungen in EINER Transaktion (alles oder nichts)
 export const setSettings = werte => tx('settings', 'readwrite', st => {

@@ -24,6 +24,8 @@ export const FREIGABEN = [
   { datei: 'js/signals.js', muster: /speechSynthesis\.speak\(u\)/, ziel: 'Gerät', grund: 'Sprachansage-Rückfall — nur mit lokaler Stimme (localService), sonst stumm' },
   { datei: 'js/main.js', muster: /location\.replace\(`\$\{location\.pathname\}\?demo=/, ziel: 'eigene Adresse', grund: 'Navigation innerhalb der App (Demo)' },
   { datei: 'js/demo.js', muster: /location\.replace\((?:location\.pathname\)|`\$\{location\.pathname\}\?demo=fahrten)/, ziel: 'eigene Adresse', grund: 'Navigation innerhalb der App (Demo)' },
+  { datei: 'index.html', muster: /<a href="https:\/\/github\.com\/grenzenloseSchublade\/ergoMergo\/blob\/main\/docs\/sicherheit\.md"/, ziel: 'GitHub (nur auf Tipp)', grund: 'Link zum Prüfbericht — öffnet sich nur, wenn du ihn antippst; überträgt keine Daten' },
+  { datei: 'js/ui/settings.js', muster: /location\.replace\(location\.pathname\)/, ziel: 'eigene Adresse', grund: 'Neustart der App nach „Alle Daten löschen"' },
   { datei: 'index.html', muster: /<form method="dialog">/, ziel: '—', grund: 'Dialog-Formulare, senden nichts (method="dialog")' },
   { datei: 'index.html', muster: /rel="canonical"|property="og:(?:url|image)"|"@context": "https:\/\/schema\.org"|"url": "https:\/\/grenzenloseschublade/, ziel: '—', grund: 'Metadaten für Suchmaschinen/Vorschauen — lädt der Browser nicht' },
   { datei: 'js/export.js', muster: /xmlns(?::ns3)?="http:\/\/www\.garmin\.com\/xmlschemas\//, ziel: '—', grund: 'XML-Namensraum im TCX-Export (Text, keine Anfrage)' },

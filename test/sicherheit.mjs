@@ -4,6 +4,7 @@
 //           Programmname) führt keinen Code aus und wird bereinigt
 //   STO-02  unbekannte/alte Einstellungen (icuApiKey) werden verworfen und gelöscht
 //   STO-03  Sicherung enthält keine gerätebezogenen Daten (geraete)
+//   STO-04  „Alle Daten löschen“ entfernt Datenbank und Browser-Merker
 // Aufruf: node test/sicherheit.mjs     Exit 1 bei Abweichung.
 
 import { server, browser, sleep } from './lib.mjs';
@@ -81,6 +82,11 @@ try {
   await b.ev(`import('./js/storage.js').then(m => m.setSetting('geraete', { trainer: { id: 'abc', name: 'KICKR' } }))`);
   const export_ = await b.ev(`import('./js/backup.js').then(m => m.exportiereAlles()).then(JSON.parse)`);
   soll('Sicherung ohne Geräte', 'geraete' in export_.settings, false);
+  // STO-04: „Alle Daten löschen" entfernt Datenbank und Browser-Merker
+  await b.ev(`localStorage.setItem('uiState', 'x')`);
+  await b.ev(`import('./js/storage.js').then(m => m.alleDatenLoeschen())`);
+  const rest = await b.ev(`(async () => ({ dbs: (await indexedDB.databases()).map(d => d.name), local: Object.keys(localStorage) }))()`);
+  soll('Alles gelöscht: keine Datenbank, keine Merker', rest, { dbs: [], local: [] });
 } catch (e) {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {

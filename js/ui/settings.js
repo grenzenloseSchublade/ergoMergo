@@ -2,7 +2,7 @@
 // Aus main.js ausgelagert; App-Rückwirkungen (Kachel-Refresh nach
 // FTP-Änderung) laufen über injizierte Callbacks.
 
-import { getSettings, setSetting, setSettings, getLogs, clearLogs, EINSTELLUNGEN, pruefeEinstellung } from '../storage.js';
+import { getSettings, setSetting, setSettings, getLogs, clearLogs, alleDatenLoeschen, EINSTELLUNGEN, pruefeEinstellung } from '../storage.js';
 
 // Formularfelder ↔ Einstellungen; Grenzen und Standardwerte stehen nur im
 // Schema (EINSTELLUNGEN in storage.js)
@@ -111,6 +111,18 @@ export async function openSettings({ nachSpeichern } = {}) {
     download(`ergomergo-backup-${dateiStempel()}.json`,
       await exportiereAlles(), 'application/json');
     toastOk('Sicherung heruntergeladen');
+  };
+  // Alles löschen ist unumkehrbar — deshalb hier (und nur hier) eine Rückfrage
+  $('#btn-alles-loeschen').onclick = async () => {
+    if (!confirm('Alle Fahrten, Einstellungen, Programme, den Trainingsplan und das Log auf diesem Gerät endgültig löschen?\n\nTipp: vorher unter „Sicherung" exportieren.')) return;
+    dlg.close('cancel');
+    try {
+      await alleDatenLoeschen();
+      toastOk('Alle Daten gelöscht — lade neu …');
+    } catch (err) {
+      toastErr('Löschen fehlgeschlagen: ' + err.message);
+    }
+    setTimeout(() => location.replace(location.pathname), 1200);
   };
   $('#btn-restore').onclick = () => $('#backup-file').click();
   $('#backup-file').onchange = async e => {

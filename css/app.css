@@ -12,6 +12,9 @@ body {
 }
 .screen { min-height: 100dvh; padding: max(var(--abstand-3), env(safe-area-inset-top)) var(--abstand-4) var(--abstand-4); max-width: 52rem; margin: 0 auto; }
 button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+/* Links (selten: Prüfbericht) — Akzentfarbe, als Hinweiszeile 44 px hoch tippbar */
+a { color: var(--accent); }
+.hint a { display: inline-flex; align-items: center; min-height: var(--tippflaeche); }
 
 /* ---------- Rollen (docs/stil.md) ----------
    Wiederkehrende Muster EINMAL definiert; Bausteine ergänzen nur, was
@@ -424,6 +427,7 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .plan-verwalten { display: flex; flex-wrap: wrap; gap: var(--abstand-2); margin-top: var(--abstand-4); }
 .plan-verwalten:not(:has(> :not([hidden]))) { display: none; }
 .chip.danger { color: var(--danger); border-color: var(--danger); }
+.dlg-actions .danger { color: var(--danger); }
 /* Blatt von unten (Einheit ändern): volle Breite, am unteren Rand */
 dialog.sheet {
   margin: auto auto 0; width: min(32rem, 100vw); max-width: 100vw;

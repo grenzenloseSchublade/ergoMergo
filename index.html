@@ -345,7 +345,7 @@
     </details>
     <details class="diagnose">
       <summary>Sicherung</summary>
-      <p class="hint">Komplette Datenbank (Fahrten, Programme, Einstellungen) als JSON-Datei.</p>
+      <p class="hint">Komplette Datenbank (Fahrten mit Herzfrequenz, Programme, Einstellungen) als JSON-Datei — vertraulich behandeln. Gemerkte Geräte sind nicht enthalten.</p>
       <div class="dlg-actions">
         <button type="button" id="btn-backup">Export</button>
         <button type="button" id="btn-restore" class="ghost">Import</button>
@@ -380,6 +380,16 @@
           <span class="schalter-text">Orange Paddles<small>Tempo nach Druck: leicht langsam, fest schnell</small></span>
           <input type="checkbox" class="schalter" id="set-halten-paddles">
         </label>
+      </div>
+    </details>
+    <details class="diagnose">
+      <summary>Datenschutz &amp; Sicherheit</summary>
+      <p class="hint">Die App schickt deine Daten nirgendwohin — kein Server, kein Konto, keine Analyse, keine Cookies.
+        Fahrten (mit Herzfrequenz) und Einstellungen liegen nur in diesem Browser. Der Browser erlaubt der App nur
+        Verbindungen zu ihrer eigenen Adresse; online wird nur nach Updates gefragt, nie während der Fahrt.</p>
+      <p class="hint"><a href="https://github.com/grenzenloseSchublade/ergoMergo/blob/main/docs/sicherheit.md" target="_blank" rel="noopener noreferrer">Prüfbericht und „So prüfst du es selbst“ ›</a></p>
+      <div class="dlg-actions">
+        <button type="button" id="btn-alles-loeschen" class="ghost danger">Alle Daten löschen</button>
       </div>
     </details>
     <details class="diagnose">

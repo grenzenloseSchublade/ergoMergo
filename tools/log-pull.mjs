@@ -11,6 +11,9 @@
 //   node tools/log-pull.mjs --logs-only      nur Log anzeigen, kein Dump
 //   node tools/log-pull.mjs --seit 2026-09-21   Log erst ab diesem Datum
 //   node tools/log-pull.mjs --out dump.json  Dump-Zieldatei
+//
+// Der Dump enthält Fahrten mit Herzfrequenz — vertraulich behandeln; die
+// Standard-Dateinamen ergomergo-dump-*.json stehen in .gitignore.
 
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -90,6 +93,10 @@ const DUMP_EXPR = (mitSamples) => `(async () => {
   return JSON.stringify({ logs, sessions, settings${mitSamples
     ? ', sessionData: sessionData.map(x => ({ id: x.id, count: x.count, samples: Array.from(x.samples) }))' : ''} });
 })()`;
+
+// Die Weiterleitung auf den DevTools-Port nach dem Lauf immer wieder abbauen —
+// sonst bleibt der Debug-Zugang zum Handy-Chrome lokal offen
+process.on('exit', () => { try { adb('forward', '--remove', `tcp:${PORT}`); } catch { /* war nicht gesetzt */ } });
 
 let tab = null;
 try {
