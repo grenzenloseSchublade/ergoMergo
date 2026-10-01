@@ -47,23 +47,44 @@ function chromePfad() {
   return 'google-chrome';
 }
 
+// Chrome mit frischem Profil starten und auf den DevTools-Endpunkt warten.
+// Auf frischen CI-Runnern braucht der erste Start gelegentlich über 15 s
+// (Pages-Lauf 01.10.2026) — daher 30 s Frist und ein zweiter Versuch; im
+// Fehler steht das Ende von Chromes stderr statt nur „startet nicht".
+async function starteChrome(bewegung) {
+  let letzterFehler;
+  for (let versuch = 1; versuch <= 2; versuch++) {
+    const profil = mkdtempSync(join(tmpdir(), 'ergomergo-test-'));
+    const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profil}`, '--no-sandbox', 'about:blank'];
+    if (!bewegung) args.splice(3, 0, '--force-prefers-reduced-motion');
+    const proc = spawn(chromePfad(), args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let puffer = '';
+    try {
+      const wsUrl = await new Promise((ok, fehl) => {
+        const t = setTimeout(() => fehl(new Error('keine Meldung nach 30 s')), 30000);
+        proc.stderr.on('data', d => {
+          puffer += d;
+          const m = puffer.match(/DevTools listening on (ws:\S+)/);
+          if (m) { clearTimeout(t); ok(m[1]); }
+        });
+        proc.on('error', e => { clearTimeout(t); fehl(e); });
+        proc.on('exit', code => { clearTimeout(t); fehl(new Error(`beendet mit Code ${code}`)); });
+      });
+      return { proc, profil, wsUrl };
+    } catch (e) {
+      letzterFehler = e;
+      proc.kill();
+      try { rmSync(profil, { recursive: true, force: true }); } catch { /* tmp räumt das System */ }
+      console.error(`Chrome-Start, Versuch ${versuch}: ${e.message}\n${puffer.trim().split('\n').slice(-15).join('\n')}`);
+    }
+  }
+  throw new Error(`Chrome startet nicht (CHROME setzen?) — ${letzterFehler.message}`);
+}
+
 // Frisches Chrome-Profil, eine Seite, CDP-Helfer. breite/hoehe = Viewport.
 // swUmgehen: false lässt den Service Worker arbeiten (Netz-Mitschnitt inkl. SW)
 export async function browser({ breite = 412, hoehe = 915, dpr = 1, bewegung = true, swUmgehen = true } = {}) {
-  const profil = mkdtempSync(join(tmpdir(), 'ergomergo-test-'));
-  const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profil}`, '--no-sandbox', 'about:blank'];
-  if (!bewegung) args.splice(3, 0, '--force-prefers-reduced-motion');
-  const proc = spawn(chromePfad(), args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  const wsUrl = await new Promise((ok, fehl) => {
-    let puffer = '';
-    const t = setTimeout(() => fehl(new Error('Chrome startet nicht (CHROME setzen?)')), 15000);
-    proc.stderr.on('data', d => {
-      puffer += d;
-      const m = puffer.match(/DevTools listening on (ws:\S+)/);
-      if (m) { clearTimeout(t); ok(m[1]); }
-    });
-    proc.on('error', fehl);
-  });
+  const { proc, profil, wsUrl } = await starteChrome(bewegung);
   const port = new URL(wsUrl).port;
   const seite = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page');
   const ws = new WebSocket(seite.webSocketDebuggerUrl);
