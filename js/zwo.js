@@ -52,7 +52,8 @@ export function parseZwo(xmlText) {
         bloecke.push({ dauer, pct: num(el, 'Power', 0.6), rpm: rpmVon(el) });
         break;
       case 'IntervalsT': {
-        const wdh = Math.max(1, num(el, 'Repeat', 1));
+        // Obergrenze: eine präparierte Datei mit Repeat=1e6 legte sonst den Tab lahm
+        const wdh = Math.min(100, Math.max(1, Math.round(num(el, 'Repeat', 1))));
         const gruppe = `zwo${bloecke.length}`;   // je IntervalsT-Abschnitt eine Klammer
         for (let r = 0; r < wdh; r++) {
           bloecke.push({ dauer: num(el, 'OnDuration'), pct: num(el, 'OnPower', 1), gruppe, gruppeLabel: `${wdh}×`, rpm: rpmVon(el) });
@@ -73,6 +74,7 @@ export function parseZwo(xmlText) {
 
   const gueltig = bloecke.filter(b => b.dauer >= 1);
   if (!gueltig.length) throw new Error('Workout enthält keine Blöcke');
+  if (gueltig.length > 2000) throw new Error('Workout zu lang (mehr als 2000 Blöcke)');
   return { name, bloecke: gueltig, uebersprungen };
 }
 

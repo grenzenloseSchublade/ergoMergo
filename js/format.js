@@ -27,5 +27,6 @@ export function dateiStempel(d = new Date()) {
 }
 
 export function fmtKm(km) {
-  return (km ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  // Nur Zahlen formatieren — landet in innerHTML, ein String käme sonst ungefiltert durch
+  return (Number.isFinite(km) ? km : 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }

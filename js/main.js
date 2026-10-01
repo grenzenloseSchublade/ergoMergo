@@ -256,9 +256,17 @@ function zeigeProfilOverlay(programm, blocks, ftp) {
     programm.name, `${min} min${ftp ? '' : ` · FTP-Annahme ${FTP_ANNAHME} W`}`);
 }
 
+// Importierte Programme — ein kaputtes einzeln überspringen (und loggen),
+// statt die ganze Kachel-Liste samt „Zuletzt gefahren" zu verlieren
+async function eigeneProgramme() {
+  return (await listProgramme()).flatMap(p => {
+    try { return [zwoProgramm(p)]; } catch (err) { logError('app', `Programm ${p?.id} unlesbar`, err.message); return []; }
+  });
+}
+
 // Programm per id — eingebaut oder importiert (?dlg, ?big)
 async function findeProgramm(id) {
-  const customs = (await listProgramme()).map(p => zwoProgramm(p));
+  const customs = await eigeneProgramme();
   return [...WORKOUTS, ...PROGRAMME, ...customs].find(x => x.id === id) ?? null;
 }
 
@@ -315,7 +323,7 @@ async function renderProgrammTilesInner() {
   // Importierte .zwo-Workouts als eigene Kacheln mit Löschknopf. Der Import
   // ist eine Einstellung (standardmäßig aus); schon importierte Programme
   // bleiben auch ohne ihn sichtbar und fahrbar
-  const customs = (await listProgramme()).map(p => zwoProgramm(p));
+  const customs = await eigeneProgramme();
   $('#btn-zwo').hidden = !settings.zwoImport;
   $('#rubrik-custom').hidden = !settings.zwoImport && !customs.length;
   fill('#custom-tiles', customs, async p => {

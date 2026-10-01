@@ -69,16 +69,49 @@ export const deleteProgramm = id => tx('programme', 'readwrite', st => st.delete
 // minus) — einzige Stelle, Controller und Manager ergänzen damit
 export const STANDARD_TASTEN = { plus: 4, minus: 0 };
 
+// --- Einstellungen: EIN Schema für Standardwerte, Grenzen und Import ---
+// pruefe(v) liefert einen gültigen Wert oder undefined (= verwerfen).
+// Unbekannte Schlüssel (z. B. icuApiKey bis v3.2) werden beim Lesen
+// verworfen und aus der Datenbank gelöscht.
+const ganz = (min, max) => v => typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : undefined;
+const jaNein = v => typeof v === 'boolean' ? v : undefined;
+const objekt = v => v && typeof v === 'object' && !Array.isArray(v) ? v : v === null ? null : undefined;
+// Tastenbelegung: Aktion → Bit 0–63 oder null (bewusst unbelegt)
+const tastenMap = v => objekt(v) ? Object.fromEntries(Object.entries(v)
+  .filter(([k, b]) => /^[a-z]+$/i.test(k) && (b === null || (Number.isInteger(b) && b >= 0 && b < 64)))) : undefined;
+export const EINSTELLUNGEN = {
+  ftp: { std: 0, pruefe: ganz(0, 500) },
+  wattSchritt: { std: 10, pruefe: ganz(1, 50) },
+  maxWatt: { std: 400, pruefe: ganz(100, 1000) },
+  startWatt: { std: 100, pruefe: ganz(20, 300) },
+  controllerMap: { std: STANDARD_TASTEN, pruefe: tastenMap },   // per Lern-Modus belegbar
+  haltenTasten: { std: true, pruefe: jaNein },                  // ±-Taste halten = wiederholen
+  haltenPaddles: { std: true, pruefe: jaNein },
+  sprachansagen: { std: true, pruefe: jaNein },
+  tonAn: { std: true, pruefe: jaNein },
+  zwoImport: { std: false, pruefe: jaNein },                    // .zwo-Import, standardmäßig aus
+  plan: { std: null, pruefe: objekt },                          // Trainingsplan (js/plan.js)
+  // Gemerkte Geräte: Web-Bluetooth-IDs gelten nur in diesem Browserprofil —
+  // nie exportieren, nie importieren
+  geraete: { std: undefined, pruefe: objekt, lokal: true },
+};
+// Wert gegen das Schema prüfen (Dialog, Import) — undefined = ungültig
+export const pruefeEinstellung = (key, value) =>
+  Object.hasOwn(EINSTELLUNGEN, key) ? EINSTELLUNGEN[key].pruefe(value) : undefined;
+
 export async function getSettings() {
   const rows = await tx('settings', 'readonly', st => st.getAll());
-  const defaults = {
-    ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100,
-    controllerMap: { ...STANDARD_TASTEN },   // Ride-Tasten, per Lern-Modus belegbar
-    haltenTasten: true, haltenPaddles: true, // ±-Taste/Paddle halten = wiederholen
-    sprachansagen: true, tonAn: true,
-    zwoImport: false,                        // .zwo-Import (Zwift-Workouts) — Funktion für Fortgeschrittene, standardmäßig aus
-  };
-  return Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));
+  const s = {};
+  for (const [key, { std }] of Object.entries(EINSTELLUNGEN))
+    s[key] = std && typeof std === 'object' ? structuredClone(std) : std;
+  const veraltet = [];
+  for (const { key, value } of rows) {
+    if (!Object.hasOwn(EINSTELLUNGEN, key)) { veraltet.push(key); continue; }
+    const v = EINSTELLUNGEN[key].pruefe(value);
+    if (v !== undefined) s[key] = v;
+  }
+  if (veraltet.length) await tx('settings', 'readwrite', st => veraltet.forEach(k => st.delete(k)));
+  return s;
 }
 export const setSetting = (key, value) => tx('settings', 'readwrite', st => st.put({ key, value }));
 
