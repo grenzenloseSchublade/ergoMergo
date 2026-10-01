@@ -90,6 +90,8 @@ export async function browser({ breite = 412, hoehe = 915, dpr = 1, bewegung = t
     if (!navigator.bluetooth) Object.defineProperty(navigator, 'bluetooth', { value: Object.assign(new EventTarget(), {
       getAvailability: async () => true, getDevices: async () => [],
       requestDevice: async () => { throw new DOMException('abgebrochen', 'NotFoundError'); } }) });
+    // Jeder CSP-Verstoß wird zum Testfehler (Runtime.exceptionThrown)
+    document.addEventListener('securitypolicyviolation', e => { setTimeout(() => { throw new Error('CSP-Verstoß: ' + e.violatedDirective + ' ' + e.blockedURI); }); });
     const orig = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (typ, ...r) { if (typ === 'reconnectfehler') window.__ftms = this; return orig.call(this, typ, ...r); };` });
   return {

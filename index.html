@@ -2,6 +2,13 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
+<!-- Content-Security-Policy: Der Browser erzwingt, dass die App nur Dateien von
+     ihrer eigenen Adresse lädt und Daten nur dorthin schicken könnte
+     (connect-src 'self'). Kein fremder Server, kein eingeschleustes Skript.
+     style-src-attr: Balkenhöhen/-farben werden als style="" gesetzt — ohne
+     fremde Bilder/Verbindungen kann darüber nichts nach außen. Prüfung:
+     test/sicherheit.mjs, tools/datenschutz-check.mjs (docs/sicherheit.md) -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self'; media-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1113">
 <title>ergoMergo — Wahoo KICKR als Ergometer im Browser, ohne Abo</title>
