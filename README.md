@@ -65,6 +65,20 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.3
+
+- **Datenschutz & Sicherheit nachweisbar:** Eine Content-Security-Policy
+  lässt die App nur von ihrer eigenen Adresse laden und nur dorthin
+  verbinden. Jede Netzstelle im Code ist begründet freigegeben, ein
+  Netz-Mitschnitt aller Abläufe belegt es
+  ([docs/sicherheit.md](docs/sicherheit.md), [SECURITY.md](SECURITY.md)).
+- **Veröffentlichung nur nach bestandenen Prüfungen** per GitHub Actions,
+  ausgeliefert werden nur die App-Dateien.
+- **Einstellungen → „Datenschutz & Sicherheit“:** kurz erklärt, was die App
+  tut, Link zum Prüfbericht und „Alle Daten löschen“ (mit Rückfrage).
+- Trainingsplan rechnet bei der Zeitumstellung richtig (Planende und Tage
+  ohne Fahrt nach Kalendertagen); die Update-Prüfung ruht während der Fahrt.
+
 ## Neu in 3.2
 
 - **Plan-Karte wie ein Kalender:** Tag im Wochenstreifen antippen zeigt
