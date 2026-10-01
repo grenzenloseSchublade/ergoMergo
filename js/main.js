@@ -90,7 +90,8 @@ function verlasseFahrt() {
   eintragAbbauen();
 }
 
-// plan: { vorgaben, planInfo } — Start aus dem Trainingsplan (Dialog vorbelegt)
+// plan: { vorgaben, planInfo, abgebrochen? } — Start aus dem Trainingsplan
+// (Dialog vorbelegt); abgebrochen() läuft, wenn der Startdialog abgebrochen wird
 async function startRide(programm = null, plan = null) {
   if (startLaeuft || rideScreen) return;
   startLaeuft = true;
@@ -116,7 +117,7 @@ async function startRideInner(programm, plan = null) {
   let run = null, blocks = null, seed = null;
   if (programm) {
     const opts = await startDialog(programm, settings, plan?.vorgaben);
-    if (!opts) return;
+    if (!opts) { await plan?.abgebrochen?.(); return; }
     blocks = baueBlocks(programm, opts, settings.ftp);
     seed = opts.seed ?? null;
   }

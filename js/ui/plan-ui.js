@@ -333,7 +333,9 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
       gewaehlt = heuteIso;
       neuZeichnen();
       const heuteE = wocheWirksam(neu, heute, sessions, heute, ftp).find(x => x.datum === heuteIso).einheit;
-      starte(p, { vorgaben: heuteE.opts, planInfo: planInfo(neu, heuteE) });
+      // Startdialog abgebrochen: Verschiebung zurücknehmen, der Tag bleibt gewählt
+      starte(p, { vorgaben: heuteE.opts, planInfo: planInfo(neu, heuteE),
+        abgebrochen: async () => { await setSetting('plan', plan); gewaehlt = tag.datum; neuZeichnen(); } });
     },
   }, true);
 }

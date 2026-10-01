@@ -19,6 +19,13 @@ const bildschirm = () => b.ev(`['home','fahrten','detail','ride'].filter(k => !d
 const suche = () => b.ev('location.search');
 const ftp = () => b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.ftp)`);
 const zurueck = (ms = 800) => b.ev('history.back()').then(() => sleep(ms));
+// „Heute fahren ›" → Startdialog → Abbrechen: Woche wieder wie vorher
+async function heuteFahrenAbbrechen(br, streifenVorher) {
+  await br.klick('#plan-starten', 1000);
+  soll('Startdialog für die verschobene Einheit', await br.ev(`document.querySelector('#dlg-start').open`), true);
+  await br.ev(`document.querySelector('#dlg-start').close('cancel')`); await sleep(1000);
+  soll('Abbrechen nimmt die Verschiebung zurück', await br.ev(`[...document.querySelectorAll('.plan-tag')].map(l => l.title).join('|')`), streifenVorher);
+}
 
 try {
   // --- Navigation mit Fahrten-Historie ---
@@ -96,6 +103,16 @@ try {
   await b.ev(`document.querySelector('.plan-tag.heute button').click()`); await sleep(600);
   soll('Heute wieder gewählt', await b.ev(`document.querySelector('#plan-titel').textContent`), titelHeute);
   soll('Knöpfe Starten und Ändern', await b.ev(`document.querySelector('#plan-starten').textContent + '|' + !document.querySelector('#plan-aendern').hidden`), 'Starten ›|true');
+
+  // Späterer Tag: „Heute fahren ›" öffnet den Startdialog; Abbrechen nimmt die Verschiebung zurück
+  const streifenVorher = await b.ev(`[...document.querySelectorAll('.plan-tag')].map(l => l.title).join('|')`);
+  await b.ev(`[...document.querySelectorAll('.plan-tag:not(.heute) button')].find(x => !x.closest('[data-status="frei"]')).click()`); await sleep(600);
+  soll('Späterer Tag: Heute fahren', await b.ev(`document.querySelector('#plan-starten').textContent`), 'Heute fahren ›');
+  // Mit den Beispieldaten (gestern hart gefahren) ist heute gesperrt — dann muss der Grund dastehen
+  if (await b.ev(`document.querySelector('#plan-starten').disabled`))
+    soll('Gesperrt mit Grund', await b.ev(`document.querySelector('#plan-sub').textContent`), t => t.startsWith('Heute nicht möglich'));
+  else await heuteFahrenAbbrechen(b, streifenVorher);
+  await b.ev(`document.querySelector('.plan-tag.heute button').click()`); await sleep(600);
 
   // Blatt „Einheit ändern" über „Ändern": heutige Einheit auslassen, rückgängig machen
   await b.klick('#plan-aendern', 600);
@@ -195,6 +212,25 @@ try {
   await b.klick('#btn-demo-fahrt', 1500);
   await b.klick('#btn-demo-zur-fahrt', 3000);
   soll('Beispielfahrten → Demo-Fahrt', [await bildschirm(), await suche()].join(' '), 'ride ?demo=vo2max');
+  // Zweiter Durchlauf ohne Beispieldaten: „Heute fahren ›" ist frei → Startdialog, Abbrechen nimmt zurück
+  const b2 = await browser({ breite: 412, hoehe: 900 });
+  try {
+    await b2.geh(srv.url, 1500);
+    await b2.ev(`import('./js/storage.js').then(m => m.setSetting('ftp', 220))`);
+    await b2.geh(srv.url, 1500);
+    await b2.klick('#plan-anlegen', 700);
+    await b2.ev(`(() => { const heute = (new Date().getDay() + 6) % 7, tage = [heute, (heute + 3) % 7].map(String);
+      for (const i of document.querySelectorAll('#plan-tage input')) i.checked = tage.includes(i.value);
+      document.querySelector('.plan-form').dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await b2.ev(`document.querySelector('#plan-ok').click()`); await sleep(1200);
+    const vorher = await b2.ev(`[...document.querySelectorAll('.plan-tag')].map(l => l.title).join('|')`);
+    await b2.ev(`[...document.querySelectorAll('.plan-tag:not(.heute) button')].find(x => !x.closest('[data-status="frei"]')).click()`); await sleep(600);
+    soll('Ohne Vorbelastung: Heute fahren frei', await b2.ev(`!document.querySelector('#plan-starten').disabled`), true);
+    await heuteFahrenAbbrechen(b2, vorher);
+  } finally {
+    abweichungen.push(...b2.fehler.map(f => 'JS-Fehler (2): ' + f));
+    b2.schliesse();
+  }
 } catch (e) {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {
