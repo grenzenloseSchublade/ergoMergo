@@ -87,11 +87,8 @@ export async function startDemo(variante, { betreteFahrt }) {
     prefill(480, k => k < 120 ? 120 : k < 300 ? 200 : 160);
     session.setTarget(160, { instant: true });
   }
-  const ping = new URLSearchParams(location.search).has('ping');
   setInterval(() => {
     ftms.dispatchEvent(new CustomEvent('data', { detail: fahrer(session.target, session.elapsed) }));
-    // ?ping — Hintergrund-Throttling messen: 1 Request/s, Servlog zeigt Lücken
-    if (ping) fetch(`ping?t=${session.elapsed}&vis=${document.visibilityState}`).catch(() => {});
   }, 1000);
   // Audio wie in der echten Fahrt (Beeps + Ansage-Bausteine statt Browser-TTS).
   // Vor dem RideScreen, damit dessen initAnsagen den Context schon bekommt.

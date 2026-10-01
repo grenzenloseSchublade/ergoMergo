@@ -75,7 +75,7 @@ export async function getSettings() {
     ftp: 0, wattSchritt: 10, maxWatt: 400, startWatt: 100,
     controllerMap: { ...STANDARD_TASTEN },   // Ride-Tasten, per Lern-Modus belegbar
     haltenTasten: true, haltenPaddles: true, // ±-Taste/Paddle halten = wiederholen
-    sprachansagen: true, tonAn: true, icuApiKey: '',
+    sprachansagen: true, tonAn: true,
     zwoImport: false,                        // .zwo-Import (Zwift-Workouts) — Funktion für Fortgeschrittene, standardmäßig aus
   };
   return Object.assign(defaults, ...rows.map(r => ({ [r.key]: r.value })));

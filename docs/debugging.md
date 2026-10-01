@@ -25,7 +25,6 @@ Zeilen mit `[INFO:CONSOLE(...)]` sind die JS-Konsolenausgaben der Seite, inklusi
 | `?demo=programm` | Programm-Modus mit klassischem Intervallprogramm (4×4) |
 | `?dlg=<id>` | Startdialog eines Programms direkt öffnen |
 | `?big=<id>` | Graph-Vollbild eines Programms direkt öffnen |
-| `?demo&ping` | zusätzlich 1 Request/s an den Dev-Server — Hintergrund-Throttling im Servlog sichtbar |
 
 Demo-Fahrten werden nicht in die Historie gespeichert. Die Demo nutzt denselben
 Fahrbildschirm, Audio-Pfad (Töne + thorsten-Ansagen) und Fahrt-Eintritt wie die

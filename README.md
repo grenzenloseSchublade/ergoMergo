@@ -206,19 +206,6 @@ node tools/release.mjs --check    # prüft vor dem Push auf Drift
 Danach committen (Konvention: „…; Release vXX") und pushen — GitHub Pages
 deployt `main` direkt; installierte Apps bieten das Update per Button an.
 
-### V0 — Gerätecheck
-
-`tools/gatt_dump.py` liest per Python/Bleak die GATT-Dienste des Trainers aus
-und schreibt `docs/services.json`:
-
-```sh
-pip install bleak
-python3 tools/gatt_dump.py            # nur lesen
-python3 tools/gatt_dump.py --control  # zusätzlich Steuerbefehle testen
-```
-
-`test/bonding.html` ist die Browser-Gegenprobe.
-
 ### Diagnose-Log vom Gerät ziehen
 
 `tools/log-pull.mjs` holt das Diagnose-Log und die Fahrtdaten direkt aus der

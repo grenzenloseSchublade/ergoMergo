@@ -106,7 +106,6 @@ export async function openSettings({ nachSpeichern } = {}) {
   $('#set-zwo').checked = s.zwoImport;
   $('#set-halten-tasten').checked = s.haltenTasten;
   $('#set-halten-paddles').checked = s.haltenPaddles;
-  $('#set-icukey').value = s.icuApiKey;
 
   // Sicherung: Export/Import der kompletten Datenbank
   $('#btn-backup').onclick = async () => {
@@ -145,7 +144,6 @@ export async function openSettings({ nachSpeichern } = {}) {
     await setSetting('sprachansagen', $('#set-sprache').checked);
     await setSetting('tonAn', $('#set-ton').checked);
     await setSetting('zwoImport', $('#set-zwo').checked);
-    await setSetting('icuApiKey', $('#set-icukey').value.trim());
     const halten = { tasten: $('#set-halten-tasten').checked, paddles: $('#set-halten-paddles').checked };
     await setSetting('haltenTasten', halten.tasten);
     await setSetting('haltenPaddles', halten.paddles);

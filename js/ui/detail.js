@@ -1,10 +1,9 @@
 // Detailansicht einer gespeicherten Fahrt: Kennwerte, Graph (mit HF),
-// Intervall-Report, Export (TCX, intervals.icu) und Löschen.
+// Intervall-Report, Export (TCX-Datei) und Löschen.
 
-import { getSamples, deleteSession, saveSession, getSettings, FIELDS } from '../storage.js';
-import { logInfo, logError } from '../logger.js';
-import { toastOk, toastErr } from './toast.js';
-import { toTCX, download, tcxDateiname, ladeZuIntervals } from '../export.js';
+import { getSamples, deleteSession, getSettings, FIELDS } from '../storage.js';
+import { toastOk } from './toast.js';
+import { toTCX, download, tcxDateiname } from '../export.js';
 import { drawSessionChart, beobachte } from './chart.js';
 import { zeigeGraphOverlay } from './overlay.js';
 import { fmtTime, fmtKm } from '../format.js';
@@ -100,30 +99,6 @@ export async function renderDetail(root, session, onClose, { demo = null } = {})
     if (!data) return;
     download(tcxDateiname(session), toTCX(session, data.samples, data.count));
     toastOk('TCX heruntergeladen');
-  };
-
-  // intervals.icu: Hochgeladen-Status gehört zur Fahrt (kein Doppel-Upload),
-  // und ein spätes Ergebnis landet nie auf dem Knopf einer anderen Fahrt
-  const icuBtn = root.querySelector('#btn-icu');
-  icuBtn.hidden = !settings.icuApiKey || !data || !!demo;
-  const zeigeIcu = () => {
-    icuBtn.disabled = !!session.icuHochgeladen;
-    icuBtn.textContent = session.icuHochgeladen ? '✓ bei intervals.icu' : '→ intervals.icu';
-  };
-  zeigeIcu();
-  icuBtn.onclick = async () => {
-    icuBtn.disabled = true;
-    try {
-      await ladeZuIntervals(session, data.samples, data.count, settings.icuApiKey);
-      logInfo('icu', 'Upload ok', session.id);
-      session.icuHochgeladen = Date.now();
-      await saveSession(session);
-      toastOk('Bei intervals.icu hochgeladen');
-    } catch (err) {
-      logError('icu', 'Upload fehlgeschlagen', err.message);
-      toastErr('intervals.icu-Upload fehlgeschlagen: ' + err.message);
-    }
-    if (root.dataset.fahrt === session.id) zeigeIcu();
   };
 
   root.querySelector('#btn-delete').hidden = !!demo;

@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 node_modules/
 *.log
+# Diagnose-Dumps vom Gerät (tools/log-pull.mjs) — persönliche Daten, nie einchecken
+ergomergo-dump-*.json

@@ -1,24 +1,12 @@
-// TCX-Export (Garmin Training Center XML). Akzeptiert von Strava,
-// Garmin Connect und intervals.icu. Watt über die ns3-Activity-Extension.
+// TCX-Export (Garmin Training Center XML) als Datei aufs eigene Gerät —
+// lässt sich von Hand bei Strava, Garmin Connect oder intervals.icu
+// hochladen. Die App selbst sendet nichts. Watt über die ns3-Activity-Extension.
 
 import { FIELDS } from './storage.js';
 import { dateiStempel } from './format.js';
 
-// Dateiname einer Fahrt (Ortszeit des Starts) — Download und Upload gleich
+// Dateiname einer Fahrt (Ortszeit des Starts)
 export const tcxDateiname = session => `ergomergo-${dateiStempel(new Date(session.start))}.tcx`;
-
-// Upload zu intervals.icu (Basic Auth, CORS nur auf /api/v1/-Endpunkten)
-export async function ladeZuIntervals(session, samples, count, apiKey) {
-  const fd = new FormData();
-  fd.append('file', new Blob([toTCX(session, samples, count)], { type: 'application/xml' }), tcxDateiname(session));
-  fd.append('name', `ergoMergo: ${session.programm}`);
-  const resp = await fetch('https://intervals.icu/api/v1/athlete/0/activities', {
-    method: 'POST',
-    headers: { Authorization: 'Basic ' + btoa('API_KEY:' + apiKey) },
-    body: fd,
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-}
 
 // Lap-Summen aus denselben Samples wie die Trackpoints (ganze Fahrt inkl.
 // Ausfahren) — die App-Kennwerte beziehen Ø/max W aufs Programmfenster

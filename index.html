@@ -229,7 +229,6 @@
   <div id="d-compliance"></div>
   <div class="d-actions">
     <button id="btn-tcx">TCX exportieren</button>
-    <button id="btn-icu" hidden>→ intervals.icu</button>
     <button id="btn-delete" class="danger">Löschen</button>
   </div>
 </section>
@@ -335,7 +334,6 @@
           <span class="schalter-text">.zwo-Import<small>Workout-Dateien aus Zwift als eigene Programme laden</small></span>
           <input type="checkbox" class="schalter" id="set-zwo">
         </label>
-        <label>intervals.icu API-Key (leer = aus)<input type="text" id="set-icukey" autocomplete="off"></label>
       </div>
     </details>
     <details class="diagnose">
@@ -379,6 +377,7 @@
     </details>
     <details class="diagnose">
       <summary>Diagnose-Log</summary>
+      <p class="hint">Technisches Protokoll für die Fehlersuche: Gerätenamen, Firmware, Programmnamen, Zeitpunkte und Fehlermeldungen — keine Herzfrequenz, keine Wattreihen. Bleibt auf dem Gerät, bis du es exportierst.</p>
       <pre id="log-view">–</pre>
       <div class="dlg-actions">
         <button type="button" id="btn-log-export">Export</button>
