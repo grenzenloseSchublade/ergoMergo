@@ -88,8 +88,17 @@ try {
     .map(({ e, r }) => (e.id || e.className || e.tagName) + ' ' + Math.round(r.width) + '×' + Math.round(r.height))`);
   soll('Tippflächen auf Home', await tippflaechen(), l => l.length === 0);
 
-  // Blatt „Einheit ändern": heutige Einheit auslassen, rückgängig machen
+  // Kalender: anderen Tag wählen zeigt dessen Einheit, heute wieder wählen
+  const titelHeute = await b.ev(`document.querySelector('#plan-titel').textContent`);
+  await b.ev(`document.querySelector('.plan-tag:not(.heute) button').click()`); await sleep(600);
+  soll('Tag wählen zeigt diesen Tag', await b.ev(`document.querySelector('#plan-titel').textContent`), t => t !== titelHeute && !t.startsWith('Heute'));
+  soll('… und ist markiert', await b.ev(`document.querySelectorAll('.plan-tag.gewaehlt').length`), 1);
   await b.ev(`document.querySelector('.plan-tag.heute button').click()`); await sleep(600);
+  soll('Heute wieder gewählt', await b.ev(`document.querySelector('#plan-titel').textContent`), titelHeute);
+  soll('Knöpfe Starten und Ändern', await b.ev(`document.querySelector('#plan-starten').textContent + '|' + !document.querySelector('#plan-aendern').hidden`), '▶ Starten|true');
+
+  // Blatt „Einheit ändern" über „Ändern": heutige Einheit auslassen, rückgängig machen
+  await b.klick('#plan-aendern', 600);
   soll('Blatt für heute offen', await b.ev(`document.querySelector('#dlg-einheit').open`), true);
   soll('Tippflächen im Blatt', await tippflaechen(), l => l.length === 0);
   await b.ev(`[...document.querySelectorAll('#ein-aktionen button')].find(x => x.textContent.startsWith('Auslassen')).click()`); await sleep(900);

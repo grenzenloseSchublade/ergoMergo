@@ -5,7 +5,7 @@
 
 import { getSettings, setSetting, listSessions } from '../storage.js';
 import { planAnlegen, wocheAb, wocheWirksam, naechsteEinheit, wochenMinuten, titel, programmFuer,
-  verschiebeZiele, mitAnpassung, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart,
+  verschiebeZiele, mitAnpassung, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart, erledigtDurch,
   planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg, planInfo,
   tagIso, montag, WOCHENTAGE, DAUERN, LAENGEN, ZIELE } from '../plan.js';
 import { baueBlocks } from '../program.js';
@@ -13,6 +13,7 @@ import { drawProfile, beobachte } from './chart.js';
 import { effektiveFtp } from '../metrics.js';
 import { oeffneModal } from '../navigation.js';
 import { toastOk, toastRueckgaengig } from './toast.js';
+import { fmtTime } from '../format.js';
 
 const $ = s => document.querySelector(s);
 const TAG_MS = 864e5;
@@ -34,7 +35,9 @@ export async function planErsatzHeute(heute = new Date()) {
 }
 
 // Karte auf Home. starte(programm, { vorgaben, planInfo }) öffnet den Startdialog.
-export async function renderPlan({ starte, heute = new Date() } = {}) {
+let gewaehlt = null;                      // im Wochenstreifen gewählter Tag ('JJJJ-MM-TT')
+
+export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {}) {
   const [settings, sessions] = await Promise.all([getSettings(), listSessions()]);
   const plan = settings.plan;
   const karte = $('#plan-karte');
@@ -46,7 +49,7 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
 
   const ftp = settings.ftp;
   const heuteIso = tagIso(heute);
-  const neuZeichnen = () => renderPlan({ starte, heute });
+  const neuZeichnen = () => renderPlan({ starte, oeffneFahrt, heute });
   const speichern = async (neu, meldung) => {
     await setSetting('plan', neu);
     neuZeichnen();
@@ -67,6 +70,7 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
     $('#plan-heute').disabled = true;
     $('#plan-heute').onclick = null;
     $('#plan-profil').hidden = true;
+    $('#plan-aktionen').hidden = true;
     $('#plan-woche').hidden = true;
     $('#plan-info').hidden = true;
   };
@@ -96,9 +100,6 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
   }
   // Die Woche, wie sie wirklich läuft: verpasste harte Einheiten sind schon verschoben
   const woche = wocheWirksam(plan, heute, sessions, heute, ftp);
-  const heuteTag = woche.find(t => t.datum === heuteIso);
-  const e = heuteTag.einheit;
-  const erledigt = heuteTag.status === 'erledigt';
   const naechste = woche.find(t => t.datum > heuteIso && t.einheit)?.einheit
     ?? naechsteEinheit(plan, montagPlus(heute, 7), ftp);
 
@@ -106,31 +107,11 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
   const pw = Math.max(0, planWoche(plan, heute));
   $('#plan-kicker').textContent = `Trainingsplan · Woche ${pw + 1}${plan.laenge ? ` von ${plan.laenge}` : ''}${pw % 4 === 3 ? ' · leichte Woche' : ''}`;
 
-  // Heute
-  const knopf = $('#plan-heute');
-  const profil = $('#plan-profil');
-  const naechsteText = naechste ? `Nächste: ${wochentagLang(naechste.datum)} · ${titel(naechste)}` : '';
-  if (e && !erledigt) {
-    $('#plan-titel').textContent = `Heute: ${titel(e)}`;
-    const art = e.typ === 'T' ? 'FTP-Test — danach passen sich alle Einheiten an'
-      : `${e.art === 'hart' ? 'Hart' : 'Locker'} · ${e.sub ?? programmFuer(e).sub}`;
-    $('#plan-sub').textContent = e.verschobenVon ? `Verschoben von ${wochentagLang(e.verschobenVon)} · ${art}` : art;
-    knopf.disabled = false;
-    // Lockere Einheiten heißen nach ihrer Rolle („Grundlage", nicht „Ausdauer") —
-    // so stehen sie auch in Startdialog und Fahrtenliste
-    const p = e.art === 'locker' ? { ...programmFuer(e), name: e.name } : programmFuer(e);
-    knopf.onclick = () => starte(p, { vorgaben: e.opts, planInfo: planInfo(plan, e) });
-    profil.hidden = false;
-    const zeichne = c => drawProfile(c, baueBlocks(programmFuer(e), { ...e.opts }, ftp), effektiveFtp(ftp));
-    zeichne(profil);
-    profilAbmelden = beobachte(profil, zeichne);
-  } else {
-    $('#plan-titel').textContent = erledigt ? `Heute erledigt ✓` : 'Heute frei';
-    $('#plan-sub').textContent = naechsteText;
-    knopf.disabled = true;
-    knopf.onclick = null;
-    profil.hidden = true;
-  }
+  // Gewählter Tag (wie im Kalender; Standard heute): Einheit bzw. gefahrene
+  // Fahrt darunter, Knöpfe Starten/Heute fahren · Ändern bzw. Fahrt ansehen
+  if (!woche.some(t => t.datum === gewaehlt)) gewaehlt = heuteIso;
+  const tag = woche.find(t => t.datum === gewaehlt);
+  zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechste, neuZeichnen });
 
   // Wochenstreifen: Balken in Zonenfarbe, Höhe = Dauer; ↷ = hierher verschoben
   const ol = $('#plan-woche');
@@ -152,23 +133,22 @@ export async function renderPlan({ starte, heute = new Date() } = {}) {
     const zeichen = t.status === 'erledigt' ? ' ✓' : t.einheit?.verschobenVon && t.status === 'geplant' ? ' ↷' : '';
     const text = document.createElement('span');
     text.textContent = `${t.kurz}${zeichen}`;
-    if (t.einheit) {
-      // Tag mit Einheit antippen: Blatt mit Heute fahren/Verschieben/Kürzer/Leichter/Auslassen
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('aria-label', `${li.title} — ändern`);
-      b.append(balken, text);
-      b.onclick = () => oeffneEinheit({ plan, tag: t, sessions, heute, ftp, neuZeichnen: () => renderPlan({ starte, heute }) });
-      li.append(b);
-    } else li.append(balken, text);
+    // Jeder Tag ist wählbar (Kalender): zeigt seine Einheit bzw. Fahrt darunter
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', `${li.title} — anzeigen`);
+    b.setAttribute('aria-pressed', String(t.datum === gewaehlt));
+    li.classList.toggle('gewaehlt', t.datum === gewaehlt);
+    b.append(balken, text);
+    b.onclick = () => { gewaehlt = t.datum; neuZeichnen(); };
+    li.append(b);
     ol.append(li);
   }
   // Was mit Verpasstem passiert ist, in einer Zeile
   const info = woche.filter(t => t.status === 'verpasst' && t.hinweis)
     .map(t => `${wochentagLang(t.datum)} verpasst — ${t.hinweis.replace('verschoben auf ', 'auf ')}${t.hinweis.startsWith('verschoben') ? ' verschoben' : ''}`);
-  // sonst der Hinweis, dass Tage tippbar sind
-  $('#plan-info').hidden = false;
-  $('#plan-info').textContent = info.length ? info.join(' · ') : 'Tag antippen: verschieben, kürzer, leichter oder auslassen';
+  $('#plan-info').hidden = !info.length;
+  $('#plan-info').textContent = info.join(' · ');
 
   // Länger nicht gefahren (ohne Pause-Knopf): Wiedereinstieg nach denselben Stufen anbieten
   const bezugTag = new Date((plan.aktivAb ?? plan.angelegt) + 'T00:00').getTime();
@@ -282,6 +262,80 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
     };
     oeffneModal(dlg, 'plan');
   });
+}
+
+// Der gewählte Tag in der Karte: Titel, Erklärung, Profil, Knöpfe
+function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechste, neuZeichnen }) {
+  const heuteIso = tagIso(heute);
+  const istHeute = tag.datum === heuteIso;
+  const wann = istHeute ? 'Heute' : wochentagLang(tag.datum);
+  const e = tag.einheit;
+  const knopf = $('#plan-heute'), profil = $('#plan-profil');
+  const [haupt, aendern] = [$('#plan-starten'), $('#plan-aendern')];
+  $('#plan-aktionen').hidden = false;
+  const zeigeProfil = () => {
+    profil.hidden = false;
+    const zeichne = c => drawProfile(c, baueBlocks(programmFuer(e), { ...e.opts }, ftp), effektiveFtp(ftp));
+    zeichne(profil);
+    profilAbmelden = beobachte(profil, zeichne);
+  };
+  // hauptKnopf: { label, fn, aus?, start? } — start: auch Titel/Profil tippen startet
+  const knoepfe = (hauptKnopf, mitAendern) => {
+    haupt.hidden = !hauptKnopf;
+    if (hauptKnopf) { haupt.textContent = hauptKnopf.label; haupt.disabled = !!hauptKnopf.aus; haupt.onclick = hauptKnopf.fn; }
+    aendern.hidden = !mitAendern;
+    aendern.onclick = () => oeffneEinheit({ plan, tag, sessions, heute, ftp, neuZeichnen });
+    $('#plan-aktionen').hidden = !hauptKnopf && !mitAendern;
+    knopf.disabled = !hauptKnopf?.start || !!hauptKnopf.aus;
+    knopf.onclick = knopf.disabled ? null : hauptKnopf.fn;
+  };
+
+  if (!e) {
+    $('#plan-titel').textContent = `${wann} frei`;
+    $('#plan-sub').textContent = istHeute && naechste ? `Nächste: ${wochentagLang(naechste.datum)} · ${titel(naechste)}` : 'Kein Training geplant';
+    profil.hidden = true;
+    knoepfe(null, false);
+    return;
+  }
+  const art = e.typ === 'T' ? 'FTP-Test — danach passen sich alle Einheiten an'
+    : `${e.art === 'hart' ? 'Hart' : 'Locker'} · ${e.sub ?? programmFuer(e).sub}`;
+  // Lockere Einheiten heißen nach ihrer Rolle („Grundlage", nicht „Ausdauer")
+  const p = e.art === 'locker' ? { ...programmFuer(e), name: e.name } : programmFuer(e);
+  zeigeProfil();
+
+  if (tag.status === 'erledigt') {
+    const fahrt = erledigtDurch(e, sessions);
+    $('#plan-titel').textContent = `${wann}: ${titel(e)} ✓`;
+    $('#plan-sub').textContent = `Gefahren · ${fmtTime(fahrt.dauer)} · Ø ${fahrt.avgW} W${fahrt.programm !== p.name ? ` · ${fahrt.programm}` : ''}`;
+    knoepfe(oeffneFahrt ? { label: 'Fahrt ansehen', fn: () => oeffneFahrt(fahrt) } : null, false);
+    return;
+  }
+  $('#plan-titel').textContent = `${wann}: ${titel(e)}`;
+  const zusatz = tag.status === 'verpasst' ? `Verpasst${tag.hinweis ? ` — ${tag.hinweis}` : ''}`
+    : tag.status === 'ausgelassen' ? 'Ausgelassen'
+    : e.verschobenVon ? `Verschoben von ${wochentagLang(e.verschobenVon)}` : '';
+  $('#plan-sub').textContent = zusatz ? `${zusatz} · ${art}` : art;
+  if (tag.status === 'verpasst') { knoepfe(null, false); return; }
+  if (tag.status === 'ausgelassen') { knoepfe(null, true); return; }
+  if (istHeute) {
+    knoepfe({ label: '▶ Starten', start: true, fn: () => starte(p, { vorgaben: e.opts, planInfo: planInfo(plan, e) }) }, true);
+    return;
+  }
+  // Späterer Tag: auf heute legen und gleich starten (dieselben Regeln wie Verschieben)
+  const ziel = verschiebeZiele(plan, tag.datum, sessions, heute, ftp).find(z => z.datum === heuteIso);
+  const gesperrt = !ziel || ziel.zustand === 'gesperrt';
+  if (gesperrt) $('#plan-sub').textContent = `Heute nicht möglich: ${ziel ? ziel.grund : 'heute schon gefahren'}`;
+  knoepfe({
+    label: '▶ Heute fahren', aus: gesperrt, start: true,
+    fn: async () => {
+      const neu = mitAnpassung(plan, montag(heute), { art: 'verschieben', von: tag.datum, nach: heuteIso });
+      await setSetting('plan', neu);
+      gewaehlt = heuteIso;
+      neuZeichnen();
+      const heuteE = wocheWirksam(neu, heute, sessions, heute, ftp).find(x => x.datum === heuteIso).einheit;
+      starte(p, { vorgaben: heuteE.opts, planInfo: planInfo(neu, heuteE) });
+    },
+  }, true);
 }
 
 // --- Blatt „Einheit ändern" ---

@@ -455,7 +455,7 @@ async function goHome() {
   // Demo-Parameter aus der Adresse: Reload/Update landet sonst wieder in der Demo
   if (new URLSearchParams(location.search).has('demo')) history.replaceState(history.state, '', location.pathname);
   renderProgrammTiles();          // „Zuletzt gefahren" sofort nachführen
-  renderPlan({ starte: startRide });
+  renderPlan({ starte: startRide, oeffneFahrt: s => openDetail(s) });
   zeichneGeraeteLeiste();
   detailCleanup?.();
   detailCleanup = null;
@@ -547,11 +547,11 @@ $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
 $('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
 // Trainingsplan anlegen bzw. ändern — danach die Karte neu aufbauen
-const planDialog = () => oeffnePlanDialog().then(geaendert => { if (geaendert) renderPlan({ starte: startRide }); });
+const planDialog = () => oeffnePlanDialog().then(geaendert => { if (geaendert) renderPlan({ starte: startRide, oeffneFahrt: s => openDetail(s) }); });
 $('#plan-anlegen').addEventListener('click', planDialog);
 $('#btn-plan').addEventListener('click', planDialog);
 // Rückgängig aus dem Plan-Dialog (Pausieren) meldet sich hierüber
-document.addEventListener('plan-geaendert', () => renderPlan({ starte: startRide }));
+document.addEventListener('plan-geaendert', () => renderPlan({ starte: startRide, oeffneFahrt: s => openDetail(s) }));
 $('#btn-back').addEventListener('click', () => zurueck(zurueckAusDetail));
 $('#btn-back-fahrten').addEventListener('click', () => zurueck(zurueckAusFahrten));
 $('#btn-demo-zur-fahrt').addEventListener('click', () => zurDemoFahrt(demoHistorie?.vonFahrt ?? 'vo2max'));

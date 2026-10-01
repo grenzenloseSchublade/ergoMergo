@@ -97,7 +97,12 @@ export async function browser({ breite = 412, hoehe = 915, dpr = 1, bewegung = t
     geh: async (url, ms = 2500) => { await cdp('Page.navigate', { url }); await sleep(ms); },
     klick: async (sel, ms = 450) => { await ev(`document.querySelector(${JSON.stringify(sel)}).click()`); await sleep(ms); },
     bild: async () => Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'),
-    schliesse: () => { ws.close(); proc.kill(); rmSync(profil, { recursive: true, force: true }); },
+    // Profil erst löschen, wenn Chrome beendet ist (sonst schreibt es noch hinein)
+    schliesse: () => {
+      ws.close();
+      proc.once('exit', () => { try { rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* tmp räumt das System */ } });
+      proc.kill();
+    },
   };
 }
 
