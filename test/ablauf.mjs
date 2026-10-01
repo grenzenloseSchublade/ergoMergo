@@ -95,7 +95,7 @@ try {
   soll('… und ist markiert', await b.ev(`document.querySelectorAll('.plan-tag.gewaehlt').length`), 1);
   await b.ev(`document.querySelector('.plan-tag.heute button').click()`); await sleep(600);
   soll('Heute wieder gewählt', await b.ev(`document.querySelector('#plan-titel').textContent`), titelHeute);
-  soll('Knöpfe Starten und Ändern', await b.ev(`document.querySelector('#plan-starten').textContent + '|' + !document.querySelector('#plan-aendern').hidden`), '▶ Starten|true');
+  soll('Knöpfe Starten und Ändern', await b.ev(`document.querySelector('#plan-starten').textContent + '|' + !document.querySelector('#plan-aendern').hidden`), 'Starten ›|true');
 
   // Blatt „Einheit ändern" über „Ändern": heutige Einheit auslassen, rückgängig machen
   await b.klick('#plan-aendern', 600);

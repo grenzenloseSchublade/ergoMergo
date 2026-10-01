@@ -381,13 +381,15 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
   display: grid; justify-items: center; align-content: end; gap: var(--abstand-1);
 }
 .plan-tag[data-status="ausgelassen"] i { opacity: .2; }
-/* Gewählter Tag (Kalender): umrandet; seine Einheit steht darüber in der Karte */
-.plan-tag.gewaehlt button { outline: 1px solid var(--accent); outline-offset: -1px; border-radius: var(--radius-s); }
-.plan-aktionen { display: flex; gap: var(--abstand-2); }
-.plan-haupt, .plan-neben { min-height: var(--tippflaeche); padding: 0 var(--abstand-4); border-radius: var(--radius-m); font-weight: 600; }
-.plan-haupt { flex: 1; background: var(--accent); color: var(--auf-accent); }
-.plan-haupt:disabled { background: var(--surface2); color: var(--ink3); }
-.plan-neben { background: none; border: 1px solid var(--line); color: var(--ink2); }
+/* Gewählter Tag (Kalender): umrandet, wenn es nicht heute ist (heute ist schon
+   hervorgehoben); seine Einheit steht darüber in der Karte */
+.plan-tag.gewaehlt:not(.heute) button { outline: 1px solid var(--accent); outline-offset: -1px; border-radius: var(--radius-s); }
+.plan-aktionen { display: flex; align-items: center; margin: calc(-1 * var(--abstand-1)) calc(-1 * var(--abstand-2)); }
+/* Leise Text-Aktionen wie „Alle Fahrten ›": keine Fläche, Tippfläche trotzdem 44 px */
+.plan-haupt, .plan-neben { min-height: var(--tippflaeche); padding: 0 var(--abstand-2); background: none; font-size: var(--text-md); }
+.plan-haupt { margin-left: auto; color: var(--accent); font-weight: 600; }
+.plan-haupt:disabled { color: var(--ink3); font-weight: 400; }
+.plan-neben { order: -1; color: var(--ink2); }
 .plan-tag[data-status="ausgelassen"] span { text-decoration: line-through; }
 .plan-tag i { display: block; width: 100%; max-width: 2rem; height: var(--hoehe, 2px); border-radius: var(--radius-xs); background: var(--farbe, var(--line)); }
 .plan-tag[data-status="geplant"] i { opacity: .5; }

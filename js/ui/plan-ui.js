@@ -307,7 +307,7 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
     const fahrt = erledigtDurch(e, sessions);
     $('#plan-titel').textContent = `${wann}: ${titel(e)} ✓`;
     $('#plan-sub').textContent = `Gefahren · ${fmtTime(fahrt.dauer)} · Ø ${fahrt.avgW} W${fahrt.programm !== p.name ? ` · ${fahrt.programm}` : ''}`;
-    knoepfe(oeffneFahrt ? { label: 'Fahrt ansehen', fn: () => oeffneFahrt(fahrt) } : null, false);
+    knoepfe(oeffneFahrt ? { label: 'Fahrt ansehen ›', fn: () => oeffneFahrt(fahrt) } : null, false);
     return;
   }
   $('#plan-titel').textContent = `${wann}: ${titel(e)}`;
@@ -318,7 +318,7 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
   if (tag.status === 'verpasst') { knoepfe(null, false); return; }
   if (tag.status === 'ausgelassen') { knoepfe(null, true); return; }
   if (istHeute) {
-    knoepfe({ label: '▶ Starten', start: true, fn: () => starte(p, { vorgaben: e.opts, planInfo: planInfo(plan, e) }) }, true);
+    knoepfe({ label: 'Starten ›', start: true, fn: () => starte(p, { vorgaben: e.opts, planInfo: planInfo(plan, e) }) }, true);
     return;
   }
   // Späterer Tag: auf heute legen und gleich starten (dieselben Regeln wie Verschieben)
@@ -326,7 +326,7 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
   const gesperrt = !ziel || ziel.zustand === 'gesperrt';
   if (gesperrt) $('#plan-sub').textContent = `Heute nicht möglich: ${ziel ? ziel.grund : 'heute schon gefahren'}`;
   knoepfe({
-    label: '▶ Heute fahren', aus: gesperrt, start: true,
+    label: 'Heute fahren ›', aus: gesperrt, start: true,
     fn: async () => {
       const neu = mitAnpassung(plan, montag(heute), { art: 'verschieben', von: tag.datum, nach: heuteIso });
       await setSetting('plan', neu);
