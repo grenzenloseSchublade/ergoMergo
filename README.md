@@ -11,12 +11,31 @@ Programm oder Wattzahl wählen, fahren.
 
 ## Datenschutz
 
-**Alle Daten bleiben auf dem Gerät.** Fahrten, Einstellungen und Programme
-liegen ausschließlich in der lokalen IndexedDB des Browsers — es gibt keinen
-Server, kein Konto, keine Cloud, keine Telemetrie, keine Cookies und keine
-Drittanbieter-Anfragen. Die App ist eine rein statische Seite; nach dem ersten
-Laden funktioniert sie komplett offline. Export (Backup/TCX) passiert nur auf
-ausdrücklichen Tap und landet als Datei auf dem eigenen Gerät.
+**Die App schickt deine Daten nirgendwohin** — kein Server von uns, kein Konto,
+keine Analyse, keine Cookies, keine fremden Bibliotheken. Fahrten (inklusive
+Herzfrequenz), Einstellungen und Programme liegen nur im Browser auf deinem
+Gerät. Eine Content-Security-Policy lässt den Browser Verbindungen nur zur
+eigenen Adresse der App zu — selbst eingeschleuster Code könnte nichts an einen
+fremden Server senden.
+
+Ohne Netz läuft alles. Ist das Gerät online, fragt die App nur `sw.js` ab, um
+Updates zu erkennen (beim Öffnen, beim Zurückkehren, alle 10 min — nie während
+der Fahrt); GitHub als Hoster sieht dabei wie bei jedem Seitenaufruf IP-Adresse
+und Zeitpunkt. Sicherung und TCX-Export entstehen nur auf deinen Tipp als Datei
+auf deinem Gerät.
+
+| Datenschutz-Etikett | |
+|---|---|
+| Vom Entwickler erhoben | nichts |
+| An Dritte weitergegeben | nichts |
+| Tracker / Werbung | keine |
+| Berechtigungen | Bluetooth, nur für die im Chrome-Dialog gewählten Geräte |
+| Speicherort | nur dein Browser (IndexedDB) |
+| Löschen | jederzeit in der App bzw. über die Browserdaten |
+
+Belegt durch eine automatische Selbstprüfung vor jeder Veröffentlichung —
+Prüfkatalog, Speicher-Inventar, Grenzen und „So prüfst du es selbst":
+[docs/sicherheit.md](docs/sicherheit.md). Funde bitte über [SECURITY.md](SECURITY.md) melden.
 
 ## Warum
 
@@ -183,6 +202,9 @@ Farben, Schriftgrößen, Radien und Abstände kommen nur aus `css/tokens.css`
 
 ```sh
 node tools/stil-check.mjs   # feste Werte außerhalb der Tokens (läuft auch in release.mjs)
+node tools/datenschutz-check.mjs  # jede Netzstelle freigegeben, CSP unverändert (läuft auch in release.mjs)
+node test/sicherheit.mjs    # präparierte Sicherung: kein Schadcode, bereinigt
+node test/netz.mjs          # Netz-Mitschnitt aller Abläufe inkl. Service Worker, CSP, Speicher
 node test/layout.mjs        # Fahrbildschirm in 5 Größen: Bedienleiste, Überlauf, Zentrierung, Sprünge, Panel
 node test/ablauf.mjs        # Navigation, Einstellungen, Fahrt, Programm, Demo-Wege mit Sollwerten
 ```
@@ -203,8 +225,10 @@ node tools/release.mjs            # nächste Version, setzt beide Stempel
 node tools/release.mjs --check    # prüft vor dem Push auf Drift
 ```
 
-Danach committen (Konvention: „…; Release vXX") und pushen — GitHub Pages
-deployt `main` direkt; installierte Apps bieten das Update per Button an.
+Danach committen (Konvention: „…; Release vXX") und pushen. Der Workflow
+`.github/workflows/pages.yml` prüft (Stil, Datenschutz, Sicherheit, Netz) und
+veröffentlicht nur die App-Dateien aus `tools/auslieferung.mjs`; installierte
+Apps bieten das Update per Button an.
 
 ### Diagnose-Log vom Gerät ziehen
 

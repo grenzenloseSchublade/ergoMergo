@@ -1,0 +1,49 @@
+# Veröffentlichung auf GitHub Pages — nur nach bestandenen Prüfungen und nur
+# die App-Dateien aus tools/auslieferung.mjs (keine Tests, Werkzeuge, Rohdoku).
+# Einmalig nötig: Repo-Settings → Pages → Source „GitHub Actions".
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  pruefen-und-bauen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Versionsstempel, Offline-Shell, Stil nur aus Tokens, Datenschutz-Check (statisch)
+      - run: node tools/release.mjs --check
+      # Nachweise im Browser: präparierte Sicherung, Netz-Mitschnitt, CSP, Speicher
+      - run: node test/sicherheit.mjs
+        env: { CHROME: google-chrome }
+      - run: node test/netz.mjs --protokoll
+        env: { CHROME: google-chrome }
+      - run: node tools/auslieferung.mjs _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  veroeffentlichen:
+    needs: pruefen-und-bauen
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

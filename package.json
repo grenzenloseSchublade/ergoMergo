@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Statische PWA ohne Build — package.json nur für die Test-Skripte",
   "scripts": {
-    "test": "node tools/stil-check.mjs && node test/plan.mjs && node test/sicherheit.mjs && node test/ablauf.mjs && node test/layout.mjs",
-    "stil": "node tools/stil-check.mjs"
+    "test": "node tools/stil-check.mjs && node tools/datenschutz-check.mjs && node test/plan.mjs && node test/sicherheit.mjs && node test/netz.mjs && node test/ablauf.mjs && node test/layout.mjs",
+    "stil": "node tools/stil-check.mjs",
+    "datenschutz": "node tools/datenschutz-check.mjs --register && node test/netz.mjs --protokoll"
   }
 }

@@ -20,6 +20,7 @@
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pruefeStil } from './stil-check.mjs';
+import { pruefeDatenschutz } from './datenschutz-check.mjs';
 
 const DATEIEN = {
   'sw.js':         /(const VERSION = ')v[\d.]+(')/,
@@ -68,13 +69,19 @@ if (stil.length) {
   console.error(`Stil-Prüfung: ${stil.length} feste Werte außerhalb von css/tokens.css (node tools/stil-check.mjs)\n  ${stil.join('\n  ')}`);
   process.exit(1);
 }
+// Datenschutz: jede Netzstelle freigegeben, CSP unverändert, keine Abhängigkeiten
+const datenschutz = pruefeDatenschutz().befunde;
+if (datenschutz.length) {
+  console.error(`Datenschutz-Check: ${datenschutz.length} Befunde (node tools/datenschutz-check.mjs)\n  ${datenschutz.join('\n  ')}`);
+  process.exit(1);
+}
 
 if (process.argv[2] === '--check') {
   if (sw.v !== shell.v) {
     console.error(`Versions-Drift: sw.js=${sw.v}, js/version.js=${shell.v}`);
     process.exit(1);
   }
-  console.log(`ok — beide auf ${sw.v}, Offline-Shell vollständig, Stil nur aus Tokens`);
+  console.log(`ok — beide auf ${sw.v}, Offline-Shell vollständig, Stil nur aus Tokens, Datenschutz-Check bestanden`);
   process.exit(0);
 }
 

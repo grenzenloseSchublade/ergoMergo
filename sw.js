@@ -45,7 +45,9 @@ self.addEventListener('message', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // nur eigene alte Caches — der Origin (github.io-Konto) teilt sich den
+      // Cache-Speicher mit anderen Projekten, deren Caches bleiben unberührt
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('ergomergo-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -55,15 +57,9 @@ self.addEventListener('fetch', e => {
   // sw.js selbst nie aus dem Cache beantworten oder hineinlegen —
   // sonst friert die Update-Erkennung des Watchdogs auf einem alten Stand ein
   if (new URL(e.request.url).pathname.endsWith('/sw.js')) return;
+  // Nur der eigene Cache (nie fremde Caches desselben Origins); was nicht im
+  // App-Shell steht, kommt direkt aus dem Netz und wird nicht nachgecacht
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: true }).then(hit =>
-      hit ?? fetch(e.request).then(resp => {
-        if (resp.ok && new URL(e.request.url).origin === location.origin) {
-          const copy = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return resp;
-      })
-    )
+    caches.match(e.request, { ignoreSearch: true, cacheName: CACHE }).then(hit => hit ?? fetch(e.request))
   );
 });

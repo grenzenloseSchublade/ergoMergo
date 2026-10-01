@@ -27,7 +27,8 @@ export function starteUpdateWatchdog(statusEl) {
 
   let updateLaeuft = false;   // Installation angestoßen: Knopf nicht ersetzen
   const pruefe = async () => {
-    if (updateLaeuft) return;
+    // Während der Fahrt keine Anfrage — das Update wird danach angeboten
+    if (updateLaeuft || document.getElementById('screen-ride')?.hidden === false) return;
     try {
       const text = await (await fetch(`sw.js?_=${Date.now()}`, { cache: 'no-store' })).text();
       const live = text.match(/VERSION = '([^']+)'/)?.[1];
@@ -121,6 +122,8 @@ export function starteUpdateWatchdog(statusEl) {
     }
   };
 
+  // Prüfen beim Start, beim Zurückkehren in die App und alle 10 min — nur die
+  // Datei sw.js, ohne Nutzdaten (docs/sicherheit.md, NET-03)
   pruefe();
   setInterval(pruefe, 10 * 60 * 1000);
   document.addEventListener('visibilitychange', () => {

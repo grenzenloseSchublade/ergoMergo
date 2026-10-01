@@ -118,11 +118,25 @@ export async function countdown() {
   tone(880, ctx.currentTime + 0.05, 0.09, 0.4);
 }
 
-// Sprachansage (SpeechSynthesis) — z. B. „3 Minuten, 210 Watt"
+// Sprachansage (SpeechSynthesis) — Rückfall, z. B. „3 Minuten, 210 Watt".
+// Nur mit einer LOKALEN deutschen Stimme: Online-Stimmen (localService
+// false) schicken den Text an einen Sprachdienst — dann lieber schweigen.
+let lokaleStimme;
+function stimme() {
+  if (lokaleStimme === undefined || lokaleStimme === null) {
+    const alle = globalThis.speechSynthesis?.getVoices?.() ?? [];
+    lokaleStimme = alle.find(v => v.localService && v.lang?.toLowerCase().startsWith('de')) ?? (alle.length ? false : null);
+  }
+  return lokaleStimme || null;
+}
+globalThis.speechSynthesis?.addEventListener?.('voiceschanged', () => { lokaleStimme = undefined; });
 export function sage(text) {
   try {
+    const v = stimme();
+    if (!v) return;
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'de-DE';
+    u.voice = v;
+    u.lang = v.lang;
     u.rate = 1.1;
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
