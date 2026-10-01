@@ -225,16 +225,14 @@ export class Session extends EventTarget {
   async save(final = false) {
     if (!this.count) return;
     await saveSamples(this.id, this.samples, this.count);
+    // Plan: nur speichern, wenn die Fahrt zählt (Abbruch nach 2 min ist nicht „gefahren")
+    const plan = this.planInfo && zaehltFuerPlan({ dauer: this.count, programmId: this.programm?.id }) ? this.planInfo : null;
     await saveSession({
       id: this.id, start: this.start,
       programm: this.programm?.name ?? 'Freies Fahren',
       programmId: this.programm?.id ?? null,
       seed: this.seed,
-      // Plan: nur speichern, wenn die Fahrt zählt (Abbruch nach 2 min ist nicht „gefahren")
-      ...(() => {
-        const plan = this.planInfo && zaehltFuerPlan({ dauer: this.count, programmId: this.programm?.id }) ? this.planInfo : null;
-        return { planRef: plan?.ref ?? null, plan };
-      })(),
+      planRef: plan?.ref ?? null, plan,
       ftp: this.settings.ftp || null,
       akkuProStunde: this.akkuProStunde ?? null,
       programmEndeBei: this.programmEndeBei,   // Detail-Graph: Ausfahr-Bereich absetzen

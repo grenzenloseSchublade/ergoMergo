@@ -2,7 +2,13 @@
 // Aus main.js ausgelagert; App-Rückwirkungen (Kachel-Refresh nach
 // FTP-Änderung) laufen über injizierte Callbacks.
 
-import { getSettings, setSetting, getLogs, clearLogs } from '../storage.js';
+import { getSettings, setSetting, setSettings, getLogs, clearLogs, EINSTELLUNGEN, pruefeEinstellung } from '../storage.js';
+
+// Formularfelder ↔ Einstellungen; Grenzen und Standardwerte stehen nur im
+// Schema (EINSTELLUNGEN in storage.js)
+const ZAHLFELDER = { '#set-ftp': 'ftp', '#set-schritt': 'wattSchritt', '#set-max': 'maxWatt', '#set-start': 'startWatt' };
+const SCHALTER = { '#set-sprache': 'sprachansagen', '#set-ton': 'tonAn', '#set-zwo': 'zwoImport',
+  '#set-halten-tasten': 'haltenTasten', '#set-halten-paddles': 'haltenPaddles' };
 import { esc, dateiStempel } from '../format.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';
 import { tastenName, tasteInfo, HALTEN_TAKT_MS } from '../ble/zwift-controller.js';
@@ -97,15 +103,8 @@ export async function openSettings({ nachSpeichern } = {}) {
   };
   zeigeMap(s.controllerMap);
   $('#btn-map-lernen').onclick = () => lerneTasten(zeigeMap);
-  $('#set-ftp').value = s.ftp;
-  $('#set-schritt').value = s.wattSchritt;
-  $('#set-max').value = s.maxWatt;
-  $('#set-start').value = s.startWatt;
-  $('#set-sprache').checked = s.sprachansagen;
-  $('#set-ton').checked = s.tonAn !== false;
-  $('#set-zwo').checked = s.zwoImport;
-  $('#set-halten-tasten').checked = s.haltenTasten;
-  $('#set-halten-paddles').checked = s.haltenPaddles;
+  for (const [id, k] of Object.entries(ZAHLFELDER)) $(id).value = s[k];
+  for (const [id, k] of Object.entries(SCHALTER)) $(id).checked = s[k];
 
   // Sicherung: Export/Import der kompletten Datenbank
   $('#btn-backup').onclick = async () => {
@@ -133,21 +132,15 @@ export async function openSettings({ nachSpeichern } = {}) {
   };
   dlg.onclose = async () => {
     if (dlg.returnValue !== 'ok') return;
-    // Werte in JS klemmen und runden — die Felder erzwingen keine Schritte
-    // mehr (ein Rampentest-FTP wie 248 blockierte sonst jedes Speichern)
-    const zahl = (id, min, max, standard) =>
-      Math.min(max, Math.max(min, Math.round(Number($(id).value)) || standard));
-    await setSetting('ftp', zahl('#set-ftp', 0, 500, 0));
-    await setSetting('wattSchritt', zahl('#set-schritt', 1, 50, 10));
-    await setSetting('maxWatt', zahl('#set-max', 100, 1000, 400));
-    await setSetting('startWatt', zahl('#set-start', 20, 300, 100));
-    await setSetting('sprachansagen', $('#set-sprache').checked);
-    await setSetting('tonAn', $('#set-ton').checked);
-    await setSetting('zwoImport', $('#set-zwo').checked);
-    const halten = { tasten: $('#set-halten-tasten').checked, paddles: $('#set-halten-paddles').checked };
-    await setSetting('haltenTasten', halten.tasten);
-    await setSetting('haltenPaddles', halten.paddles);
-    geraeteManager.setzeHalten(halten);         // verbundene Pads sofort umstellen
+    // Zahlen über das Schema klemmen und runden — die Felder erzwingen keine
+    // Schritte (ein Rampentest-FTP wie 248 blockierte sonst jedes Speichern);
+    // leer oder 0 → Standardwert
+    const neu = {};
+    for (const [id, k] of Object.entries(ZAHLFELDER))
+      neu[k] = pruefeEinstellung(k, Math.round(Number($(id).value)) || EINSTELLUNGEN[k].std);
+    for (const [id, k] of Object.entries(SCHALTER)) neu[k] = $(id).checked;
+    await setSettings(neu);
+    geraeteManager.setzeHalten({ tasten: neu.haltenTasten, paddles: neu.haltenPaddles });   // verbundene Pads sofort umstellen
     nachSpeichern?.();          // Zonenfarben/Profile an neue FTP anpassen
     toastOk('Einstellungen gespeichert');
   };

@@ -8,6 +8,7 @@ import { initAudio } from './signals.js';
 import { Session } from './state.js';
 import { WORKOUTS } from './workouts.js';
 import { PROGRAMME, ProgramRun, expand, baueBlocks } from './program.js';
+import { montag, plusTage, tageZwischen, tagIso } from './plan.js';
 
 const $ = s => document.querySelector(s);
 
@@ -198,19 +199,16 @@ export async function beispielHistorie() {
   }
   // Die letzten vier Wochen als Trainingsplan (8 Wochen) gefahren — damit die
   // Beispielfahrten zeigen, wie Planfahrten in Liste und Detail aussehen
-  const planStart = new Date();
-  planStart.setDate(planStart.getDate() - ((planStart.getDay() + 6) % 7) - 21);
-  planStart.setHours(0, 0, 0, 0);
+  const planStart = plusTage(montag(new Date()), -21);
   const ROLLE = { vo2max: ['H1', 'Intervalle', 'hart'], hiit4020: ['H1', 'Intervalle', 'hart'], sprint3030: ['H1', 'Intervalle', 'hart'],
     schwelle: ['H2', 'Schwelle', 'hart'], ausdauer: ['E', 'Grundlage', 'locker'], recovery: ['R', 'Regeneration', 'locker'] };
   // Klassische Programme (feste Watt) gelten als Ersatz für eine passende Einheit
   const STATT = { intervalle44: 'VO2max 4×4 · 45 min', pyramide: 'Schwelle / Sweet Spot · 60 min' };
   for (const { session: s } of fahrten) {
     if (s.start < planStart.getTime() || s.dauer < 900) continue;
-    const woche = Math.floor((s.start - planStart.getTime()) / (7 * 864e5)) + 1;
+    const woche = Math.floor(tageZwischen(planStart, new Date(s.start)) / 7) + 1;
     const [typ, name, art] = ROLLE[s.programmId] ?? ['E', 'Grundlage', 'locker'];
-    const tag = new Date(s.start);
-    const ref = `plan:${tag.getFullYear()}-${String(tag.getMonth() + 1).padStart(2, '0')}-${String(tag.getDate()).padStart(2, '0')}`;
+    const ref = `plan:${tagIso(new Date(s.start))}`;
     s.planRef = ref;
     s.plan = { ref, plan: 'demo', woche, laenge: 8, typ, name, art,
       ...(ROLLE[s.programmId] ? {} : { ersatz: true, statt: STATT[s.programmId] ?? 'Grundlage · 45 min' }) };

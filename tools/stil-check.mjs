@@ -15,7 +15,7 @@ const ABSTAND_EIGENSCHAFT = /^(?:gap|row-gap|column-gap|padding(?:-[a-z]+)*|marg
 // Kommentare durch Leerzeichen ersetzen — Zeilennummern bleiben gleich
 const ohneKommentare = (text, re) => text.replace(re, m => m.replace(/[^\n]/g, ' '));
 
-function dateien(dir, re) {
+export function dateien(dir, re) {
   const liste = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);

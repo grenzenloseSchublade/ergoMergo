@@ -51,7 +51,11 @@ export const tagIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padSta
 const ausIso = s => { const [j, m, t] = s.split('-').map(Number); return new Date(j, m - 1, t); };
 export const wochentag = d => (d.getDay() + 6) % 7;                  // Mo = 0 … So = 6
 export const montag = d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - wochentag(d));
-const plusTage = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+export const plusTage = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+// Kalendertage zwischen zwei Daten — gerundet, damit 23-/25-Stunden-Tage der
+// Zeitumstellung nicht als halber Tag zählen
+const nullUhr = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+export const tageZwischen = (a, b) => Math.round((nullUhr(b) - nullUhr(a)) / TAG_MS);
 
 // Abstand in Tagen zwischen aufeinanderfolgenden Tagen, über das Wochenende hinweg
 function kleinsterAbstand(tage) {
@@ -242,6 +246,18 @@ export function wiedereinstieg(plan, pauseAb, heute = new Date()) {
 }
 export const pausieren = (plan, heute = new Date()) => ({ ...plan, pause: { seit: tagIso(heute) } });
 
+// Ein Trainingstag: Fahrt aus dem Plan oder ≥ 15 min (keine Probefahrten)
+export const zaehltAlsTrainingstag = f => !!f.planRef || (f.dauer ?? 0) >= 900;
+
+// Wie lange nicht gefahren? seit = volle Tage ohne Fahrt bis gestern,
+// ab = erster Tag ohne Fahrt (Beginn einer gedachten Pause). Bezug ist die
+// letzte Fahrt, frühestens der Start bzw. Wiedereinstieg des Plans.
+export function tageOhneFahrt(plan, sessions, heute = new Date()) {
+  let letzte = plusTage(ausIso(plan.aktivAb ?? plan.angelegt), -1);
+  for (const f of sessions) if (zaehltAlsTrainingstag(f) && f.start > letzte.getTime()) letzte = nullUhr(new Date(f.start));
+  return { seit: tageZwischen(letzte, heute) - 1, ab: tagIso(plusTage(letzte, 1)) };
+}
+
 // Bilanz am Planende: Trainingstage (Fahrt aus dem Plan oder ≥ 15 min) vom
 // Anlegen bis heute bzw. Planende — über Pausen und Wiedereinstiege hinweg —
 // gegen die geplanten Einheiten (Länge × Tage pro Woche)
@@ -249,7 +265,7 @@ export function planBilanz(plan, sessions, heute = new Date()) {
   const ende = planEnde(plan);
   const bis = tagIso(ende && ende < heute ? ende : heute);
   const tage = new Set(sessions
-    .filter(f => f.planRef || (f.dauer ?? 0) >= 900)
+    .filter(zaehltAlsTrainingstag)
     .map(f => tagIso(new Date(f.start)))
     .filter(d => d >= plan.angelegt && d <= bis));
   return { gefahren: tage.size, geplant: (plan.laenge ?? 0) * plan.tage.length };

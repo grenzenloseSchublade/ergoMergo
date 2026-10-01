@@ -2,7 +2,7 @@
 
 import { Session } from './state.js';
 import { esc } from './format.js';
-import { getSettings, setSetting, requestPersistence, listSessions, getSession } from './storage.js';
+import { getSettings, setSetting, requestPersistence, listSessions, getSession, listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { RideScreen } from './ui/ride.js';
 import { renderHome, renderFahrten } from './ui/list.js';
 import { renderDetail } from './ui/detail.js';
@@ -30,7 +30,6 @@ async function demoStarten(variante) {
 import { zeichneGeraeteLeiste, geraeteHinweis } from './ui/geraete-leiste.js';
 import { montiereIcons, svgIcon } from './ui/icons.js';
 import { parseZwo, zwoProgramm } from './zwo.js';
-import { listProgramme, saveProgramm, deleteProgramm } from './storage.js';
 import { besteDauerleistung, effektiveFtp, FTP_ANNAHME } from './metrics.js';
 import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
 import { WORKOUTS } from './workouts.js';

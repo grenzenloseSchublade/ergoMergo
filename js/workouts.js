@@ -46,6 +46,26 @@ function fueller(minuten, f) {
   return minuten >= 1 ? [block(minuten * 60, 0.65 * f)] : [];
 }
 
+// Satz-Intervalle (Sprint 30/30, HIIT 40/20): Sätze aus 8 × (an/aus), dazwischen
+// eine Satzpause @ 50 %; Satzzahl 2–4 aus dem Hauptteil, Rest als Z2-Füller
+function saetze8({ an, aus, anPct, ausPct, pause }) {
+  return (o, ftp) => {
+    const f = eff(ftp, o);
+    const { wu, cd, main } = rahmen(o.dauer);
+    const saetze = clamp(Math.floor((main + pause) / (8 + pause)), 2, 4);
+    const blocks = rampe(wu, 0.45, 0.72, f);
+    for (let s = 0; s < saetze; s++) {
+      if (s > 0) blocks.push(block(pause * 60, 0.5 * f));
+      const satz = [];
+      for (let r = 0; r < 8; r++) satz.push(block(an, anPct * f), block(aus, ausPct * f));
+      blocks.push(...markiere(satz, '8×'));
+    }
+    blocks.push(...fueller(main - saetze * 8 - (saetze - 1) * pause, f));
+    blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
+    return blocks;
+  };
+}
+
 export const WORKOUTS = [
   {
     id: 'sprint3030',
@@ -56,21 +76,7 @@ export const WORKOUTS = [
       intensitaet: { label: 'Intensität (%)', min: 70, max: 120, default: 100 },
     },
     // Satz = 8 × (30 s @ 118 % / 30 s @ 50 %) = 8 min, dazwischen 4 min Satzpause
-    generieren(o, ftp) {
-      const f = eff(ftp, o);
-      const { wu, cd, main } = rahmen(o.dauer);
-      const saetze = clamp(Math.floor((main + 4) / 12), 2, 4);
-      const blocks = rampe(wu, 0.45, 0.72, f);
-      for (let s = 0; s < saetze; s++) {
-        if (s > 0) blocks.push(block(4 * 60, 0.5 * f));
-        const satz = [];
-        for (let r = 0; r < 8; r++) satz.push(block(30, 1.18 * f), block(30, 0.5 * f));
-        blocks.push(...markiere(satz, '8×'));
-      }
-      blocks.push(...fueller(main - saetze * 8 - (saetze - 1) * 4, f));
-      blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
-      return blocks;
-    },
+    generieren: saetze8({ an: 30, aus: 30, anPct: 1.18, ausPct: 0.5, pause: 4 }),
   },
   {
     id: 'hiit4020',
@@ -81,21 +87,7 @@ export const WORKOUTS = [
       intensitaet: { label: 'Intensität (%)', min: 70, max: 120, default: 100 },
     },
     // Satz = 8 × (40 s @ 120 % / 20 s @ 45 %) = 8 min, 5 min Satzpause
-    generieren(o, ftp) {
-      const f = eff(ftp, o);
-      const { wu, cd, main } = rahmen(o.dauer);
-      const saetze = clamp(Math.floor((main + 5) / 13), 2, 4);
-      const blocks = rampe(wu, 0.45, 0.72, f);
-      for (let s = 0; s < saetze; s++) {
-        if (s > 0) blocks.push(block(5 * 60, 0.5 * f));
-        const satz = [];
-        for (let r = 0; r < 8; r++) satz.push(block(40, 1.2 * f), block(20, 0.45 * f));
-        blocks.push(...markiere(satz, '8×'));
-      }
-      blocks.push(...fueller(main - saetze * 8 - (saetze - 1) * 5, f));
-      blocks.push(...rampe(cd, 0.6, 0.4, f, 2));
-      return blocks;
-    },
+    generieren: saetze8({ an: 40, aus: 20, anPct: 1.2, ausPct: 0.45, pause: 5 }),
   },
   {
     id: 'vo2max',

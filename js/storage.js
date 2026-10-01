@@ -12,12 +12,10 @@ function db() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const d = req.result;
-      for (const name of ['sessions', 'sessionData'])
-        if (!d.objectStoreNames.contains(name)) d.createObjectStore(name, { keyPath: 'id' });
-      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
-      if (!d.objectStoreNames.contains('programme')) d.createObjectStore('programme', { keyPath: 'id' });
-      // v2: Diagnose-Log als ein Ringpuffer-Datensatz
-      if (!d.objectStoreNames.contains('logs')) d.createObjectStore('logs', { keyPath: 'key' });
+      // Store → Schlüsselfeld (v2: logs als ein Ringpuffer-Datensatz)
+      const STORES = { sessions: 'id', sessionData: 'id', settings: 'key', programme: 'id', logs: 'key' };
+      for (const [name, keyPath] of Object.entries(STORES))
+        if (!d.objectStoreNames.contains(name)) d.createObjectStore(name, { keyPath });
     };
     req.onsuccess = () => {
       const d = req.result;
@@ -114,6 +112,10 @@ export async function getSettings() {
   return s;
 }
 export const setSetting = (key, value) => tx('settings', 'readwrite', st => st.put({ key, value }));
+// Mehrere Einstellungen in EINER Transaktion (alles oder nichts)
+export const setSettings = werte => tx('settings', 'readwrite', st => {
+  for (const [key, value] of Object.entries(werte)) st.put({ key, value });
+});
 
 // Diagnose-Log: ein Datensatz mit gedeckeltem Eintrags-Array
 const LOG_MAX = 2000;

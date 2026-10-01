@@ -17,9 +17,9 @@
 // hieße offline beim zweiten Start weißer Bildschirm (passierte bei
 // backup.js/zwo.js).
 
-import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pruefeStil } from './stil-check.mjs';
+import { pruefeStil, dateien as alleDateien } from './stil-check.mjs';
 import { pruefeDatenschutz } from './datenschutz-check.mjs';
 
 const DATEIEN = {
@@ -40,18 +40,8 @@ const shell = lies('js/version.js');
 // Alle auszuliefernden Dateien gegen die SHELL-Liste — fehlende und verwaiste Einträge
 function pruefeShell(swText) {
   const shell = new Set([...swText.match(/const SHELL = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]));
-  const dateien = [];
-  const sammle = (dir, re) => {
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, e.name);
-      if (e.isDirectory()) sammle(p, re);
-      else if (re.test(e.name)) dateien.push(p);
-    }
-  };
-  sammle('js', /\.(js|json)$/);
-  sammle('css', /\.css$/);
-  sammle('icons', /\.(png|svg)$/);
-  sammle('audio', /\.ogg$/);
+  const dateien = [['js', /\.(js|json)$/], ['css', /\.css$/], ['icons', /\.(png|svg)$/], ['audio', /\.ogg$/]]
+    .flatMap(([dir, re]) => alleDateien(dir, re));
   const fehlend = dateien.filter(d => !shell.has(d));
   const verwaist = [...shell].filter(u => u !== '.' && !u.includes('.webmanifest') && u !== 'index.html'
     && !dateien.includes(u));

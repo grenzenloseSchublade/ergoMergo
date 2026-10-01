@@ -9,9 +9,12 @@
 //   · Wochenumfang wächst im Block höchstens um ~25 %
 // Aufruf: node test/plan.mjs   (reines Node, kein Browser)
 
+// Zeitumstellung reproduzierbar prüfen (Termine unten in Europe/Berlin)
+process.env.TZ = 'Europe/Berlin';
+
 import { planAnlegen, einheitAm, wocheAb, wocheWirksam, wocheMitAnpassungen, verschiebeZiele, mitAnpassung,
   kuerzerDauer, istHart, tagIso, planWoche, pausieren, wiedereinstieg, istAbgeschlossen, planBilanz,
-  erledigtDurch, zaehltFuerPlan, planInfo, planBeschreibung,
+  erledigtDurch, zaehltFuerPlan, planInfo, planBeschreibung, planEnde, plusTage, tageOhneFahrt,
   WOCHENTAGE, DAUERN, ZIELE, TYPEN, programmFuer } from '../js/plan.js';
 
 const fehler = [];
@@ -236,6 +239,20 @@ for (const laenge of [4, 8, 12]) {
   if (text !== `Trainingsplan · Woche 2 von 8 · ${e.name}`) fehler.push(`Beschreibung: ${text}`);
   const ersatz = planBeschreibung(planInfo(plan, e, { ersatz: true }));
   if (!ersatz.includes('statt ')) fehler.push(`Ersatz-Beschreibung: ${ersatz}`);
+}
+
+// Zeitumstellung: Herbst (25.10.2026, 25-h-Tag) und Frühjahr (29.03.2026, 23-h-Tag)
+{
+  const plan = planAnlegen({ tage: [1, 3, 5], dauer: 45, ftp: 220, laenge: 4, heute: new Date(2026, 8, 28) });
+  const ende = planEnde(plan);
+  if (tagIso(ende) !== '2026-10-25') fehler.push(`Zeitumstellung: Planende ${tagIso(ende)} statt 2026-10-25`);
+  const naechster = tagIso(plusTage(ende, 1));
+  if (naechster !== '2026-10-26') fehler.push(`Zeitumstellung: Tag nach Planende ${naechster} statt 2026-10-26`);
+  const w = wiedereinstieg({ ...plan, laenge: 8 }, naechster, new Date(2026, 10, 1, 9));
+  if (w.text !== 'weiter wie geplant') fehler.push(`Zeitumstellung: Weiter nach 6 Tagen ergibt „${w.text}"`);
+  const fruehling = planAnlegen({ tage: [1, 3, 5], dauer: 45, ftp: 220, laenge: 8, heute: new Date(2026, 2, 16) });
+  const t = tageOhneFahrt(fruehling, [{ start: new Date(2026, 2, 27, 19).getTime(), dauer: 2700 }], new Date(2026, 2, 31, 8));
+  if (t.seit !== 3 || t.ab !== '2026-03-28') fehler.push(`Zeitumstellung: ${t.seit} Tage ohne Fahrt ab ${t.ab} statt 3 ab 2026-03-28`);
 }
 
 const eindeutig = [...new Set(fehler)];

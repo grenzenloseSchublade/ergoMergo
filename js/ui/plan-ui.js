@@ -6,7 +6,7 @@
 import { getSettings, setSetting, listSessions } from '../storage.js';
 import { planAnlegen, wocheAb, wocheWirksam, naechsteEinheit, wochenMinuten, titel, programmFuer,
   verschiebeZiele, mitAnpassung, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart, erledigtDurch,
-  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg, planInfo,
+  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg, planInfo, tageOhneFahrt, plusTage,
   tagIso, montag, WOCHENTAGE, DAUERN, LAENGEN, ZIELE } from '../plan.js';
 import { baueBlocks } from '../program.js';
 import { drawProfile, beobachte } from './chart.js';
@@ -16,13 +16,11 @@ import { toastOk, toastRueckgaengig } from './toast.js';
 import { fmtTime } from '../format.js';
 
 const $ = s => document.querySelector(s);
-const TAG_MS = 864e5;
 const HINWEIS_NACH_TAGEN = 7;              // ohne Fahrt → Wiedereinstieg anbieten
 const minutenText = m => m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`;
 const wochentagLang = iso => new Date(iso + 'T12:00').toLocaleDateString('de-DE', { weekday: 'short' });
 
 let profilAbmelden = null;
-const montagPlus = (d, n) => { const m = montag(d); return new Date(m.getFullYear(), m.getMonth(), m.getDate() + n); };
 
 // Offene Plan-Einheit von heute als Ersatz-Info für eine Fahrt, die nicht
 // aus dem Plan gestartet wurde (oder null: kein Plan, pausiert, frei, erledigt)
@@ -90,7 +88,7 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
     sonderzustand('Trainingsplan · abgeschlossen', 'Plan geschafft ✓',
       `${bilanz.gefahren} Trainingstage in ${plan.laenge} Wochen (${bilanz.geplant} Einheiten geplant)`
       + (plan.ftp && ftp ? ` · FTP ${plan.ftp} → ${ftp} W` : ftp ? ` · FTP jetzt ${ftp} W` : ''));
-    const ende = tagIso(new Date(planEnde(plan).getTime() + TAG_MS));
+    const ende = tagIso(plusTage(planEnde(plan), 1));
     hinweis('', {
       label: '4 Wochen weiter',
       fn: () => { const w = wiedereinstieg({ ...plan, laenge: plan.laenge + 4 }, ende, heute);
@@ -101,7 +99,7 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
   // Die Woche, wie sie wirklich läuft: verpasste harte Einheiten sind schon verschoben
   const woche = wocheWirksam(plan, heute, sessions, heute, ftp);
   const naechste = woche.find(t => t.datum > heuteIso && t.einheit)?.einheit
-    ?? naechsteEinheit(plan, montagPlus(heute, 7), ftp);
+    ?? naechsteEinheit(plan, plusTage(montag(heute), 7), ftp);
 
   // Kopf: Planwoche (von Länge), leichte Woche benannt
   const pw = Math.max(0, planWoche(plan, heute));
@@ -151,13 +149,8 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
   $('#plan-info').textContent = info.join(' · ');
 
   // Länger nicht gefahren (ohne Pause-Knopf): Wiedereinstieg nach denselben Stufen anbieten
-  const bezugTag = new Date((plan.aktivAb ?? plan.angelegt) + 'T00:00').getTime();
-  // zählt wie überall im Plan: Fahrt aus dem Plan oder ≥ 15 min (keine Probefahrten)
-  const letzteFahrt = sessions.filter(f => f.planRef || (f.dauer ?? 0) >= 900).reduce((a, f) => Math.max(a, f.start), 0);
-  const letzteAktiv = Math.max(letzteFahrt, bezugTag - TAG_MS);
-  const seit = Math.floor((new Date(heuteIso + 'T00:00') - new Date(tagIso(new Date(letzteAktiv)) + 'T00:00')) / TAG_MS) - 1;
+  const { seit, ab } = tageOhneFahrt(plan, sessions, heute);
   if (seit >= HINWEIS_NACH_TAGEN) {
-    const ab = tagIso(new Date(letzteAktiv + TAG_MS));
     const w = wiedereinstieg(plan, ab, heute);
     hinweis(`${seit} Tage ohne Fahrt — Wiedereinstieg: ${w.text}.`,
       { label: 'Übernehmen', fn: () => speichern(w.plan, `Wiedereinstieg — ${w.text}`) });

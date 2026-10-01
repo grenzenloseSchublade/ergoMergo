@@ -4,7 +4,7 @@
 import { listSessions, getSamples, saveSession } from '../storage.js';
 import { fmtTime, fmtKm, fmtDauer, esc } from '../format.js';
 import { fahrtStats } from '../metrics.js';
-import { planBeschreibung } from '../plan.js';
+import { planBeschreibung, montag, plusTage } from '../plan.js';
 
 // Zeit-in-Zonen als schmaler Farbbalken (HTML, nutzt --z1..--z6)
 export function zonenBalken(zonenSek, hoehe = 6) {
@@ -19,20 +19,10 @@ export function zonenBalken(zonenSek, hoehe = 6) {
 
 const WOCHEN_IM_DIAGRAMM = 8;
 
-// Montag 0:00 (lokal) der Woche, in der t liegt
-function wochenstart(t) {
-  const d = new Date(t);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - (d.getDay() + 6) % 7);
-  return d.getTime();
-}
-
-// Wochenstart n Wochen vor/nach ws (Kalendertage, damit Zeitumstellung egal ist)
-function wochePlus(ws, n) {
-  const d = new Date(ws);
-  d.setDate(d.getDate() + 7 * n);
-  return d.getTime();
-}
+// Montag 0:00 (lokal) der Woche, in der t liegt; n Wochen weiter (Kalendertage,
+// damit die Zeitumstellung egal ist) — Datumshelfer aus plan.js
+const wochenstart = t => montag(new Date(t)).getTime();
+const wochePlus = (ws, n) => plusTage(new Date(ws), 7 * n).getTime();
 
 // ISO-Kalenderwoche (Donnerstag der Woche bestimmt das Jahr)
 function kalenderwoche(ws) {
@@ -55,8 +45,7 @@ function wochenName(ws) {
   const jetzt = wochenstart(Date.now());
   const name = ws === jetzt ? 'Diese Woche' : ws === wochePlus(jetzt, -1) ? 'Vorwoche' : `KW ${kalenderwoche(ws)}`;
   const tag = t => new Date(t).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' });
-  const so = new Date(ws); so.setDate(so.getDate() + 6);
-  return { name, spanne: `${tag(ws)}–${tag(so)}` };
+  return { name, spanne: `${tag(ws)}–${tag(plusTage(new Date(ws), 6))}` };
 }
 
 // Balkendiagramm Fahrzeit je Woche, aktuelle Woche in Akzentfarbe
