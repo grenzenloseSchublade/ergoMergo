@@ -21,6 +21,7 @@ const minutenText = m => m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).pad
 const wochentagLang = iso => new Date(iso + 'T12:00').toLocaleDateString('de-DE', { weekday: 'short' });
 
 let profilAbmelden = null;
+let textAbmelden = null;                  // Breite ändert sich → Texthöhe neu messen
 
 // Offene Plan-Einheit von heute als Ersatz-Info für eine Fahrt, die nicht
 // aus dem Plan gestartet wurde (oder null: kein Plan, pausiert, frei, erledigt)
@@ -43,6 +44,9 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
   karte.hidden = !plan;
   profilAbmelden?.();
   profilAbmelden = null;
+  textAbmelden?.();
+  textAbmelden = null;
+  $('#plan-text').style.minHeight = '';
   if (!plan) return;
 
   const ftp = settings.ftp;
@@ -110,6 +114,9 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
   if (!woche.some(t => t.datum === gewaehlt)) gewaehlt = heuteIso;
   const tag = woche.find(t => t.datum === gewaehlt);
   zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechste, neuZeichnen });
+  const texte = woche.map(t => tagTexte({ plan, tag: t, sessions, heute, ftp, naechste }));
+  reserviereTextHoehe(texte);
+  textAbmelden = beiBreite($('#plan-karte'), () => reserviereTextHoehe(texte));
 
   // Wochenstreifen: Balken in Zonenfarbe, Höhe = Dauer; ↷ = hierher verschoben
   const ol = $('#plan-woche');
@@ -257,11 +264,70 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
   });
 }
 
+// Lockere Einheiten heißen nach ihrer Rolle („Grundlage", nicht „Ausdauer")
+const programmDerEinheit = e => (e.art === 'locker' ? { ...programmFuer(e), name: e.name } : programmFuer(e));
+
+// Titel und Erklärung eines Tages — EINE Quelle für die Anzeige und für die
+// Höhenmessung über die ganze Woche. gesperrt: späterer Tag, der heute nicht
+// gefahren werden darf (dieselben Regeln wie Verschieben)
+function tagTexte({ plan, tag, sessions, heute, ftp, naechste }) {
+  const heuteIso = tagIso(heute);
+  const istHeute = tag.datum === heuteIso;
+  const wann = istHeute ? 'Heute' : wochentagLang(tag.datum);
+  const e = tag.einheit;
+  if (!e) return { titel: `${wann} frei`,
+    sub: istHeute && naechste ? `Nächste: ${wochentagLang(naechste.datum)} · ${titel(naechste)}` : 'Kein Training geplant' };
+  const art = e.typ === 'T' ? 'FTP-Test — danach passen sich alle Einheiten an'
+    : `${e.art === 'hart' ? 'Hart' : 'Locker'} · ${e.sub ?? programmFuer(e).sub}`;
+  if (tag.status === 'erledigt') {
+    const fahrt = erledigtDurch(e, sessions);
+    const name = programmDerEinheit(e).name;
+    return { titel: `${wann}: ${titel(e)} ✓`,
+      sub: `Gefahren · ${fmtTime(fahrt.dauer)} · Ø ${fahrt.avgW} W${fahrt.programm !== name ? ` · ${fahrt.programm}` : ''}` };
+  }
+  const zusatz = tag.status === 'verpasst' ? `Verpasst${tag.hinweis ? ` — ${tag.hinweis}` : ''}`
+    : tag.status === 'ausgelassen' ? 'Ausgelassen'
+    : e.verschobenVon ? `Verschoben von ${wochentagLang(e.verschobenVon)}` : '';
+  const texte = { titel: `${wann}: ${titel(e)}`, sub: zusatz ? `${zusatz} · ${art}` : art };
+  if (istHeute || tag.status === 'verpasst' || tag.status === 'ausgelassen') return texte;
+  const ziel = verschiebeZiele(plan, tag.datum, sessions, heute, ftp).find(z => z.datum === heuteIso);
+  texte.gesperrt = !ziel || ziel.zustand === 'gesperrt';
+  if (texte.gesperrt) texte.sub = `Heute nicht möglich: ${ziel ? ziel.grund : 'heute schon gefahren'}`;
+  return texte;
+}
+
+// Nichts springt beim Tageswechsel (docs/stil.md): der Textblock bekommt die
+// Höhe des längsten Tages dieser Woche — gemessen statt pauschal zwei Zeilen
+// je Text, sonst stünde bei kurzen Texten eine große Lücke über dem Profil
+function reserviereTextHoehe(texte) {
+  const block = $('#plan-text'), t = $('#plan-titel'), s = $('#plan-sub');
+  const jetzt = [t.textContent, s.textContent];
+  block.style.minHeight = '';
+  let max = 0;
+  for (const x of texte) {
+    t.textContent = x.titel;
+    s.textContent = x.sub;
+    max = Math.max(max, block.getBoundingClientRect().height);
+  }
+  [t.textContent, s.textContent] = jetzt;
+  block.style.minHeight = `${Math.ceil(max)}px`;
+}
+
+// Nur Breitenänderungen (Drehen, Fenster) — die eigene Höhenänderung löst nichts aus
+function beiBreite(el, fn) {
+  let breite = el.getBoundingClientRect().width;
+  const ro = new ResizeObserver(() => {
+    const b = el.getBoundingClientRect().width;
+    if (b !== breite) { breite = b; fn(); }
+  });
+  ro.observe(el);
+  return () => ro.disconnect();
+}
+
 // Der gewählte Tag in der Karte: Titel, Erklärung, Profil, Knöpfe
 function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechste, neuZeichnen }) {
   const heuteIso = tagIso(heute);
   const istHeute = tag.datum === heuteIso;
-  const wann = istHeute ? 'Heute' : wochentagLang(tag.datum);
   const e = tag.einheit;
   const knopf = $('#plan-heute'), profil = $('#plan-profil');
   const [haupt, aendern] = [$('#plan-starten'), $('#plan-aendern')];
@@ -286,30 +352,18 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
     knopf.onclick = knopf.disabled ? null : hauptKnopf.fn;
   };
 
-  if (!e) {
-    $('#plan-titel').textContent = `${wann} frei`;
-    $('#plan-sub').textContent = istHeute && naechste ? `Nächste: ${wochentagLang(naechste.datum)} · ${titel(naechste)}` : 'Kein Training geplant';
-    knoepfe(null, false);
-    return;
-  }
-  const art = e.typ === 'T' ? 'FTP-Test — danach passen sich alle Einheiten an'
-    : `${e.art === 'hart' ? 'Hart' : 'Locker'} · ${e.sub ?? programmFuer(e).sub}`;
-  // Lockere Einheiten heißen nach ihrer Rolle („Grundlage", nicht „Ausdauer")
-  const p = e.art === 'locker' ? { ...programmFuer(e), name: e.name } : programmFuer(e);
+  const texte = tagTexte({ plan, tag, sessions, heute, ftp, naechste });
+  $('#plan-titel').textContent = texte.titel;
+  $('#plan-sub').textContent = texte.sub;
+  if (!e) { knoepfe(null, false); return; }
+  const p = programmDerEinheit(e);
   zeigeProfil();
 
   if (tag.status === 'erledigt') {
     const fahrt = erledigtDurch(e, sessions);
-    $('#plan-titel').textContent = `${wann}: ${titel(e)} ✓`;
-    $('#plan-sub').textContent = `Gefahren · ${fmtTime(fahrt.dauer)} · Ø ${fahrt.avgW} W${fahrt.programm !== p.name ? ` · ${fahrt.programm}` : ''}`;
     knoepfe(oeffneFahrt ? { label: 'Fahrt ansehen ›', fn: () => oeffneFahrt(fahrt) } : null, false);
     return;
   }
-  $('#plan-titel').textContent = `${wann}: ${titel(e)}`;
-  const zusatz = tag.status === 'verpasst' ? `Verpasst${tag.hinweis ? ` — ${tag.hinweis}` : ''}`
-    : tag.status === 'ausgelassen' ? 'Ausgelassen'
-    : e.verschobenVon ? `Verschoben von ${wochentagLang(e.verschobenVon)}` : '';
-  $('#plan-sub').textContent = zusatz ? `${zusatz} · ${art}` : art;
   if (tag.status === 'verpasst') { knoepfe(null, false); return; }
   if (tag.status === 'ausgelassen') { knoepfe(null, true); return; }
   if (istHeute) {
@@ -317,9 +371,7 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
     return;
   }
   // Späterer Tag: auf heute legen und gleich starten (dieselben Regeln wie Verschieben)
-  const ziel = verschiebeZiele(plan, tag.datum, sessions, heute, ftp).find(z => z.datum === heuteIso);
-  const gesperrt = !ziel || ziel.zustand === 'gesperrt';
-  if (gesperrt) $('#plan-sub').textContent = `Heute nicht möglich: ${ziel ? ziel.grund : 'heute schon gefahren'}`;
+  const gesperrt = texte.gesperrt;
   knoepfe({
     label: 'Heute fahren ›', aus: gesperrt, start: true,
     fn: async () => {

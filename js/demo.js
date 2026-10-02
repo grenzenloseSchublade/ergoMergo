@@ -4,7 +4,7 @@
 
 import { getSettings, FIELDS } from './storage.js';
 import { distanzKm, fahrtStats, kadenzBereich } from './metrics.js';
-import { initAudio } from './signals.js';
+import { initAudio, auftakt } from './signals.js';
 import { Session } from './state.js';
 import { WORKOUTS } from './workouts.js';
 import { PROGRAMME, ProgramRun, expand, baueBlocks } from './program.js';
@@ -96,6 +96,9 @@ export async function startDemo(variante, { betreteFahrt }) {
   // ?demo-Autostart hat keine User-Geste — erste Berührung entsperrt dann nach.
   initAudio();
   document.addEventListener('pointerdown', initAudio, { once: true });
+  // Auftakt wie in der echten Fahrt — nur mit Geste (Demo-Knopf); der
+  // ?demo-Autostart bleibt still, ohne Geste darf der Browser nicht spielen
+  if (settings.tonAn !== false) auftakt();
   // Reload räumt alle Demo-Timer ab — auch wenn ohne ?demo gestartet wurde
   // replace statt href: Zurück führt danach nicht wieder in die Demo
   betreteFahrt(session, settings,

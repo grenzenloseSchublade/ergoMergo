@@ -392,10 +392,10 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .plan-heute:disabled { opacity: 1; }
 .plan-karte .tile-title { font-size: var(--text-lg); }
 /* Nichts springt beim Tageswechsel (docs/stil.md): solange der Wochenstreifen
-   steht, haben Titel und Erklärung Platz für je 2 Zeilen (Zeilenhöhe 1,5 wie
-   body) und enden danach mit „…"; Profil und Knopfzeile bleiben stehen */
+   steht, enden Titel und Erklärung nach 2 Zeilen mit „…"; die Höhe des Text-
+   blocks misst plan-ui.js über alle Tage der Woche (längster Tag), Profil und
+   Knopfzeile bleiben stehen */
 .plan-text { display: grid; gap: var(--abstand-05); align-content: start; }
-.plan-karte:has(> .plan-woche:not([hidden])) .plan-text { min-height: calc(2 * 1.5 * (var(--text-lg) + var(--text-md)) + var(--abstand-05)); }
 .plan-karte:has(> .plan-woche:not([hidden])) .plan-text > * { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .tile-profile.frei { visibility: hidden; }   /* freier Tag: Platz bleibt, kein Profil */
 /* Wochenstreifen: je Tag ein Balken in der Zonenfarbe, Höhe = Dauer */

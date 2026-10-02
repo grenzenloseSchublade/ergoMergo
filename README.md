@@ -65,6 +65,13 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.4.1
+
+- **Plan-Karte kompakter:** Über dem Profil steht nur noch so viel Platz, wie
+  der längste Text dieser Woche braucht; beim Tippen auf andere Tage springt
+  weiterhin nichts.
+- **Auftakt auch in der Demo**, wenn sie über den Demo-Knopf startet.
+
 ## Neu in 3.4
 
 - **Auftakt:** Zum Start der Fahrt erklingen zwei schwere Schläge (eigene
