@@ -1,17 +1,18 @@
 // Komplettsicherung der lokalen Datenbank als JSON-Datei — und Wiederherstellung.
 // Schutz gegen Browser-Datenverlust und der Weg für den Gerätewechsel.
 
-import { listSessions, getAllSamples, saveSession, saveSamples, listProgramme, saveProgramm, getSettings, setSetting,
-  EINSTELLUNGEN, pruefeEinstellung, FIELDS } from './storage.js';
+import { listSessions, getAllSamples, saveSession, saveSamples, listProgramme, saveProgramm, getGespeicherteEinstellungen,
+  setSetting, EINSTELLUNGEN, pruefeEinstellung, FIELDS } from './storage.js';
 
 const FORMAT = 'ergomergo-backup';
 const FORMAT_VERSION = 1;
 
 export async function exportiereAlles() {
   const [sessions, samples, programme, settings] = await Promise.all([
-    listSessions(), getAllSamples(), listProgramme(), getSettings(),
+    listSessions(), getAllSamples(), listProgramme(), getGespeicherteEinstellungen(),
   ]);
-  // Gerätebezogenes bleibt draußen (gilt nur in diesem Browserprofil)
+  // Nur selbst gesetzte Werte, keine Standardwerte (die gelten beim Import von
+  // selbst). Gerätebezogenes bleibt draußen (gilt nur in diesem Browserprofil)
   const export_ = Object.fromEntries(Object.entries(settings).filter(([k]) => !EINSTELLUNGEN[k]?.lokal));
   return JSON.stringify({
     format: FORMAT,
@@ -29,6 +30,10 @@ export async function exportiereAlles() {
 // Eine Sicherung ist eine fremde Datei: Werte landen später in der Anzeige.
 // Deshalb wird jede Fahrt und jedes Programm neu aufgebaut (Allowlist), statt
 // das Objekt zu übernehmen — unbekannte oder falsch typisierte Felder fallen weg.
+// Sicherungen bis v3.3.1 enthielten immer die damalige Werksbelegung, auch
+// ohne eigene Zuordnung. Die ist keine Nutzerwahl — beim Import übergehen,
+// dann gilt wie ohne Sicherung der heutige Standard (STANDARD_TASTEN)
+const alteWerksbelegung = m => Object.keys(m ?? {}).length === 2 && m.plus === 4 && m.minus === 0;
 const zahlOk = v => typeof v === 'number' && Number.isFinite(v);
 const text = (v, max = 200) => typeof v === 'string' ? v.slice(0, max) : undefined;
 const ZAHLEN = ['start', 'dauer', 'ausgefahrenSek', 'avgW', 'maxW', 'kJ', 'avgRpm', 'np', 'hrAvg', 'hrMax',
@@ -92,6 +97,7 @@ export async function importiereAlles(text_) {
   for (const [key, value] of Object.entries(data.settings ?? {})) {
     if (EINSTELLUNGEN[key]?.lokal) continue;
     const v = pruefeEinstellung(key, value);
+    if (key === 'controllerMap' && alteWerksbelegung(v)) continue;
     if (v !== undefined) await setSetting(key, v);
   }
   if (fehler.length) throw new Error(`${n} Fahrten importiert, aber: ${fehler.join('; ')}`);

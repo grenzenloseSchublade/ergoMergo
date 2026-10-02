@@ -14,7 +14,7 @@
   --ink2: #9fb0b6;            /* Nebentext */
   --ink3: #74868d;            /* Beschriftung, Hinweise — ≥ 4,5:1 auf --bg/--surface */
 
-  /* --- Farben: Bedeutung (nie nur Farbe allein — immer mit Text/Symbol) --- */
+  /* --- Farben: Bedeutung (nie nur Farbe allein — immer mit Text/Symbol; Ausnahme: Wertfärbungen) --- */
   --accent: #45c7d4;          /* Aktion, Auswahl, aktuelle Position */
   --ok: #5fc98d;              /* verbunden, im Ziel, WEITER */
   --danger: #ef6b5e;          /* STOPP, Fehler, Löschen */
@@ -34,7 +34,7 @@
   /* Graphen */
   --power-line: #ecf3f5;
   --target-fill: rgba(69, 199, 212, .18);
-  --hr-line: #ff6f8a;         /* Herzfrequenz: Kurve, Werte, Symbol — überall gleich */
+  --hr-line: #ff6f8a;         /* Herzfrequenz: Pulskurve und Puls ab der Pulsgrenze (Symbole neutral) */
   /* LED-Statuszeile */
   --status-mulde: #050809;    /* eingelassene Tafel */
   --led-aus: rgba(236, 243, 245, .06);   /* unbeleuchtete Punkte */

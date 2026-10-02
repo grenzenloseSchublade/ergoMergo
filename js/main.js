@@ -8,7 +8,7 @@ import { renderHome, renderFahrten } from './ui/list.js';
 import { renderDetail } from './ui/detail.js';
 import { drawProfile, beobachte } from './ui/chart.js';
 import { zeigeGraphOverlay } from './ui/overlay.js';
-import { logInfo, logError } from './logger.js';
+import { logInfo, logWarn, logError, flushJetzt } from './logger.js';
 import { geraeteManager } from './ble/geraete.js';
 import { starteUpdateWatchdog, heileVersionsDrift, APP_VERSION } from './version.js';
 import { toast, toastOk, toastErr } from './ui/toast.js';
@@ -34,7 +34,7 @@ import { besteDauerleistung, effektiveFtp, FTP_ANNAHME } from './metrics.js';
 import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
 import { WORKOUTS } from './workouts.js';
 import { renderPlan, oeffnePlanDialog, planErsatzHeute } from './ui/plan-ui.js';
-import { initAudio } from './signals.js';
+import { initAudio, auftakt } from './signals.js';
 import { starteMessung } from './energie.js';
 
 const $ = s => document.querySelector(s);
@@ -44,20 +44,93 @@ function show(name) {
   for (const [k, el] of Object.entries(screens)) el.hidden = k !== name;
 }
 
+// Bildschirm während der Fahrt wach halten (Screen Wake Lock). Chrome gibt
+// die Sperre beim Verdecken selbst frei — das Sichtbarwerden fordert neu an
+// (visibilitychange unten). Entzieht das System sie bei sichtbarer Fahrt
+// (Energiesparmodus, Akku knapp), sofort neu anfordern, höchstens alle
+// WACH_NEU_MS. Verweigert Chrome sie (Energiesparmodus an), steht einmal
+// pro Fahrt ein leiser Hinweis in der LED-Zeile. Anforderung, Ablehnung und
+// Freigabe stehen im Diagnose-Log; eine Freigabe-Schleife höchstens
+// WACH_LOG_MAX-mal, am Fahrtende die Summe.
+const WACH_NEU_MS = 5000;
+const WACH_LOG_MAX = 5;
 let wakeLock = null;
-async function keepAwake(on) {
-  try {
-    if (on) {
-      wakeLock = await navigator.wakeLock?.request('screen');
-    } else {
-      await wakeLock?.release();
-      wakeLock = null;
-    }
-  } catch { /* Wake Lock optional */ }
+let wachGewollt = false;     // Fahrt läuft: Sperre soll bestehen
+let wachAnfrage = null;      // laufendes request() — nicht doppelt anfordern
+let wachLetzteAnfrage = 0;
+let wachTimer = null;
+let wachNeu = 0;             // Neuanforderungen nach Entzug in dieser Fahrt
+let wachHinweis = false;     // Hinweis in dieser Fahrt schon gezeigt
+let wachFehltGeloggt = false;
+
+function keepAwake(on) {
+  wachGewollt = on;
+  if (on) return wachAnfordern();
+  clearTimeout(wachTimer);
+  if (wachNeu > WACH_LOG_MAX) logInfo('wakelock', `Fahrtende: ${wachNeu}× nach Entzug neu angefordert`);
+  const l = wakeLock;
+  wakeLock = null;
+  return l?.release().catch(() => { /* schon frei */ });
 }
+
+function wachAnfordern() {
+  if (!navigator.wakeLock) {
+    if (!wachFehltGeloggt) { wachFehltGeloggt = true; logInfo('wakelock', 'Screen Wake Lock nicht verfügbar'); }
+    return;
+  }
+  if (wakeLock && !wakeLock.released) return;
+  wachAnfrage ??= (async () => {
+    wachLetzteAnfrage = Date.now();
+    const leise = wachNeu > WACH_LOG_MAX;
+    try {
+      const l = await navigator.wakeLock.request('screen');
+      if (!wachGewollt) { l.release().catch(() => {}); return; }   // Fahrt inzwischen vorbei
+      wakeLock = l;
+      if (!leise) logInfo('wakelock', 'angefordert — Bildschirm bleibt an');
+      l.addEventListener('release', () => {
+        if (wakeLock === l) wakeLock = null;
+        if (!wachGewollt) { logInfo('wakelock', 'freigegeben (Fahrtende)'); return; }
+        if (document.hidden) { logInfo('wakelock', 'freigegeben (Seite verdeckt)'); return; }
+        // Bei sichtbarer Fahrt entzogen: neu anfordern, gebremst
+        wachNeu++;
+        if (wachNeu <= WACH_LOG_MAX) logWarn('wakelock', 'bei sichtbarer Fahrt entzogen — fordere neu an'
+          + (wachNeu === WACH_LOG_MAX ? ' (weitere nur noch als Summe am Fahrtende)' : ''));
+        clearTimeout(wachTimer);
+        wachTimer = setTimeout(() => { if (wachGewollt && !document.hidden) wachAnfordern(); },
+          Math.max(0, wachLetzteAnfrage + WACH_NEU_MS - Date.now()));
+      });
+    } catch (err) {
+      logWarn('wakelock', 'abgelehnt', `${err.name}: ${err.message}`);
+      // Hinweis nur bei sichtbarer Fahrt — verdeckt lehnt Chrome immer ab
+      if (wachGewollt && !wachHinweis && rideScreen && !document.hidden) {
+        wachHinweis = true;
+        rideScreen.hinweis('Bildschirm bleibt nicht an — Energiesparmodus aus?');
+      }
+    }
+  })().finally(() => { wachAnfrage = null; });
+  return wachAnfrage;
+}
+
+// Seite verdeckt/sichtbar (Bildschirm gesperrt, App gewechselt). In der Fahrt
+// fürs Diagnose-Log mitschreiben, wann und wie lange — Fehlersuche „gesperrter
+// Bildschirm: keine Tastendrücke"; außerhalb der Fahrt wird nichts geloggt.
+// Beim Verdecken sofort schreiben: danach kann Android die App beenden.
+let verdecktSeit = 0;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
-  if (!screens.ride.hidden) { keepAwake(true); return; }
+  const sichtbar = document.visibilityState === 'visible';
+  if (rideScreen && !sichtbar) {
+    verdecktSeit = Date.now();
+    logInfo('bg', 'Fahrt: Seite verdeckt');
+    flushJetzt();
+  } else if (rideScreen && verdecktSeit) {
+    logInfo('bg', `Fahrt: Seite wieder sichtbar nach ${Math.round((Date.now() - verdecktSeit) / 1000)} s`);
+  }
+  if (!sichtbar) return;
+  verdecktSeit = 0;
+  // Fahrbild sichtbar: kein Update nachholen. Wake Lock fiel beim Verdecken
+  // weg — neu nur bei laufender Fahrt: nach verlasseFahrt() bleibt das Fahrbild
+  // bis goHome() stehen (Rampentest: confirm + FTP speichern dazwischen)
+  if (!screens.ride.hidden) { if (rideScreen) keepAwake(true); return; }
   ausstehendNachholen();                        // verpasstes Update nachholen
 });
 
@@ -75,7 +148,9 @@ function betreteFahrt(session, settings, onEnd, run) {
   show('ride');
   history.pushState({ screen: 'ride' }, '');
   speichereUiState();
-  keepAwake(true);
+  wachNeu = 0;
+  wachHinweis = false;
+  keepAwake(true);          // async: eine Ablehnung trifft den fertigen rideScreen
   rideScreen = new RideScreen(screens.ride, session, settings, onEnd, run);
   return rideScreen;
 }
@@ -159,6 +234,9 @@ async function startRideInner(programm, plan = null) {
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
+  // Auftakt mit dem Fahrbildschirm — der Context ist seit initAudio()
+  // (Start-Tap) entsperrt; die erste Ansage wartet ihn ab (auftaktVorbei)
+  if (settings.tonAn !== false) auftakt();
   betreteFahrt(session, settings, async (_, gespeichert) => {
     verlasseFahrt();
     // Verbindung lebt im Pool weiter — getrennt wird über die Geräte-Leiste.

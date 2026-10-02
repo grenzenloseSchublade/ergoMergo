@@ -1,5 +1,6 @@
 // Fahrbildschirm: Livewerte, ±-Bedienung mit Tastenwiederholung, Not-Stopp,
-// Statusleiste (LED-Zeile + Geräte-Symbole), Optionen-Panel, Fokus-Modi.
+// Statusleiste (LED-Zeile + Geräte-Symbole), Optionen-Panel mit Blatt
+// „Tastenbelegung", Fokus-Modi.
 // Die DOM-Elemente überleben die Fahrt (ein Fahrbildschirm für alle
 // Fahrten) — deshalb setzt der Konstruktor alles Sichtbare zurück und
 // Handler werden ZUGEWIESEN statt angehängt.
@@ -8,16 +9,20 @@ import { LiveChart, WorkoutChart, zoneColor, zoneVar, beobachte } from './chart.
 import { fmtTime, fmtKm } from '../format.js';
 import * as signal from '../signals.js';
 import { geraeteManager } from '../ble/geraete.js';
+import { OHNE_ERG } from '../ble/ftms.js';
 import { initAnsagen, ansageBlock, ansageFertig, stoppeAnsagen } from '../ansagen.js';
 import { PiP } from './pip.js';
-import { setSetting } from '../storage.js';
+import { getSettings, setSetting } from '../storage.js';
 import { beendeMessung } from '../energie.js';
-import { effektiveFtp, kadenzBereich } from '../metrics.js';
+import { effektiveFtp, kadenzBereich, ueberPulsGrenze } from '../metrics.js';
 import { logError } from '../logger.js';
-import { oeffneModal } from '../navigation.js';
+import { oeffneModal, nachAbbau } from '../navigation.js';
 import { toastErr } from './toast.js';   // nur fürs Fahrtende — danach ist die LED-Zeile weg
 
 import { geraeteHinweis } from './geraete-leiste.js';
+import { CONTROLLER_AKTIONEN, istBelegbar } from './controller-aktionen.js';
+import { tasteInfo } from '../ble/zwift-controller.js';
+import { zeigeBelegung } from './lenker-karte.js';
 import { LedZeile } from './led-zeile.js';
 import { tokenLeser } from './tokens.js';
 
@@ -53,6 +58,7 @@ export class RideScreen {
     if (run) this.#bindProgramm();
     this.#bindGeraete();
     this.#bindOptionen();
+    this.#bindBelegung();
     this.#bindPip();
     this.#bindBedienung();
     this.#bindFokus();
@@ -66,8 +72,10 @@ export class RideScreen {
     session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('target', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('error', e => this.#info(e.detail, 'err'));
-    // Startmeldung: zeigt, womit gefahren wird — und dass die Tafel lebt
-    if (session.ftms.connected) this.#info(`${session.ftms.deviceName ?? 'Trainer'} verbunden`);
+    // Startmeldung: zeigt, womit gefahren wird — und dass die Tafel lebt.
+    // Meldet der Trainer keine Leistungsvorgabe, steht stattdessen das da
+    if (session.ftms.features?.powerTarget === false) this.#info(OHNE_ERG, 'err');
+    else if (session.ftms.connected) this.#info(`${session.ftms.deviceName ?? 'Trainer'} verbunden`);
     this.render();
   }
 
@@ -90,8 +98,12 @@ export class RideScreen {
   #cursorBlinkBis = 0;
   #zustaende = new Map();     // Statuszeile: art → { text, cls }
   #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
+  #wartenderHinweis = null;   // leiser Hinweis hinter einer laufenden Fehlermeldung
   #abmelden = null;           // Resize-Beobachtung des Charts
   #rpmAbweichSeit = 0;
+  #rpmLage = '';              // 'drin' | 'daneben' | '' — Fahrbildschirm und Bild-in-Bild
+  #rpmPfeil = 0;              // daneben: +1 schneller treten, −1 langsamer (nur Bild-in-Bild)
+  #pulsUeber = false;         // Puls über der Pulsgrenze (mit Hysterese) — Fahrbildschirm und Bild-in-Bild
 
   #abo(target, typ, fn) {
     target.addEventListener(typ, fn);
@@ -129,6 +141,15 @@ export class RideScreen {
     this.#zeigeStatus();
   }
 
+  // Leiser Hinweis von außen (z. B. Bildschirm bleibt nicht an): neutrale
+  // Schrift, läuft zweimal durch und verschwindet — kein Popup. Eine gerade
+  // laufende Fehlermeldung überschreibt er nicht, er folgt ihr
+  hinweis(text) {
+    if (this.#tot) return;
+    if (this.#infoMeldung?.cls === 'err') this.#wartenderHinweis = text;
+    else this.#info(text, '');
+  }
+
 
   #zeigeStatus() {
     // Die Mulde bleibt immer stehen (feste Höhe) — nur die LED-Schrift wechselt
@@ -140,7 +161,14 @@ export class RideScreen {
       m.neu = false;
       this.#led.setze(m.text, m.cls, {
         neu,
-        fertig: () => { if (this.#infoMeldung === m) { this.#infoMeldung = null; this.#zeigeStatus(); } },
+        fertig: () => {
+          if (this.#infoMeldung !== m) return;
+          this.#infoMeldung = null;
+          const h = this.#wartenderHinweis;
+          this.#wartenderHinweis = null;
+          if (h) this.#info(h, '');
+          else this.#zeigeStatus();
+        },
       });
       return;
     }
@@ -184,10 +212,15 @@ export class RideScreen {
     });
     // Der Konstruktor-#tick des Runs lief VOR dieser Registrierung —
     // das block-Event des ersten (bzw. aktuellen) Blocks kam nie an:
-    // Ton-Referenz und Erst-Ansage von Hand nachziehen
-    if (run.aktuellerBlock && run.index >= 0) {
-      prevWatt = run.aktuellerBlock.watt;
-      this.#planeAnsage(run.aktuellerBlock, 0);
+    // Ton-Referenz und Erst-Ansage von Hand nachziehen. Die Ansage wartet,
+    // bis der Auftakt verklungen ist — außer, inzwischen kam ein Blockwechsel
+    // (Skip während der Schläge): dessen Ansage ist dann schon geplant
+    const erster = run.index >= 0 ? run.aktuellerBlock : null;
+    if (erster) {
+      prevWatt = erster.watt;
+      signal.auftaktVorbei().then(() => {
+        if (!this.#tot && run.aktuellerBlock === erster) this.#planeAnsage(erster, 0);
+      });
     }
     run.addEventListener('countdown', () => { if (this.tonAn) signal.countdown(); });
     run.addEventListener('zeitsprung', () => {
@@ -277,9 +310,19 @@ export class RideScreen {
     for (const ctrl of geraeteManager.clients('controller')) {
       if (this.#uebernommen.has(ctrl)) continue;
       this.#uebernommen.add(ctrl);
-      // Fühlbares Feedback für jeden erkannten Druck: kurzer Tick + der
-      // Zielwert blitzt auf — auch wenn die Taste (noch) keine Aktion hat
-      this.#abo(ctrl, 'button', () => {
+      // Fühlbares Feedback für jeden erkannten Druck: belegte Taste = kurzer
+      // Tick + der Zielwert blitzt auf; unbelegte Taste = eigener tiefer
+      // Doppel-Tick ohne Blitz (erkannt, aber ohne Wirkung); Ein/Aus bleibt
+      // stumm. Belegung zum Zeitpunkt des Drucks (Lern-Modus belegt live um).
+      this.#abo(ctrl, 'button', e => {
+        const bit = e.detail;
+        if (!istBelegbar(tasteInfo(bit))) return;
+        // aktionen(bit): jedes Bit einer Mehrfachbelegung, dazu die freie
+        // Gegenrichtung eines belegten Paddles (aktionenJeBit)
+        if (!ctrl.aktionen(bit).some(k => CONTROLLER_AKTIONEN.some(a => a.key === k))) {
+          if (this.tonAn) signal.tickUnbelegt();
+          return;
+        }
         if (this.tonAn) signal.tick();
         const ziel = this.$('#m-target');
         ziel.classList.remove('blitz');
@@ -382,11 +425,37 @@ export class RideScreen {
 
   // --- Panel „Geräte und Töne" hinter „⋯" oben rechts ------------------------
 
+  // Panel und Blatt der Fahrt sind NICHT modal: STOPP, ± und Beenden bleiben
+  // daneben sofort bedienbar (Tipp schließt UND wirkt). Jeder andere Tipp
+  // daneben schließt nur — er kippt nicht nebenbei den Fokus oder löst einen
+  // Chip aus. Esc schließt ebenso, Zurück über die History (oeffneModal).
+  // ausser: Knopf, der das Fenster selbst umschaltet („⋯")
+  #schliesstDaneben(dlg, ausser = null) {
+    const bedienung = this.$('.controls');
+    // Den zum Tipp gehörenden click schlucken; kommt keiner (Wischen,
+    // abgebrochene Geste), verfällt das nach kurzer Zeit
+    const schlucke = () => {
+      const weg = e => { e.preventDefault(); e.stopPropagation(); ende(); };
+      const ende = () => { clearTimeout(t); document.removeEventListener('click', weg, true); };
+      const t = setTimeout(ende, 600);
+      document.addEventListener('click', weg, true);
+    };
+    const draussen = e => {
+      if (dlg.contains(e.target) || ausser?.contains(e.target)) return;
+      dlg.close();
+      if (!bedienung.contains(e.target)) schlucke();
+    };
+    const esc = e => { if (e.key === 'Escape') dlg.close(); };
+    document.addEventListener('pointerdown', draussen, true);
+    document.addEventListener('keydown', esc);
+    dlg.addEventListener('close', () => {
+      document.removeEventListener('pointerdown', draussen, true);
+      document.removeEventListener('keydown', esc);
+    }, { once: true });
+  }
+
   // Geräte im Klartext (Name, Zustand, was ein Tipp bewirkt) und die selten
-  // gebrauchten Schalter. Das Panel ist NICHT modal: STOPP, ± und Beenden
-  // bleiben daneben sofort bedienbar (Tipp schließt es UND wirkt). Jeder
-  // andere Tipp daneben schließt nur — er kippt nicht nebenbei den Fokus
-  // oder löst einen Chip aus. Zurück und Esc schließen ebenso.
+  // gebrauchten Schalter
   #bindOptionen() {
     const dlg = this.$('#dlg-fahrt-optionen');
     const mehr = this.$('#btn-mehr');
@@ -406,21 +475,6 @@ export class RideScreen {
       dlg.style.top = `${oben}px`;
       dlg.style.maxHeight = `${Math.floor(unten - oben - rand / 2)}px`;
     };
-    const bedienung = this.$('.controls');
-    // Den zum Tipp gehörenden click schlucken; kommt keiner (Wischen,
-    // abgebrochene Geste), verfällt das nach kurzer Zeit
-    const schlucke = () => {
-      const weg = e => { e.preventDefault(); e.stopPropagation(); ende(); };
-      const ende = () => { clearTimeout(t); document.removeEventListener('click', weg, true); };
-      const t = setTimeout(ende, 600);
-      document.addEventListener('click', weg, true);
-    };
-    const draussen = e => {
-      if (dlg.contains(e.target) || mehr.contains(e.target)) return;
-      dlg.close();
-      if (!bedienung.contains(e.target)) schlucke();
-    };
-    const esc = e => { if (e.key === 'Escape') dlg.close(); };
     mehr.onclick = () => {
       if (dlg.open) { dlg.close(); return; }
       this.$('#fo-hinweis').textContent = '';   // alte Rückmeldung nicht wieder zeigen
@@ -428,13 +482,10 @@ export class RideScreen {
       mehr.setAttribute('aria-expanded', 'true');
       platziere();
       addEventListener('resize', platziere);
-      document.addEventListener('pointerdown', draussen, true);
-      document.addEventListener('keydown', esc);
+      this.#schliesstDaneben(dlg, mehr);
       dlg.addEventListener('close', () => {
         mehr.setAttribute('aria-expanded', 'false');
         removeEventListener('resize', platziere);
-        document.removeEventListener('pointerdown', draussen, true);
-        document.removeEventListener('keydown', esc);
       }, { once: true });
     };
 
@@ -451,17 +502,65 @@ export class RideScreen {
     });
   }
 
+  // --- Blatt „Tastenbelegung" (nur ansehen) aus dem Panel ---------------------
+
+  // Zeigt die gespeicherte Belegung — auch ohne verbundenen Lenker. Zugeordnet
+  // wird weiter in den Einstellungen. Das Blatt sitzt zwischen Kopfzeile und
+  // Bedienleiste (hochkant) bzw. links neben ihr (quer): Geräte-Symbole und
+  // −10/+10/STOPP/Beenden bleiben sichtbar und bedienbar; zu Hohes scrollt
+  // in sich. Die Lenker-Tasten wirken ohnehin weiter (ihre Events gehen an
+  // die Fahrt, nicht an ein Fenster).
+  #bindBelegung() {
+    const blatt = this.$('#dlg-belegung');
+    const platziere = () => {
+      const b = this.$('.controls').getBoundingClientRect();
+      const kopf = this.$('.ride-kopf').getBoundingClientRect().bottom;
+      const quer = b.left > innerWidth / 2;
+      const unten = quer ? 0 : Math.max(0, innerHeight - b.top);
+      const rechts = quer ? Math.max(0, innerWidth - b.left) : 0;
+      blatt.style.bottom = `${Math.round(unten)}px`;
+      blatt.style.right = `${Math.round(rechts)}px`;
+      blatt.style.maxWidth = `${Math.floor(innerWidth - rechts)}px`;
+      blatt.style.maxHeight = `${Math.floor(innerHeight - unten - kopf)}px`;
+    };
+    const oeffne = async () => {
+      const { controllerMap } = await getSettings();
+      if (this.#tot || blatt.open) return;
+      zeigeBelegung(this.$('#belegung-blatt-karte'), this.$('#belegung-blatt-liste'), controllerMap);
+      oeffneModal(blatt, 'belegung', { modal: false });
+      platziere();
+      blatt.scrollTop = 0;
+      addEventListener('resize', platziere);
+      this.#schliesstDaneben(blatt);
+      blatt.addEventListener('close', () => removeEventListener('resize', platziere), { once: true });
+    };
+    // Panel zu, Blatt auf — erst wenn der History-Eintrag des Panels abgebaut
+    // ist: 'close' kommt asynchron, und ein neuer Eintrag davor überholte
+    // dessen back()
+    this.$('#fo-belegung').onclick = () => {
+      const panel = this.$('#dlg-fahrt-optionen');
+      panel.addEventListener('close', () => nachAbbau(oeffne), { once: true });
+      panel.close();
+    };
+  }
+
   // --- Bild-in-Bild (Experiment) ---------------------------------------------
 
   #pipDaten() {
     const s = this.session;
     const farbVar = zoneVar(s.smoothWatt, effektiveFtp(this.settings.ftp));
+    const naechster = this.run?.naechsterBlock;
     return {
       watt: s.smoothWatt,
       ziel: s.target,
+      naechstes: naechster ? this.run.zielFuer(naechster) : null,
+      gestoppt: !!s.gestoppt,
       rest: this.#zeitAnzeige().wert,
       rpm: Math.round(s.live.rpm || 0),
+      rpmLage: this.#rpmLage,
+      rpmPfeil: this.#rpmPfeil,
       hr: s.live.hr || 0,
+      hrUeber: this.#pulsUeber,
       farbe: tokenLeser(this.root)(farbVar),
     };
   }
@@ -470,10 +569,15 @@ export class RideScreen {
     // Nur anbieten, wenn der Browser es kann. arm() hält den Stream scharf
     // und registriert den Auto-PiP-Handler — Chrome kann das Fenster dann
     // selbst öffnen, wenn die App verlassen wird
-    // Knopf im Panel (Aktion, keine Einstellung); fehlt, wo es kein PiP gibt
-    const knopf = this.$('#opt-pip');
-    const titel = this.$('#opt-pip-titel');
-    const zeige = an => { titel.textContent = an ? 'Bild-in-Bild schließen' : 'Bild-in-Bild öffnen'; };
+    // Ein Knopf: Symbol in der Kopfzeile neben „⋯" (Aktion, keine
+    // Einstellung); fehlt, wo es kein PiP gibt
+    const knopf = this.$('#btn-pip');
+    const zeige = an => {
+      const text = an ? 'Bild-in-Bild schließen' : 'Bild-in-Bild öffnen';
+      knopf.setAttribute('aria-label', text);
+      knopf.title = text;
+      knopf.setAttribute('aria-pressed', String(an));
+    };
     knopf.hidden = !PiP.verfuegbar();
     zeige(false);
     if (knopf.hidden) return;
@@ -743,7 +847,7 @@ export class RideScreen {
       }
     }
     this.#renderRpm(s, ftp);
-    this.$('#m-hr').textContent = s.live.hr || '–';
+    this.#renderPuls(s);
     this.$('#m-kj').textContent = Math.round(s.kj);
     this.$('#m-km').textContent = fmtKm(s.km);
     // Graph-Fokus = volle Detailstufe, sonst entscheidet die Chart-Höhe
@@ -754,8 +858,9 @@ export class RideScreen {
   }
 
   // Kadenz-Vorgabe: zwo-Bereich des Blocks, sonst Zonen-Default aus der
-  // Zielintensität (metrics.kadenzBereich). Unaufdringlich: die rpm-Zahl
-  // färbt sich, gedämpft erst nach 5 s Abweichung, keine Töne.
+  // Zielintensität (metrics.kadenzBereich). Unaufdringlich: im Bereich ist
+  // die rpm-Zahl leicht eingefärbt (data-bereich, Regel in app.css), gedämpft erst
+  // nach 5 s Abweichung, keine Töne.
   #rpmBereich(ftp) {
     if (!this.run) return kadenzBereich(this.session.target, ftp);
     const b = this.run.aktuellerBlock;
@@ -770,17 +875,33 @@ export class RideScreen {
     el.textContent = rpm || '–';
     const range = rpm ? this.#rpmBereich(ftp) : null;
     rangeEl.hidden = !range;
-    if (!range) { el.style.color = ''; this.#rpmAbweichSeit = 0; return; }
-    rangeEl.textContent = range.high >= 140 ? `${range.low}+` : `${range.low}–${range.high}`;
-    const drin = rpm >= range.low && rpm <= range.high;
-    this.#rpmAbweichSeit = drin ? 0 : this.#rpmAbweichSeit + 1;
-    el.style.color = drin ? 'var(--z2)' : this.#rpmAbweichSeit >= 5 ? 'var(--ink3)' : '';
+    if (!range) this.#rpmAbweichSeit = 0;
+    else {
+      rangeEl.textContent = range.high >= 140 ? `${range.low}+` : `${range.low}–${range.high}`;
+      const drin = rpm >= range.low && rpm <= range.high;
+      this.#rpmAbweichSeit = drin ? 0 : this.#rpmAbweichSeit + 1;
+    }
+    this.#rpmLage = !range ? '' : this.#rpmAbweichSeit === 0 ? 'drin' : this.#rpmAbweichSeit >= 5 ? 'daneben' : '';
+    this.#rpmPfeil = this.#rpmLage === 'daneben' ? (rpm < range.low ? 1 : -1) : 0;
+    if (this.#rpmLage) el.dataset.bereich = this.#rpmLage;
+    else delete el.dataset.bereich;
+  }
+
+  // Pulsgrenze aus den Einstellungen: ab Erreichen nur die Zahl in --hr-line
+  // (data-grenze, Regel in app.css), neutral erst 3 bpm darunter — keine
+  // Fläche, kein Ton, keine Vibration. Grenze 0 = aus.
+  #renderPuls(s) {
+    const el = this.$('#m-hr');
+    const hr = s.live.hr || 0;
+    el.textContent = hr || '–';
+    this.#pulsUeber = ueberPulsGrenze(hr, this.settings.pulsGrenze, this.#pulsUeber);
+    if (this.#pulsUeber) el.dataset.grenze = 'ueber';
+    else delete el.dataset.grenze;
   }
 
   destroy() {
     this.#tot = true;
-    const optionen = this.$('#dlg-fahrt-optionen');
-    if (optionen.open) optionen.close();
+    for (const d of [this.$('#dlg-fahrt-optionen'), this.$('#dlg-belegung')]) if (d.open) d.close();
     this.#beendet = true;
     clearTimeout(this.#ansageTimer);   // keine Geister-Ansage nach Fahrtende
     stoppeAnsagen();

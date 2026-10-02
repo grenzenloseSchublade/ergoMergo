@@ -11,13 +11,23 @@
 import { logInfo, flushJetzt } from './logger.js';
 
 let still = 0;                 // so viele kommende popstates ignorieren
+let danach = [];               // wartet, bis die eigenen Abbauten durch sind
 const modale = [];             // offene Dialoge, oberster zuletzt
 
 // Beim popstate zuerst fragen: war das unser eigenes history.back()?
 export function istStill() {
   if (!still) return false;
   still--;
+  if (!still) { const f = danach; danach = []; for (const fn of f) setTimeout(fn); }
   return true;
+}
+
+// fn ausführen, sobald die eigenen history.back() abgearbeitet sind — ein
+// Dialog, der direkt nach dem Schließen eines anderen aufgeht, legte seinen
+// Eintrag sonst an, bevor das back() läuft, und verlöre ihn wieder
+export function nachAbbau(fn) {
+  if (still) danach.push(fn);
+  else fn();
 }
 
 // Eigenen Eintrag abbauen, ohne dass popstate noch einmal navigiert

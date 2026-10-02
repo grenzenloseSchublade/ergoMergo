@@ -265,9 +265,13 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
   const e = tag.einheit;
   const knopf = $('#plan-heute'), profil = $('#plan-profil');
   const [haupt, aendern] = [$('#plan-starten'), $('#plan-aendern')];
+  // Profil und Knopfzeile behalten für jeden Tag ihren Platz — die Karte
+  // springt beim Tageswechsel nicht (freier Tag: Profil unsichtbar, die
+  // Zeile ohne Knöpfe bleibt 44 px hoch; unsichtbar = nicht vorgelesen)
   $('#plan-aktionen').hidden = false;
+  profil.hidden = false;
+  profil.classList.toggle('frei', !e);
   const zeigeProfil = () => {
-    profil.hidden = false;
     const zeichne = c => drawProfile(c, baueBlocks(programmFuer(e), { ...e.opts }, ftp), effektiveFtp(ftp));
     zeichne(profil);
     profilAbmelden = beobachte(profil, zeichne);
@@ -278,7 +282,6 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
     if (hauptKnopf) { haupt.textContent = hauptKnopf.label; haupt.disabled = !!hauptKnopf.aus; haupt.onclick = hauptKnopf.fn; }
     aendern.hidden = !mitAendern;
     aendern.onclick = () => oeffneEinheit({ plan, tag, sessions, heute, ftp, neuZeichnen });
-    $('#plan-aktionen').hidden = !hauptKnopf && !mitAendern;
     knopf.disabled = !hauptKnopf?.start || !!hauptKnopf.aus;
     knopf.onclick = knopf.disabled ? null : hauptKnopf.fn;
   };
@@ -286,7 +289,6 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
   if (!e) {
     $('#plan-titel').textContent = `${wann} frei`;
     $('#plan-sub').textContent = istHeute && naechste ? `Nächste: ${wochentagLang(naechste.datum)} · ${titel(naechste)}` : 'Kein Training geplant';
-    profil.hidden = true;
     knoepfe(null, false);
     return;
   }

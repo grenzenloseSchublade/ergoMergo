@@ -4,7 +4,7 @@
 // Bausteine + Konkatenation über die AudioContext-Uhr überleben das.
 // Live-TTS (signals.sage) bleibt nur Fallback, wenn Bausteine fehlen.
 
-import { bereit, quelleStart, quelleEnde } from './signals.js';
+import { bereit, quelleStart, quelleEnde, auftaktVorbei } from './signals.js';
 
 const BASE = new URL('../audio/', import.meta.url);
 
@@ -79,6 +79,7 @@ async function spiele(namen) {
   const gen = generation;
   const bufs = await Promise.all(namen.map(lade));
   if (bufs.some(b => !b)) return false;         // Baustein fehlt → Fallback TTS
+  await auftaktVorbei();                        // erst der Auftakt, dann die Stimme
   if (!await bereit() || ctx.state !== 'running') return false;
   if (gen !== generation) return true;          // inzwischen abgebrochen/ersetzt
   let t = ctx.currentTime + 0.05;

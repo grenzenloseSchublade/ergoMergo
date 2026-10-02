@@ -14,6 +14,12 @@ const BEKANNTE_FW = '3.5.37';        // zuletzt gegen diese CORE-2-Firmware gete
 
 import { logInfo, logWarn, logError } from '../logger.js';
 
+// Klartext, wenn der Trainer im Feature-Bit keine Leistungsvorgabe meldet —
+// Fahrbildschirm, Geräte-Leiste und Log zeigen denselben Satz. Alltagsnah und
+// vorsichtig („wohl"): die Vorgabe wird trotzdem versucht, manche Trainer
+// setzen das Bit falsch; eine neuere Firmware ist der einzige Hebel
+export const OHNE_ERG = 'Trainer hält die Watt wohl nicht selbst — Firmware aktualisieren?';
+
 // Reconnect-Obergrenze: bei 10-s-Backoff ~5 min — danach ist der Trainer
 // erfahrungsgemäß aus, nicht kurz gestört
 const MAX_RECONNECT = 30;
@@ -30,6 +36,7 @@ export class FTMS extends EventTarget {
   #reconnectVersuche = 0;
   #verbindetNeu = false;
   #onGattWeg = null;
+  #ohneErgGemeldet = false;
   connected = false;
   features = null;
   firmware = null;
@@ -75,6 +82,13 @@ export class FTMS extends EventTarget {
         simulation: !!(target & 1 << 13),
       };
     } catch { this.features = null; }
+    // Nur melden, nichts sperren: Set Target Power wird trotzdem versucht
+    // (scheitert er, kommt die Control-Point-Antwort als Fehler). Einmal je
+    // Client — der Reconnect liest dieselben Features erneut
+    if (this.features?.powerTarget === false && !this.#ohneErgGemeldet) {
+      this.#ohneErgGemeldet = true;
+      logWarn('ftms', OHNE_ERG, this.features);
+    }
 
     // Firmware-Version (Device Information Service) — rein informativ
     if (!this.firmware) {

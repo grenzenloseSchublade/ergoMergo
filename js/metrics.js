@@ -22,6 +22,16 @@ export function kadenzBereich(zielWatt, ftp) {
   return { low: 110, high: 140 };
 }
 
+// Pulsgrenze (Einstellung pulsGrenze, 0 = aus): ab Erreichen gilt der Puls
+// als darüber, neutral erst wieder PULS_HYSTERESE bpm unter der Grenze — so
+// flackert die Farbe nicht, wenn der Puls um die Grenze pendelt. Ohne Gurt
+// (hr 0) nie darüber. Nur Anzeige: kein Ton, keine Vibration.
+export const PULS_HYSTERESE = 3;
+export function ueberPulsGrenze(hr, grenze, vorher = false) {
+  if (!grenze || !hr) return false;
+  return hr >= grenze || (vorher && hr > grenze - PULS_HYSTERESE);
+}
+
 // Zonengrenzen (%FTP, Zwift-Konvention) — auch von der Chart-Färbung genutzt
 const ZONEN_GRENZEN = [0.60, 0.76, 0.90, 1.05, 1.19];
 

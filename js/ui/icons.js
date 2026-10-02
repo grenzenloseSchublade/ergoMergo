@@ -35,6 +35,9 @@ const ICONS = {
   schiebenLinks: ['m12 19-7-7 7-7', 'M19 12H5'],       // Lucide arrow-left: Paddle-Richtung
   schiebenRechts: ['M5 12h14', 'm12 5 7 7-7 7'],      // Lucide arrow-right
   power: ['M12 2v10', 'M18.4 6.6a9 9 0 1 1-12.77.04'],  // Lucide power: Ein/Aus
+  // Lucide „keyboard": Tastenbelegung (Tasten statt Gerät — „Lenker" ist gamepad)
+  tasten: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+           'M6 8h.01', 'M10 8h.01', 'M14 8h.01', 'M18 8h.01', 'M8 12h.01', 'M12 12h.01', 'M16 12h.01', 'M7 16h10'],
   // Optionen der Fahrt: „⋯"-Chip (Lucide ellipsis) und die Zeilen im Panel
   // (Lucide volume-2, picture-in-picture-2) — vorher Inline-SVG in den Chips
   mehr: ['M5 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0', 'M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0',

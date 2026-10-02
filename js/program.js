@@ -170,8 +170,19 @@ export class ProgramRun extends EventTarget {
     return this.vorbei ? null : this.blocks[Math.max(0, this.index)] ?? null;
   }
 
-  // Effektives Ziel eines Blocks inkl. ±-Offset (Anzeige, Ansage, Zonenfarbe)
-  zielFuer(b) { return b.watt + this.offset; }
+  // Block nach dem laufenden (Vorschau im Bild-in-Bild); im letzten Block
+  // und nach Programmende null
+  get naechsterBlock() {
+    return this.vorbei ? null : this.blocks[Math.max(0, this.index) + 1] ?? null;
+  }
+
+  // Effektives Ziel eines Blocks inkl. ±-Offset (Anzeige, Ansage, Zonenfarbe,
+  // Vorschau im Bild-in-Bild) — geklemmt wie setTarget (state.js): adjust()
+  // hält nur den LAUFENDEN Block in 0 … maxWatt, ein anderer Block käme mit
+  // demselben Offset darüber hinaus, gefahren wird aber der geklemmte Wert
+  zielFuer(b) {
+    return Math.min(Math.max(0, Math.round(b.watt + this.offset)), this.session.settings.maxWatt ?? Infinity);
+  }
 
   // Sekunden seit Programmende (Ausfahren) für eine Aufzeichnungszeit
   ueberzeit(elapsed) {

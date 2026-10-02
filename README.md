@@ -65,6 +65,30 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.4
+
+- **Auftakt:** Zum Start der Fahrt erklingen zwei schwere Schläge (eigene
+  Klangsynthese, kein Sample). Erst danach kommen Ansagen und Signaltöne.
+- **Lenker:** Watt hoch und runter lassen sich auf mehrere Tasten legen. Ab
+  Werk: beide Paddles nach außen = mehr Watt, nach innen = weniger. Im
+  Lern-Modus einfach mehrere Tasten drücken, dann „Weiter“.
+- **Ruhigeres Halten:** Gehaltene Tasten und Paddles zählen in einem festen,
+  wählbaren Takt (ruhig, normal, flott) statt viel zu schnell.
+- **Unbelegte Tasten** geben einen eigenen, tiefen Doppel-Tick.
+- **Tastenbelegung in der Fahrt:** im Menü „⋯“ zum Nachsehen.
+- **Bild-in-Bild:** Knopf direkt oben in der Fahrt. Das Fenster zeigt den
+  Stopp, das Ziel des nächsten Blocks und einen kleinen Pfeil, wenn die
+  Trittfrequenz zu niedrig (↑) oder zu hoch (↓) ist.
+- **Trittfrequenz im Ziel** färbt sich leicht, im Fahrbildschirm und im
+  Bild-in-Bild.
+- **Pulsgrenze** (Einstellungen, Standard aus): ab diesem Puls wird der Wert
+  in der Fahrt rot. Das Herzsymbol ist sonst neutral wie die anderen.
+- **Bildschirm bleibt an:** Verweigert das Handy das (z. B. im
+  Energiesparmodus), sagt die App es einmal in der Statuszeile.
+- **Plan-Karte springt nicht mehr** beim Tippen auf einen freien Tag.
+- **Diagnose-Log** hält Bildschirm-, Bild-in-Bild- und Audiozustand sowie das
+  Fahrtende fest (ohne Puls- oder Leistungsdaten).
+
 ## Neu in 3.3.1
 
 - **„Nur auf diesem Gerät ›“** steht jetzt sichtbar oben auf dem
@@ -196,7 +220,10 @@ Einmal verbundene Geräte (Trainer, HF-Gurt, Zwift Click/Ride) werden gemerkt;
 mit persistenten Web-Bluetooth-Berechtigungen verbindet die App beim Start ohne
 Geräteauswahl, HF-Gurt und Controller automatisch mit. Zwift-Ride-Tasten werden
 in Einstellungen → Geräte → „Tasten zuordnen" interaktiv belegt (+/−, Block
-vor/zurück, STOPP). Die rpm-Anzeige kommt direkt vom Trainer (der KICKR schätzt
+vor/zurück, STOPP), je Aktion auch mehrere Tasten; ist von einem Paddle nur
+eine Richtung belegt, wirkt es in beide. Ab Werk: Watt hoch = beide Paddles
+nach außen, Watt runter = beide nach innen, Block vor/zurück = Pfeil
+rechts/links, STOPP = B. Die rpm-Anzeige kommt direkt vom Trainer (der KICKR schätzt
 die Trittfrequenz selbst, kein externer Sensor nötig).
 
 ## Firmware

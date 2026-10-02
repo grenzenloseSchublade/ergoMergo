@@ -2,6 +2,7 @@
 // Icons: Lucide (lucide.dev, MIT) — inline, kein CDN.
 
 import { geraeteManager, eintraegeVon } from '../ble/geraete.js';
+import { OHNE_ERG } from '../ble/ftms.js';
 import { getSettings } from '../storage.js';
 import { esc } from '../format.js';
 import { toast, toastOk, toastErr } from './toast.js';
@@ -83,7 +84,10 @@ async function verbindeMitRueckmeldung(rolle, label, optionen = {}) {
       ...optionen,
       vorAuswahl: grund => { const t = geraeteHinweis(label, { grund }); if (t) toast(t); },
     });
-    if (r.ergebnis === 'gekoppelt') toastOk(`${label} gekoppelt & verbunden`);
+    // Trainer ohne Leistungsvorgabe: das sagen statt „verbunden"
+    if (rolle === 'trainer' && ['gekoppelt', 'verbunden'].includes(r.ergebnis)
+      && geraeteManager.client('trainer')?.features?.powerTarget === false) toastErr(OHNE_ERG);
+    else if (r.ergebnis === 'gekoppelt') toastOk(`${label} gekoppelt & verbunden`);
     else if (r.ergebnis === 'schlaeft') toastErr(geraeteHinweis(label, r));
     return r;
   } catch (err) {

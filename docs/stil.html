@@ -37,6 +37,8 @@
   .demo-flaeche { background: var(--bg); padding: var(--abstand-3); border: 1px dashed var(--line); border-radius: var(--radius-m); }
   .sg .controls { padding: 0; }
   .einzeln .ctl { width: 7rem; }
+  .panel-muster { align-items: start; }
+  .panel-muster > .fahrt-optionen-inhalt { width: 20rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); }
 </style>
 </head>
 <body>
@@ -47,7 +49,9 @@
     außerhalb. Regeln und Begründungen stehen in <code>docs/stil.md</code>.</p>
 
   <h2>Farben</h2>
-  <p class="einl">Automatisch aus <code>tokens.css</code> gelesen — neue Tokens erscheinen hier von selbst.</p>
+  <p class="einl">Automatisch aus <code>tokens.css</code> gelesen — neue Tokens erscheinen hier von selbst.
+    Farbe trägt nie allein Bedeutung: Zustände haben immer auch Text, Symbol oder Form. Ausnahme sind Wertfärbungen
+    („Im Bereich“, „Über Grenze“): Die Zahl selbst ist die Information, die Farbe nur ein Zusatz.</p>
   <div id="farben"></div>
 
   <h2>Schrift</h2>
@@ -73,6 +77,7 @@
     <span class="opt-icon" data-icon="mehr"></span><span class="opt-icon" data-icon="timer"></span>
     <span class="opt-icon" data-icon="rotate"></span><span class="opt-icon" data-icon="blitz"></span>
     <span class="opt-icon" data-icon="route"></span><span class="opt-icon" data-icon="wuerfel"></span>
+    <span class="opt-icon" data-icon="tasten"></span>
   </div>
 
   <h2>Karten und Kacheln</h2>
@@ -91,11 +96,73 @@
     <label class="schalter-zeile"><i class="opt-icon" data-icon="ton"></i><span class="schalter-text">Schalter-Zeile<small>Ein/Aus-Einstellung</small></span><input type="checkbox" class="schalter" checked></label>
     <label class="schalter-zeile"><i class="opt-icon" data-icon="sprache"></i><span class="schalter-text">Schalter aus<small>Erklärung, was passiert</small></span><input type="checkbox" class="schalter"></label>
     <button type="button" class="fo-zeile"><i class="opt-icon" data-icon="pip"></i><span class="fo-text"><b>Aktions-Zeile</b><small>öffnet, koppelt — kein Schalter</small></span></button>
+    <button type="button" class="fo-zeile"><i class="opt-icon" data-icon="tasten"></i><span class="fo-text"><b>Leise Aktions-Zeile ›</b></span></button>
+  </div>
+
+  <h2>Panel der Fahrt</h2>
+  <p class="einl">Hinweiszeile mit festem Platz, aber ohne eigene Lücke: hochkant liegt die Rückmeldung
+    auf einen Tipp über der Beschriftung „Töne“, die solange Platz macht — nichts verschiebt sich.
+    Quer (zweispaltig) steht sie unter den Tönen.</p>
+  <div class="muster panel-muster">
+    <div class="fahrt-optionen-inhalt">
+      <div class="fo-gruppe fo-geraete">
+        <p class="gruppe-titel">Geräte</p>
+        <button type="button" class="fo-zeile"><i class="opt-icon" data-icon="tasten"></i><span class="fo-text"><b>Tastenbelegung ›</b></span></button>
+      </div>
+      <p class="fo-hinweis"></p>
+      <div class="fo-gruppe fo-toene">
+        <p class="gruppe-titel">Töne</p>
+        <label class="schalter-zeile"><i class="opt-icon" data-icon="ton"></i><span class="schalter-text">Ohne Hinweis<small>Beschriftung sichtbar</small></span><input type="checkbox" class="schalter" checked></label>
+      </div>
+    </div>
+    <div class="fahrt-optionen-inhalt">
+      <div class="fo-gruppe fo-geraete">
+        <p class="gruppe-titel">Geräte</p>
+        <button type="button" class="fo-zeile"><i class="opt-icon" data-icon="tasten"></i><span class="fo-text"><b>Tastenbelegung ›</b></span></button>
+      </div>
+      <p class="fo-hinweis err">Kein Trainer gefunden. Ist er eingeschaltet und in der Nähe?</p>
+      <div class="fo-gruppe fo-toene">
+        <p class="gruppe-titel">Töne</p>
+        <label class="schalter-zeile"><i class="opt-icon" data-icon="ton"></i><span class="schalter-text">Mit Hinweis<small>Nichts verschiebt sich</small></span><input type="checkbox" class="schalter" checked></label>
+      </div>
+    </div>
   </div>
 
   <h2>Geräte-Zustand</h2>
   <p class="einl">Eine Regel (<code>[data-zustand]</code>) für Home-Leiste, Kopfzeile der Fahrt und Panel.</p>
   <div id="zustaende" class="spalte"></div>
+
+  <h3 class="gruppe-titel">Kopfzeilen-Symbole · Bild-in-Bild zu / offen · ⋯</h3>
+  <div class="muster">
+    <button type="button" class="kopf-pip" data-icon="pip" aria-pressed="false" aria-label="Bild-in-Bild öffnen"></button>
+    <button type="button" class="kopf-pip" data-icon="pip" aria-pressed="true" aria-label="Bild-in-Bild schließen"></button>
+    <button type="button" class="kopf-mehr" data-icon="mehr" aria-label="Optionen"></button>
+  </div>
+
+  <h2>Im Bereich</h2>
+  <p class="einl">Wert gegen eine Vorgabe (Kadenz): im Bereich leicht eingefärbt (<code>--z2</code>, keine Fläche), nach 5 s daneben
+    gedämpft, sonst neutral. <code>[data-bereich]</code> auf der Zahl; nur die Farbe wechselt, nichts springt.</p>
+  <div class="row-secondary">
+    <span><i class="si" data-icon="rotate"></i><b class="rpm-wert" data-bereich="drin">92</b> rpm <i class="rpm-range">85–95</i></span>
+    <span><i class="si" data-icon="rotate"></i><b class="rpm-wert">101</b> rpm <i class="rpm-range">85–95</i></span>
+    <span><i class="si" data-icon="rotate"></i><b class="rpm-wert" data-bereich="daneben">71</b> rpm <i class="rpm-range">85–95</i></span>
+  </div>
+
+  <h2>Über Grenze</h2>
+  <p class="einl">Wert über einer selbst gesetzten Grenze (Puls ab der Pulsgrenze): nur die Zahl in <code>--hr-line</code>,
+    Symbol und Einheit neutral wie die anderen Nebenwerte. <code>[data-grenze="ueber"]</code> auf der Zahl; neutral erst
+    3 bpm unter der Grenze, kein Ton.</p>
+  <div class="row-secondary">
+    <span><i class="si" data-icon="herzpuls"></i><b>142</b> bpm</span>
+    <span><i class="si" data-icon="herzpuls"></i><b data-grenze="ueber">171</b> bpm</span>
+  </div>
+  <h3 class="gruppe-titel">Zahlenfeld mit Hinweis · Einstellungen</h3>
+  <div class="dlg-fields spalte">
+    <div class="feld-hinweis">
+      <label>Pulsgrenze (bpm, leer = aus)<input type="number" min="100" max="220" step="1" value="170" placeholder="aus" aria-describedby="sg-puls-hinweis"></label>
+      <p class="hint" id="sg-puls-hinweis">Ab diesem Puls wird der Wert in der Fahrt rot. Dein höchster gemessener Wert: 176 bpm.</p>
+    </div>
+  </div>
 
   <h2>Chips und Knöpfe</h2>
   <div class="muster">
@@ -106,6 +173,8 @@
     <button class="demo-beispiel">Beispielfahrten ›</button>
   </div>
   <div class="dlg-actions"><button class="primary">Speichern</button><button class="ghost">Abbrechen</button></div>
+  <h3 class="gruppe-titel">Leise Hauptaktion · Schritt in einem Ablauf (Tasten zuordnen)</h3>
+  <div class="dlg-actions"><button class="ghost haupt">Weiter</button><button class="ghost">Abbrechen</button></div>
   <h3 class="gruppe-titel">Leise Text-Aktion · Statuszeile</h3>
   <p class="statuszeile">
     <button type="button" class="text-aktion"><i class="si" data-icon="schloss"></i>Nur auf diesem Gerät ›</button>
@@ -130,7 +199,9 @@
 
   <h2>Trainingsplan</h2>
   <p class="einl">Wochenstreifen: Balken in der Zonenfarbe der Einheit, Höhe = Dauer. Zustände:
-    frei, geplant (blass), erledigt (✓), verpasst (gestrichelt), hierher verschoben (↷), heute (Akzent).</p>
+    frei, geplant (blass), erledigt (✓), verpasst (gestrichelt), hierher verschoben (↷), heute (Akzent).
+    Die Plan-Karte darüber hält für jeden gewählten Tag ihre Höhe: Titel und Erklärung je 2 Zeilen, Profil und
+    Knopfzeile bleiben als leerer Platz stehen, wenn der Tag frei ist.</p>
   <div class="spalte">
     <ol class="plan-woche">
       <li class="plan-tag" data-status="frei"><i></i>Mo</li>
@@ -175,13 +246,36 @@
   </div>
 
   <h2>Tastensymbole</h2>
+  <p class="einl">Je Taste ein Symbol aus <code>js/ui/tasten-symbol.js</code>. Ein Paddle mit einer Richtung je
+    Symbol (Standard: außen = Watt hoch, innen = Watt runter); wirken beide Richtungen gleich, ist es
+    <em>eine</em> Taste: ein Symbol mit beiden Pfeilen (die letzten zwei).</p>
   <div class="muster" id="tasten"></div>
+
+  <h2>Lenkeransicht und Belegung</h2>
+  <p class="einl">Live mit <code>zeigeBelegung()</code> aus <code>js/ui/lenker-karte.js</code> (Standardbelegung) —
+    dieselbe Darstellung in den Einstellungen und im Blatt „Tastenbelegung“ der Fahrt. Dort ist das Blatt
+    nicht modal und sitzt zwischen Kopfzeile und Bedienleiste (quer links daneben): STOPP bleibt frei.
+    Eine Aktion kann mehrere Tasten haben: jede trägt ihre Marke, die Liste zeigt sie untereinander.
+    Verschieden belegte Paddle-Richtungen stehen übereinander (<code>.lk-stapel</code>, ← oben), die Marke außen.</p>
+  <div class="spalte">
+    <div id="sg-lenker"></div>
+    <details class="belegung-details" open><summary>Als Liste</summary><ul id="sg-belegung" class="belegung"></ul></details>
+    <p class="hint">Ändern: Einstellungen → Geräte → „Tasten zuordnen“</p>
+  </div>
+  <h3 class="gruppe-titel">Lern-Modus · gewählte Tasten des Schritts</h3>
+  <div class="spalte">
+    <p id="map-schritt">Drücke die Taste für: Watt hoch (+)</p>
+    <div class="tasten-gewaehlt" id="sg-gewaehlt"></div>
+    <p class="hint">Weitere Taste drücken oder Weiter. Nochmal drücken nimmt eine Taste wieder heraus.</p>
+  </div>
 </main>
 
 <script type="module">
   import { montiereIcons, svgIcon } from '../js/ui/icons.js';
   import { LedZeile } from '../js/ui/led-zeile.js';
   import { tastenSymbol } from '../js/ui/tasten-symbol.js';
+  import { zeigeBelegung, tasteMitName } from '../js/ui/lenker-karte.js';
+  import { STANDARD_TASTEN } from '../js/storage.js';
 
   // Tokens aus der Quelldatei lesen (Name, Wert, Kommentar, Abschnitt)
   const text = await (await fetch('../css/tokens.css')).text();
@@ -238,7 +332,10 @@
   new LedZeile(document.querySelector('#led-2')).setze('Demo-Herzgurt verbunden', 'ok', { durchlaeufe: Infinity });
   new LedZeile(document.querySelector('#led-3')).setze('Trainer getrennt — verbindet neu', 'err', { durchlaeufe: Infinity });
   document.querySelector('#tasten').innerHTML = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 24, 25, 26, 27]
-    .map(b => { try { return tastenSymbol(b); } catch { return ''; } }).join('');
+    .map(b => { try { return tastenSymbol(b); } catch { return ''; } }).join('')
+    + [24, 26].map(b => tastenSymbol(b, { ganz: true })).join('');
+  zeigeBelegung(document.querySelector('#sg-lenker'), document.querySelector('#sg-belegung'), STANDARD_TASTEN);
+  document.querySelector('#sg-gewaehlt').innerHTML = [26, 25].map(bit => tasteMitName({ bit, ganz: false })).join('');
 </script>
 </body>
 </html>

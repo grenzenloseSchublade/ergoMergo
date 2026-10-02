@@ -40,7 +40,12 @@ export class Session extends EventTarget {
   #letzteHf = 0;
 
   #ramp = null;               // { from, to, t0 }
-  #onReconnect = () => { this.#lastWritten = -1; };
+  // Nach Reconnect Ziel neu schreiben; fürs Diagnose-Log festhalten, in
+  // welchem Zustand die Fahrt die Verbindung zurückbekam
+  #onReconnect = () => {
+    this.#lastWritten = -1;
+    logInfo('session', `Reconnect während der Fahrt: ${this.gestoppt ? 'gestoppt' : this.status}, Ziel ${this.target} W`);
+  };
   #lastWritten = -1;
   #writeTimer = null;
   #tickTimer = null;
@@ -252,14 +257,19 @@ export class Session extends EventTarget {
     this.detachHR();
     // Ziel 0 zuverlässig absetzen: busy/Ratenlimit kurz aussitzen (der
     // Writer-Loop ist schon gestoppt, hier hilft niemand mehr nach)
+    // Ausgang fürs Diagnose-Log: bestätigt oder warum nicht
+    let grund = 'Control Point blieb 1,2 s beschäftigt';
     for (let i = 0; i < 8; i++) {
-      if (!this.ftms.connected) break;
+      if (!this.ftms.connected) { grund = 'Trainer nicht verbunden'; break; }
       if (!this.ftms.busy) {
-        try { await this.ftms.setTargetPower(0); } catch { /* Trainer ggf. weg */ }
+        try { await this.ftms.setTargetPower(0); grund = null; }
+        catch (err) { grund = `Fehler: ${err.message}`; }   // Trainer ggf. weg
         break;
       }
       await new Promise(r => setTimeout(r, 150));
     }
+    if (grund) logWarn('session', 'Fahrtende: Ziel 0 W nicht bestätigt', grund);
+    else logInfo('session', 'Fahrtende: Ziel 0 W bestätigt');
     await this.save(true);
   }
 }

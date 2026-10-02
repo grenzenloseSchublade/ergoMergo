@@ -3,10 +3,17 @@
 // Akzentfarbe hervorgehoben, links/rechts die Tastensymbole der jeweiligen Lenkerseite.
 // Belegte Tasten tragen die Aktion als Marke. Zone und Anordnung kommen aus
 // der Tastentabelle (Felder zone/raster), die Symbole aus tasten-symbol.js.
+// Ein Paddle, dessen Richtungen dasselbe auslösen, ist eine Taste: ein Symbol
+// (← L →) mit einer Marke; sind die Richtungen verschieden belegt (Standard:
+// außen +, innen −), steht jede Richtung mit eigener Marke da.
+// Eine Aktion kann mehrere Tasten haben — jede trägt ihre Marke.
+// Dazu die Belegung als Liste — Einstellungen und das Blatt in der Fahrt
+// zeigen beides über zeigeBelegung().
 
-import { alleTasten } from '../ble/zwift-controller.js';
+import { alleTasten, tastenName, tastenGruppe, aktionenJeBit, wirktGleich, mitStandardBelegung } from '../ble/zwift-controller.js';
 import { tastenSymbol } from './tasten-symbol.js';
 import { CONTROLLER_AKTIONEN, istBelegt, istBelegbar } from './controller-aktionen.js';
+import { tastenVon } from '../storage.js';
 
 const ZONEN = [
   ['oben', 'Griff oben'],
@@ -38,23 +45,32 @@ const HERVOR = {
 const piktogramm = zone =>
   `<svg class="lk-pikto" viewBox="0 0 48 48" aria-hidden="true">${UMRISS}${HERVOR[zone]}</svg>`;
 
-// map: { aktion → bit }, blink: Bit, das gerade gedrückt wurde (Lern-Modus)
+// map: { aktion → Bit oder Liste }, blink: Bit, das gerade gedrückt wurde (Lern-Modus)
 export function lenkerKarte(map = {}, { blink = null } = {}) {
-  const aktionJeBit = new Map(CONTROLLER_AKTIONEN
-    .filter(a => istBelegt(map, a.key)).map(a => [map[a.key], a.key]));
-  const tasten = alleTasten().filter(istBelegbar);
+  const jeBit = aktionenJeBit(map);
+  // Marke = erste bekannte Aktion der Taste (wie bisher eine je Taste)
+  const aktionVon = bit => (jeBit.get(bit) ?? []).find(a => MARKE[a]);
+  // Wirkt ein Paddle in beide Richtungen gleich, steht nur sein erster Eintrag
+  // (als ganze Taste) in der Ansicht; getrennte Richtungen in der Reihenfolge
+  // der Tastentabelle (außen liegt außen)
+  const tasten = alleTasten().filter(t => istBelegbar(t)
+    && (tastenGruppe(t.bit)[0] === t.bit || !wirktGleich(jeBit, t.bit)));
 
   const taste = t => {
-    const aktion = aktionJeBit.get(t.bit);
+    const ganz = wirktGleich(jeBit, t.bit);
+    const bits = ganz ? tastenGruppe(t.bit) : [t.bit];
+    const aktion = aktionVon(t.bit);
     const pos = t.raster ? ` style="grid-row:${t.raster[0] + 1};grid-column:${t.raster[1] + 1}"` : '';
-    const cls = ['lk-taste', aktion ? 'belegt' : '', t.bit === blink ? 'blink' : ''].filter(Boolean).join(' ');
-    return `<span class="${cls}"${pos}>${tastenSymbol(t.bit)}` +
+    const cls = ['lk-taste', aktion ? 'belegt' : '', bits.includes(blink) ? 'blink' : ''].filter(Boolean).join(' ');
+    return `<span class="${cls}"${pos}>${tastenSymbol(t.bit, { ganz })}` +
       (aktion ? `<b class="lk-marke">${MARKE[aktion]}</b>` : '') + '</span>';
   };
   const gruppe = (seite, zone) => {
     const liste = tasten.filter(t => t.seite === seite && t.zone === zone);
     const raster = liste.some(t => t.raster);
-    return `<div class="lk-gruppe lk-${seite}${raster ? ' lk-raster' : ''}">${liste.map(taste).join('')}</div>`;
+    // Paddle in getrennten Richtungen: übereinander, damit die Marken frei stehen
+    const stapel = liste.length > 1 && liste.every(t => t.analogOrt !== undefined);
+    return `<div class="lk-gruppe lk-${seite}${raster ? ' lk-raster' : ''}${stapel ? ' lk-stapel' : ''}">${liste.map(taste).join('')}</div>`;
   };
 
   // Legende: nur Aktionen, die belegt sind — erklärt die Marken an den Tasten
@@ -69,4 +85,39 @@ export function lenkerKarte(map = {}, { blink = null } = {}) {
       ${gruppe('rechts', zone)}`).join('')}
     ${legende ? `<div class="lk-legende">${legende}</div>` : ''}
   </div>`;
+}
+
+// Tasten einer Aktion zum Anzeigen: ein Paddle, dessen Richtungen dasselbe
+// auslösen, einmal als ganze Taste, sonst jede Taste/Richtung für sich.
+// jeBit = aktionenJeBit() der Belegung, in der die Taste gilt
+export function anzeigeTasten(wert, jeBit) {
+  const gesehen = new Set();
+  return tastenVon(wert).flatMap(bit => {
+    const ganz = wirktGleich(jeBit, bit);
+    const id = ganz ? tastenGruppe(bit)[0] : bit;
+    if (gesehen.has(id)) return [];
+    gesehen.add(id);
+    return [{ bit, ganz }];
+  });
+}
+// Eine Taste als Symbol + Klartextname (Liste, Lern-Modus)
+export const tasteMitName = ({ bit, ganz }) =>
+  `<span class="belegung-taste">${tastenSymbol(bit, { ganz })}<small>${tastenName(bit, { ganz })}</small></span>`;
+
+// Belegung als Liste: Aktion links, rechts darunter je Taste Symbol + Name
+export function belegungsListe(map = {}) {
+  const jeBit = aktionenJeBit(map);
+  const belegt = CONTROLLER_AKTIONEN.filter(a => istBelegt(map, a.key));
+  return belegt.length
+    ? belegt.map(a => `<li>${a.label}<span class="belegung-tasten">${anzeigeTasten(map[a.key], jeBit).map(tasteMitName).join('')}</span></li>`).join('')
+    : '<li class="leer">Keine Tasten zugeordnet.</li>';
+}
+
+// Lenkeransicht und Liste an ihre Plätze schreiben (gespeicherte Belegung —
+// auch ohne verbundenen Lenker — samt Standard für fehlende Aktionen, so wie
+// sie der Lenker tatsächlich anwendet)
+export function zeigeBelegung(karte, liste, map) {
+  const wirksam = mitStandardBelegung(map ?? {});
+  karte.innerHTML = lenkerKarte(wirksam);
+  liste.innerHTML = belegungsListe(wirksam);
 }

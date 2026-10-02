@@ -4,7 +4,7 @@
 // sobald Chrome das default ausliefert). Ohne getDevices degradiert alles
 // sauber auf den bisherigen Chooser-Weg.
 
-import { getSettings, setSetting, STANDARD_TASTEN } from '../storage.js';
+import { getSettings, setSetting } from '../storage.js';
 import { logInfo, logWarn } from '../logger.js';
 import { FTMS } from './ftms.js';
 import { HeartRate } from './hr.js';
@@ -211,10 +211,10 @@ class GeraeteManager extends EventTarget {
   // Gelernte Tastenbelegung sofort an verbundene Controller durchreichen —
   // die Instanzen lesen ihre Map sonst nur beim Verbindungsaufbau
   setzeControllerMap(map) {
-    for (const c of this.#clients.controller) c.map = { ...STANDARD_TASTEN, ...map };
+    for (const c of this.#clients.controller) c.map = map;   // ergänzt den Standard selbst
   }
 
-  // Halten-Verhalten (Einstellungen) ebenso sofort durchreichen
+  // Halten-Verhalten (Einstellungen: Schalter und Tempo) ebenso sofort durchreichen
   setzeHalten(halten) {
     for (const c of this.#clients.controller) c.halten = { ...c.halten, ...halten };
   }
@@ -223,7 +223,7 @@ class GeraeteManager extends EventTarget {
     if (rolle === 'trainer') return new FTMS();
     if (rolle === 'hr') return new HeartRate();
     return new ZwiftController(settings.controllerMap,
-      { tasten: settings.haltenTasten, paddles: settings.haltenPaddles });
+      { tasten: settings.haltenTasten, paddles: settings.haltenPaddles, tempo: settings.haltenTempo });
   }
 
   // Chooser öffnen (braucht User-Geste), Gerät merken und direkt verbinden.

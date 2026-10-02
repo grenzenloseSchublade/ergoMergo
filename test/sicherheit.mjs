@@ -24,7 +24,7 @@ const boese = {
   format: 'ergomergo-backup', version: 1,
   settings: {
     ftp: 230, maxWatt: 99999, icuApiKey: 'FREMDER-KEY', geraete: { trainer: { id: 'x', name: PAYLOAD } },
-    controllerMap: { plus: PAYLOAD, minus: 3, skip: null }, zwoImport: true, ['__proto__']: { boese: 1 },
+    controllerMap: { plus: PAYLOAD, minus: 3, skip: null }, zwoImport: true, ['__proto__']: { boese: 1 }, pulsGrenze: 999,
     unbekannt: 'x',
   },
   sessions: [
@@ -71,6 +71,7 @@ try {
       g.onsuccess = () => { r(g.result ?? null); q.result.close(); }; }; })`), null);
   soll('Geräte nie importiert', s.geraete, undefined);
   soll('Grenzen gelten auch beim Import', s.maxWatt, 1000);
+  soll('… auch für die Pulsgrenze', s.pulsGrenze, 220);
   soll('Tastenbelegung nur mit gültigen Bits', s.controllerMap, { minus: 3, skip: null });
   soll('Unbekannte Einstellungen verworfen', 'unbekannt' in s, false);
   soll('Kein Prototyp-Eingriff', await b.ev('({}).boese ?? null'), null);
@@ -78,10 +79,44 @@ try {
   const programme = await b.ev(`import('./js/storage.js').then(m => m.listProgramme())`);
   soll('Gültiges Programm übernommen, kaputtes verworfen', programme.map(p => p.id), ['zwo-1']);
 
+  // Tastenbelegung: Einzelbit oder Liste (Mehrfachbelegung). Ein Paddle mit
+  // EINER Richtung wirkt nach dem Import in beide; Listen nur eindeutig, mit
+  // 1–4 bekannten Tasten ohne Ein/Aus; Text, Brüche, Bits außerhalb 0–63,
+  // kaputte Listen und fremde Schlüssel fallen weg
+  const tastenImport = async controllerMap => {
+    await b.ev(`import('./js/backup.js').then(m => m.importiereAlles(${JSON.stringify(JSON.stringify({ format: 'ergomergo-backup', version: 1, settings: { controllerMap } }))}))`);
+    return b.ev(`Promise.all([import('./js/storage.js'), import('./js/ble/zwift-controller.js')]).then(async ([st, z]) => {
+      const map = (await st.getSettings()).controllerMap, c = new z.ZwiftController(map);
+      return { map, wirkt: [24, 25, 26, 27, 0, 2].map(bit => c.aktionen(bit).join('+')) }; })`);
+  };
+  soll('Tastenbelegung (Paddle je eine Richtung) übernommen und beidseitig wirksam',
+    await tastenImport({ plus: 27, minus: 24, skip: 2, prev: 0, stopp: 5 }),
+    { map: { plus: 27, minus: 24, skip: 2, prev: 0, stopp: 5 }, wirkt: ['minus', 'minus', 'plus', 'plus', 'prev', 'skip'] });
+  soll('Tastenbelegung als Liste übernommen, jedes Bit wirkt',
+    await tastenImport({ plus: [26, 25], minus: [27, 24], skip: [2], prev: null, stopp: 5 }),
+    { map: { plus: [26, 25], minus: [27, 24], skip: 2, prev: null, stopp: 5 }, wirkt: ['minus', 'plus', 'plus', 'minus', '', 'skip'] });   // [2] → Einzelbit
+  soll('Tastenbelegung: Unsinn verworfen, Rest bleibt',
+    await tastenImport({ plus: [26, 26], minus: 24, skip: '2', prev: 2.5, stopp: 64, 'paddle-x': 3, weiter: { bit: 1 }, aus: -1,
+      a: [], b: [11, 2], c: [26, 99], d: [1, 2, 3, 4, 5], e: ['26'], f: [PAYLOAD], g: [[26]], h: [2.5] }),
+    { map: { minus: 24 }, wirkt: ['minus', 'minus', 'plus', 'plus', 'prev', 'skip'] });   // Fehlendes ergänzt der Standard (nur freie Tasten)
+  soll('Tastenbelegung als Liste insgesamt verworfen (alte bleibt)',
+    (await tastenImport([26, 27])).map, { minus: 24 });
+  // Sicherungen bis v3.3.1 trugen die damalige Werksbelegung immer mit — die
+  // ist keine Nutzerwahl: ohne eigene Belegung gilt danach der heutige Standard
+  await b.ev(`new Promise(r => { const q = indexedDB.open('ergomergo'); q.onsuccess = () => {
+    const t = q.result.transaction('settings', 'readwrite'); t.objectStore('settings').delete('controllerMap');
+    t.oncomplete = () => { q.result.close(); r(); }; }; })`);
+  soll('Alte Werksbelegung aus Sicherung übergangen (heutiger Standard gilt)',
+    await tastenImport({ plus: 4, minus: 0 }),
+    { map: { plus: [26, 25], minus: [27, 24], skip: 2, prev: 0, stopp: 5 }, wirkt: ['minus', 'plus', 'plus', 'minus', 'prev', 'skip'] });
+
   // Sicherung: ohne Geräte
   await b.ev(`import('./js/storage.js').then(m => m.setSetting('geraete', { trainer: { id: 'abc', name: 'KICKR' } }))`);
   const export_ = await b.ev(`import('./js/backup.js').then(m => m.exportiereAlles()).then(JSON.parse)`);
   soll('Sicherung ohne Geräte', 'geraete' in export_.settings, false);
+  soll('Sicherung mit Pulsgrenze (über das Schema)', export_.settings.pulsGrenze, 220);
+  soll('Sicherung ohne Standardwerte (nie gesetzte Tastenbelegung, Wattschritt)',
+    ['controllerMap', 'wattSchritt'].filter(k => k in export_.settings), []);
   // STO-04: „Alle Daten löschen" entfernt Datenbank und Browser-Merker
   await b.ev(`localStorage.setItem('uiState', 'x')`);
   await b.ev(`import('./js/storage.js').then(m => m.alleDatenLoeschen())`);

@@ -3,17 +3,22 @@
 // der Tastentabelle (zwift-ride-tasten.json), das Icon aus deren „symbol".
 
 import { svgIcon } from './icons.js';
-import { tasteInfo } from '../ble/zwift-controller.js';
+import { tasteInfo, tastenGruppe } from '../ble/zwift-controller.js';
 
 const FARBKLASSE = { grün: 'ts-gruen', magenta: 'ts-magenta', blau: 'ts-blau', orange: 'ts-orange' };
 
 // Farbe folgt der Taste am Lenker (Tabellenfeld farbe): Rundtasten gefüllt,
-// alle anderen orange umrandet, wenn sie am Lenker orange sind
-export function tastenSymbol(bit) {
+// alle anderen orange umrandet, wenn sie am Lenker orange sind.
+// ganz = die ganze Taste: ein Paddle mit beiden Pfeilen (← L →) statt einer Richtung
+export function tastenSymbol(bit, { ganz = false } = {}) {
   const t = tasteInfo(bit);
   const seite = t?.seite === 'links' ? 'L' : 'R';
   const rand = t?.farbe === 'orange' ? ' ts-orange-rand' : '';
   const mitSeite = cls => `<span class="ts ${cls}${rand}">${svgIcon(t.symbol)}<span>${seite}</span></span>`;
+  if (ganz && t?.gruppe === 'paddle') {
+    const [links, rechts] = tastenGruppe(bit).map(b => svgIcon(tasteInfo(b).symbol));
+    return `<span class="ts ts-paddle${rand}">${links}<span>${seite}</span>${rechts}</span>`;
+  }
   switch (t?.gruppe) {
     case 'steuerkreuz':
       return `<span class="ts">${svgIcon(t.symbol)}</span>`;

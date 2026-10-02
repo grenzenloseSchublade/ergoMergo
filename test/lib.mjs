@@ -109,6 +109,11 @@ export async function browser({ breite = 412, hoehe = 915, dpr = 1, bewegung = t
   await cdp('Runtime.enable'); await cdp('Page.enable'); await cdp('Network.enable');
   await cdp('Network.setCacheDisabled', { cacheDisabled: true });
   await cdp('Network.setBypassServiceWorker', { bypass: swUmgehen });
+  // Headless verweigert den Screen Wake Lock (wie ein Handy im
+  // Energiesparmodus) — gewähren wie Chrome im Normalfall, sonst stünde in
+  // jedem Fahrbild der Hinweis „Bildschirm bleibt nicht an"; test/ablauf.mjs
+  // prüft die Ablehnung gezielt
+  await cdp('Browser.grantPermissions', { permissions: ['wakeLockScreen'] });
   const groesse = (w, h) => cdp('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile: true });
   await groesse(breite, hoehe);
   // Headless hat kein Web Bluetooth; ohne Attrappe zeigt die App den Browser-Hinweis.

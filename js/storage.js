@@ -1,6 +1,8 @@
 // IndexedDB: sessions (Metadaten), sessionData (Rohsamples), settings, programme.
 // Samples liegen als Int16Array n×6 [s, watt, ziel, rpm, hf, kmh×10].
 
+import RIDE_TASTEN from './ble/zwift-ride-tasten.json' with { type: 'json' };
+
 const DB_NAME = 'ergomergo';
 const DB_VERSION = 2;
 export const FIELDS = 6;
@@ -63,28 +65,63 @@ export const listProgramme = () => tx('programme', 'readonly', st => st.getAll()
 export const saveProgramm = p => tx('programme', 'readwrite', st => st.put(p));
 export const deleteProgramm = id => tx('programme', 'readwrite', st => st.delete(id));
 
-// Werkseitige Tastenbelegung des Lenkers (Ride-Bits A = plus, Pfeil links =
-// minus) — einzige Stelle, Controller und Manager ergänzen damit
-export const STANDARD_TASTEN = { plus: 4, minus: 0 };
+// Werkseitige Tastenbelegung des Zwift Ride (Bits laut zwift-ride-tasten.json):
+// Watt hoch = beide Paddles nach außen (rechts 26, links 25), Watt runter =
+// beide nach innen (rechts 27, links 24), Block vor/zurück = Pfeil
+// rechts/links, STOPP/WEITER = B.
+// Einzige Stelle; mitStandardBelegung() (zwift-controller.js) ergänzt damit
+// nur fehlende Aktionen auf freien Tasten — gespeicherte Belegungen bleiben.
+// Der Zwift Click hat feste ±-Tasten und nutzt diese Belegung nicht.
+export const STANDARD_TASTEN = { plus: [26, 25], minus: [27, 24], skip: 2, prev: 0, stopp: 5 };
+
+// Tempo beim Halten einer ±-Taste oder eines Paddles: erste Wiederholung
+// nach `pause` ms, danach alle `takt` ms — einzige Stelle für Controller,
+// Einstellungs-Schema und den Text in den Einstellungen
+export const HALTEN_TEMPO = {
+  ruhig: { name: 'Ruhig', pause: 800, takt: 400 },
+  normal: { name: 'Normal', pause: 600, takt: 300 },
+  flott: { name: 'Flott', pause: 400, takt: 150 },
+};
 
 // --- Einstellungen: EIN Schema für Standardwerte, Grenzen und Import ---
 // pruefe(v) liefert einen gültigen Wert oder undefined (= verwerfen).
 // Unbekannte Schlüssel (z. B. icuApiKey bis v3.2) werden beim Lesen
 // verworfen und aus der Datenbank gelöscht.
 const ganz = (min, max) => v => typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : undefined;
+// Grenze, die auch ganz aus sein darf: 0 = aus, sonst in [min, max]
+const ausOder = (min, max) => v => { const g = ganz(0, max)(v); return g ? Math.max(min, g) : g; };
 const jaNein = v => typeof v === 'boolean' ? v : undefined;
+const auswahl = werte => v => typeof v === 'string' && Object.hasOwn(werte, v) ? v : undefined;
 const objekt = v => v && typeof v === 'object' && !Array.isArray(v) ? v : v === null ? null : undefined;
-// Tastenbelegung: Aktion → Bit 0–63 oder null (bewusst unbelegt)
+// Tastenbelegung: Aktion → Bit 0–63, Liste von Bits (Mehrfachbelegung aus
+// dem Lern-Modus) oder null (bewusst unbelegt). Eine Liste ist eindeutig, hat
+// 1–MAX_TASTEN_JE_AKTION Einträge und nur bekannte, belegbare Tasten der
+// Tastentabelle (nie Ein/Aus); eine Liste mit einem Bit wird zum Einzelbit —
+// so bleibt eine einfache Belegung im alten Format und für ältere App-Stände
+// lesbar. Eine belegte Paddle-Richtung wirkt auch in die freie Gegenrichtung
+// (aktionenJeBit in zwift-controller.js).
+export const MAX_TASTEN_JE_AKTION = 4;
+const BELEGBARE_BITS = new Set(RIDE_TASTEN.tasten.filter(t => t.gruppe !== 'system').map(t => t.bit));
+// Wert einer Aktion → Liste ihrer Bits (null/fehlt → leer) — EINE Stelle für alle Leser
+export const tastenVon = wert => wert === null || wert === undefined ? [] : [wert].flat();
+const tastenWert = b => {
+  if (b === null || (Number.isInteger(b) && b >= 0 && b < 64)) return b;
+  if (!Array.isArray(b) || !b.length || b.length > MAX_TASTEN_JE_AKTION || new Set(b).size !== b.length
+    || !b.every(bit => BELEGBARE_BITS.has(bit))) return undefined;
+  return b.length === 1 ? b[0] : [...b];
+};
 const tastenMap = v => objekt(v) ? Object.fromEntries(Object.entries(v)
-  .filter(([k, b]) => /^[a-z]+$/i.test(k) && (b === null || (Number.isInteger(b) && b >= 0 && b < 64)))) : undefined;
+  .filter(([k]) => /^[a-z]+$/i.test(k)).map(([k, b]) => [k, tastenWert(b)]).filter(([, b]) => b !== undefined)) : undefined;
 export const EINSTELLUNGEN = {
   ftp: { std: 0, pruefe: ganz(0, 500) },
   wattSchritt: { std: 10, pruefe: ganz(1, 50) },
   maxWatt: { std: 400, pruefe: ganz(100, 1000) },
   startWatt: { std: 100, pruefe: ganz(20, 300) },
+  pulsGrenze: { std: 0, pruefe: ausOder(100, 220) },            // bpm, ab hier färbt die Fahrt den Puls (0 = aus)
   controllerMap: { std: STANDARD_TASTEN, pruefe: tastenMap },   // per Lern-Modus belegbar
   haltenTasten: { std: true, pruefe: jaNein },                  // ±-Taste halten = wiederholen
   haltenPaddles: { std: true, pruefe: jaNein },
+  haltenTempo: { std: 'ruhig', pruefe: auswahl(HALTEN_TEMPO) },   // Schlüssel aus HALTEN_TEMPO
   sprachansagen: { std: true, pruefe: jaNein },
   tonAn: { std: true, pruefe: jaNein },
   zwoImport: { std: false, pruefe: jaNein },                    // .zwo-Import, standardmäßig aus
@@ -97,11 +134,13 @@ export const EINSTELLUNGEN = {
 export const pruefeEinstellung = (key, value) =>
   Object.hasOwn(EINSTELLUNGEN, key) ? EINSTELLUNGEN[key].pruefe(value) : undefined;
 
-export async function getSettings() {
+// Nur die gespeicherten Werte (geprüft), ohne Standardwerte — für die
+// Sicherung: sonst stünde ein heutiger Standard (z. B. STANDARD_TASTEN) als
+// Nutzerwahl darin, und spätere Änderungen am Standard griffen nach einer
+// Wiederherstellung nicht mehr
+export async function getGespeicherteEinstellungen() {
   const rows = await tx('settings', 'readonly', st => st.getAll());
   const s = {};
-  for (const [key, { std }] of Object.entries(EINSTELLUNGEN))
-    s[key] = std && typeof std === 'object' ? structuredClone(std) : std;
   const veraltet = [];
   for (const { key, value } of rows) {
     if (!Object.hasOwn(EINSTELLUNGEN, key)) { veraltet.push(key); continue; }
@@ -110,6 +149,13 @@ export async function getSettings() {
   }
   if (veraltet.length) await tx('settings', 'readwrite', st => veraltet.forEach(k => st.delete(k)));
   return s;
+}
+
+export async function getSettings() {
+  const s = {};
+  for (const [key, { std }] of Object.entries(EINSTELLUNGEN))
+    s[key] = std && typeof std === 'object' ? structuredClone(std) : std;
+  return Object.assign(s, await getGespeicherteEinstellungen());
 }
 // Alle Daten der App auf diesem Gerät löschen: Datenbank (Fahrten, Einstellungen,
 // Programme, Log) und die kleinen Merker im Browser-Speicher. Die App-Dateien

@@ -20,13 +20,16 @@ mit schweißigen Daumen. Daraus folgt alles Weitere:
 
 - **Nichts springt.** Werte haben feste Feldbreiten, Meldungen feste Plätze
   (LED-Zeile, Hinweiszeile im Panel). Ein neuer Text verschiebt nie ein
-  anderes Element.
+  anderes Element. Was je nach Zustand fehlt, lässt seinen Platz frei
+  (`visibility: hidden` bzw. Mindesthöhe statt `hidden`) — so bleibt der
+  Wochenstreifen beim Tageswechsel unter dem Finger. Unsichtbares ist dabei
+  auch nicht fokussierbar und wird nicht vorgelesen.
 - **STOPP ist immer erreichbar.** Kein Panel, Toast oder Dialog liegt über
   −10/+10/STOPP/Beenden; ein Tipp daneben schließt ein Panel und wirkt
   trotzdem, wenn er die Bedienleiste trifft.
 - **Ein Tipp daneben schließt — wenn nichts verloren geht.** Fenster zum
   Ansehen und Wählen (Graph im Vollbild, Blätter von unten, Startdialog,
-  Panel in der Fahrt) schließen bei einem Tipp daneben wie „Abbrechen“
+  Panel und Blatt in der Fahrt) schließen bei einem Tipp daneben wie „Abbrechen“
   (`<dialog closedby="any">`). Fenster mit Eingaben, die verloren gingen
   (Einstellungen, Plan anlegen/ändern, Tasten lernen), schließen nur über
   Abbrechen, Zurück oder Esc.
@@ -46,11 +49,13 @@ Alle Werte stehen in `css/tokens.css`. In `app.css` und im JS kommen nur
 | `--danger` | STOPP, Fehler, Löschen | Hervorhebung ohne Gefahr |
 | `--warn` | Demo, „verbindet …“ | Fehler |
 | `--z1`…`--z6` | Powerzonen (Zwift-Konvention) | andere Skalen |
-| `--hr-line` | Herzfrequenz — Kurve, Werte, Symbol | alles andere |
+| `--hr-line` | Herzfrequenz — Pulskurve im Graphen (mit Legende) und der Puls ab der eigenen Pulsgrenze | alles andere; nicht für Symbole und den Puls im Normalfall — die stehen neutral wie die anderen Nebenwerte |
 
 Farbe trägt nie allein Bedeutung: Zustände haben immer auch Text, Symbol
 oder Form (gestrichelter Rahmen = nicht gekoppelt, pulsierender Punkt =
-verbindet). `--ink3` erreicht mindestens 4,5:1 auf `--bg` und `--surface`.
+verbindet). Ausnahme sind Wertfärbungen („Im Bereich“, „Über Grenze“): Die
+Zahl selbst ist die Information, die Farbe nur ein Zusatz — sie darf dort
+allein stehen. `--ink3` erreicht mindestens 4,5:1 auf `--bg` und `--surface`.
 
 ### Schrift
 
@@ -89,21 +94,29 @@ Rollen:
 | Karte | `.tile`, `.bilanz`, `.sessions li`, `dialog` | eigenständiger Block auf dem Hintergrund |
 | Zeile | `.schalter-zeile`, `.fo-zeile`, `.geraete li` | Eintrag auf einer Karte oder im Panel; Titel + Erklärung |
 | Schalter-Zeile | `.schalter-zeile` + `input.schalter` | Ein/Aus-**Einstellung** |
-| Aktions-Zeile | `.fo-zeile` | **Aktion** (öffnen, koppeln) — nie ein Schalter für eine Aktion |
+| Aktions-Zeile | `.fo-zeile` | **Aktion** (öffnen, koppeln) — nie ein Schalter für eine Aktion; leise einzeilig mit „›“, wenn sie nur etwas zum Ansehen öffnet („Tastenbelegung ›“, Symbol `tasten`) |
 | Chip | `.chip`, `.chip-fahrt` | Aktionen in einer Leiste |
 | Bedientaste | `.ctl` | nur −10/+10/STOPP/Beenden |
 | Geräte-Zustand | `[data-zustand]` | Home-Leiste, Kopfzeile, Panel — eine Regel für alle |
+| Kopfzeilen-Symbol | `.kopf-geraet`, `.kopf-pip`, `.kopf-mehr` | Symbol ohne Rahmen in der Kopfzeile der Fahrt, 44 px; Umschalter tragen `aria-pressed` (an = `--accent`, keine Fläche) |
+| Im Bereich | `.rpm-wert` + `[data-bereich="drin"]` / `"daneben"` | Wert gegen eine Vorgabe (Kadenz): drin = Schrift `--z2` (leicht eingefärbt, keine Fläche), nach 5 s daneben `--ink3`; nur die Farbe wechselt, nichts springt. Bild-in-Bild färbt genauso |
+| Über Grenze | `[data-grenze="ueber"]` auf der Zahl | Wert über einer selbst gesetzten Grenze (Puls ab „Pulsgrenze“): nur die Zahl in `--hr-line`, Symbol und Einheit bleiben neutral; keine Fläche, kein Ton, neutral erst 3 bpm darunter (kein Flackern). Bild-in-Bild färbt genauso |
+| Zahlenfeld mit Hinweis | `.feld-hinweis` (Feld + `.hint`) | Einstellung als Zahl mit kurzer Erklärung eng darunter (Pulsgrenze); Feld per `aria-describedby` mit dem Hinweis verbunden |
 | Blatt von unten | `dialog.sheet` + `closedby="any"` | Aktionen oder Erklärung zu einem Eintrag (Plan-Einheit ändern, „Deine Daten“); Aktionen als Aktions-Zeilen; Tipp daneben schließt |
+| Blatt in der Fahrt | `dialog.sheet.blatt-fahrt` + `closedby="any"` | nur Ansehen während der Fahrt (Tastenbelegung); **nicht modal**, sitzt zwischen Kopfzeile und Bedienleiste (quer links daneben, Lage setzt `ride.js`) — STOPP bleibt frei; Tipp daneben schließt wie beim Panel |
+| Tastensymbol | `.ts` (Paddle `.ts-paddle`) | Lenkertaste in Belegung, Lern-Modus und Lenkeransicht, Form und Farbe wie am Lenker; eine Paddle-Richtung je Symbol mit eigener Marke, wenn die Richtungen verschieden belegt sind (Standard: außen +, innen −; in der Lenkeransicht übereinander, `.lk-stapel`) — wirken beide gleich, ist es **eine** Taste: ein Symbol mit beiden Pfeilen („← L →“) und eine Marke |
+| Mehrere Tasten je Aktion | `.belegung-tasten` (Liste), `.tasten-gewaehlt` (Lern-Modus) | jede Taste mit Symbol + Name; in der Liste untereinander unter bzw. neben der Aktion, im Lern-Modus nebeneinander mit Platz für eine Zeile (die erste Taste verschiebt nichts) |
 | Leise Text-Aktion | `.text-aktion` (Warnung: `.warnung`) | Verweis „… ›“ in einer Statuszeile oder einem Hinweis; keine Fläche, Tippfläche 44 px |
+| Leise Hauptaktion | `.dlg-actions .ghost.haupt` | Schritt nach vorn in einem Ablauf-Dialog („Weiter“/„Fertig“ beim Tasten zuordnen): Akzentschrift ohne Fläche; erscheint erst, wenn der Schritt etwas hat — bis dahin steht an derselben Stelle die Alternative („Ohne Belegung weiter“) |
 | Auswahl | `.tag-wahl`, `.segment`, `.ziel-wahl` | Wochentage, Dauer, Ziel — gewählt = Akzentrahmen + `--accent-flaeche` |
-| Wochenstreifen | `.plan-woche` / `.plan-tag` | Balken in Zonenfarbe, Höhe = Dauer; Tage mit Einheit sind Knöpfe |
+| Wochenstreifen | `.plan-woche` / `.plan-tag` | Balken in Zonenfarbe, Höhe = Dauer; jeder Tag ist wählbar, die Karte darüber hält für jeden Tag ihre Höhe (Titel/Erklärung je 2 Zeilen, dann „…“; Profil und Knopfzeile bleiben stehen) |
 
 ## Rückmeldungen
 
 | Wo | Was |
 |---|---|
 | LED-Zeile (Fahrt) | alles während der Fahrt: Zustände dauerhaft, Infos zweimal durchlaufend |
-| Hinweiszeile im Panel | Rückmeldung auf einen Tipp im Panel |
+| Hinweiszeile im Panel | Rückmeldung auf einen Tipp im Panel; fester Platz (2 Zeilen) ohne eigene Lücke: hochkant über der Beschriftung „Töne“, die solange ausgeblendet ist, quer unter den Tönen |
 | Toast | außerhalb der Fahrt; in der Fahrt nur „Nochmal Zurück“ und Fahrtende |
 | Toast mit „Rückgängig“ | nach jeder umkehrbaren Änderung (6 s) — **statt** einer Rückfrage vorher |
 | Rückfrage (`confirm`) | nur bei Unumkehrbarem: Fahrt/Programm löschen, Plan beenden, Sicherung einspielen |
@@ -112,7 +125,8 @@ Rollen:
 
 Deutsch, kurz, in der Sprache der Fahrt („Block übersprungen“, nicht
 „Segment wurde übersprungen“). Beschreibungen sagen, was passiert
-(„Countdown vor dem Wechsel, Ton beim Wechsel“), nicht wie es heißt.
+(„Auftakt, Countdown und Ton beim Blockwechsel, Tick bei Lenkertasten“),
+nicht wie es heißt.
 Aktionen als Verb („Bild-in-Bild öffnen“), Zustände als Partizip
 („verbunden“).
 

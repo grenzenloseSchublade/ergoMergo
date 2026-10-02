@@ -5,6 +5,7 @@
 //   · Status, Nebenwerte, Chips, Demo mittig
 //   · nichts springt, wenn etwas passiert (Meldung, Menü, STOPP, Skip, 3-stellige Werte …)
 //   · Panel „⋯" überdeckt die Bedienleiste nie; Tipp daneben schließt nur
+//   · Blatt „Tastenbelegung" (aus dem Panel) ebenso: nie über der Bedienleiste
 // Aufruf: node test/layout.mjs [breitexhöhe …]     (ohne Angabe: alle Standardgrößen)
 // Ausgabe: Befunde je Größe, Exit 1 bei Befunden.
 
@@ -84,6 +85,24 @@ async function pruefe(srv, [breite, hoehe]) {
       return { deckt, scrollt: d.scrollHeight > d.clientHeight + 1, unten: Math.round(r.bottom) }; })()`);
     if (panel.deckt.length) befunde.push(`Panel überdeckt ${panel.deckt.join(', ')} (Unterkante ${panel.unten})`);
     if (panel.scrollt && hoehe >= 640) befunde.push('Panel muss scrollen');   // auf sehr kleinen Schirmen erlaubt
+    // Hinweiszeile: im Normalzustand kein Loch zwischen „Geräte" und „Töne";
+    // eine echte Rückmeldung (Tipp auf „Trainer") verschiebt nichts, lässt das
+    // Panel nicht wachsen und überdeckt keine Zeile
+    const panelLage = () => b.ev(`(() => { const d = document.querySelector('#dlg-fahrt-optionen'), q = e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom].map(Math.round); };
+      const h = document.querySelector('#fo-hinweis'), t = document.querySelector('.fo-toene > .gruppe-titel');
+      return { panel: q(d), zeilen: [...d.querySelectorAll('.fo-zeile, .schalter-zeile')].map(q), hinweis: q(h), text: h.textContent,
+        titel: q(t), belegung: q(document.querySelector('#fo-belegung')), scrollt: d.scrollHeight > d.clientHeight + 1 }; })()`);
+    const leer = await panelLage();
+    const gestapelt = leer.titel[1] > leer.belegung[3];
+    if (gestapelt && leer.titel[1] - leer.belegung[3] > 13) befunde.push(`Lücke zwischen Geräte und Töne: ${leer.titel[1] - leer.belegung[3]} px`);
+    await b.klick('#dlg-fahrt-optionen [data-geraet="trainer"]', 400);
+    const mit = await panelLage();
+    if (!mit.text) befunde.push('Tipp auf „Trainer" zeigt keine Rückmeldung im Panel');
+    if (JSON.stringify(mit.panel) !== JSON.stringify(leer.panel) || JSON.stringify(mit.zeilen) !== JSON.stringify(leer.zeilen))
+      befunde.push('Rückmeldung im Panel verschiebt etwas');
+    if (mit.scrollt && !leer.scrollt) befunde.push('Rückmeldung im Panel erzwingt Scrollen');
+    const [hl, ht, hr, hb] = mit.hinweis;
+    if (mit.zeilen.some(([l, t, r, u]) => !(hr <= l || hl >= r || hb <= t || ht >= u))) befunde.push('Rückmeldung überdeckt eine Zeile im Panel');
     // Tipp daneben (echte Touch-Geste auf den Graphen, wo das Panel ihn nicht verdeckt) schließt nur
     const punkt = await b.ev(`(() => { const el = document.querySelector('#live-chart'), r = el.getBoundingClientRect();
       for (let y = r.top + r.height * .5; y < r.bottom - 2; y += 4) for (let x = r.left + r.width * .2; x < r.right - r.width * .1; x += 6)
@@ -97,6 +116,18 @@ async function pruefe(srv, [breite, hoehe]) {
       if (z.offen) befunde.push('Tipp neben das Panel schließt es nicht');
       if (z.fokus.includes('fokus')) befunde.push('Tipp neben das Panel wirkt zusätzlich (Fokus gewechselt)');
     } else if (await b.ev(`document.querySelector('#dlg-fahrt-optionen').open`)) await b.klick('#btn-mehr');
+
+    // Blatt „Tastenbelegung": aus dem Panel, nie über der Bedienleiste, Kopfzeile bleibt frei
+    await b.klick('#btn-mehr', 500);
+    await b.klick('#fo-belegung', 800);
+    const blatt = await b.ev(`(() => { const d = document.querySelector('#dlg-belegung'), r = d.getBoundingClientRect();
+      const deckt = [...document.querySelectorAll('.controls .ctl, .ride-kopf button')].filter(k => { const q = k.getBoundingClientRect();
+        return q.width && !(r.right <= q.left || r.left >= q.right || r.bottom <= q.top || r.top >= q.bottom); }).map(k => k.id || k.className);
+      return { offen: d.open, deckt, rand: r.right > innerWidth + .5 || r.bottom > innerHeight + .5 }; })()`);
+    if (!blatt.offen) befunde.push('Blatt „Tastenbelegung" öffnet nicht');
+    if (blatt.deckt.length) befunde.push(`Blatt überdeckt ${blatt.deckt.join(', ')}`);
+    if (blatt.rand) befunde.push('Blatt ragt über den Rand');
+    if (blatt.offen) { await b.ev('history.back()'); await sleep(500); }
   } catch (e) {
     befunde.push('Testfehler: ' + e.message);
   } finally {

@@ -64,8 +64,8 @@
         <button type="button" class="plan-mehr" id="btn-plan" data-icon="mehr" aria-label="Plan ändern" title="Plan ändern"></button>
       </div>
       <button type="button" class="plan-heute" id="plan-heute">
-        <span class="tile-title" id="plan-titel"></span>
-        <span class="tile-sub" id="plan-sub"></span>
+        <span class="plan-text"><span class="tile-title" id="plan-titel"></span>
+          <span class="tile-sub" id="plan-sub"></span></span>
         <canvas class="tile-profile" id="plan-profil"></canvas>
       </button>
       <!-- Knöpfe zum gewählten Tag: Starten bzw. Heute fahren · Ändern — oder Fahrt ansehen -->
@@ -121,8 +121,9 @@
   <div class="ride-grid">
     <!-- Kopfzeile wie eine Handy-Statusleiste: Gerätezustand links (gleiche
          Icons und Zustandspunkte wie die Geräte-Leiste auf dem Home, Tap =
-         Info bzw. neu verbinden), Demo-Hinweis mittig, „⋯" rechts öffnet
-         die selten gebrauchten Schalter. Bleibt in jedem Fokus-Modus stehen. -->
+         Info bzw. neu verbinden), Demo-Hinweis mittig, rechts Bild-in-Bild
+         (nur wo der Browser es kann) und „⋯" für die selten gebrauchten
+         Schalter. Bleibt in jedem Fokus-Modus stehen. -->
     <div class="ride-kopf">
       <span class="kopf-geraete">
         <button type="button" class="kopf-geraet" id="btn-trainer" data-geraet="trainer" aria-label="Trainer — Verbindungsstatus" title="Trainer"><span data-icon="bike"></span><i class="dot"></i></button>
@@ -133,7 +134,10 @@
         <span class="demo-badge" title="Demo — wird nicht gespeichert">DEMO</span>
         <button type="button" class="demo-beispiel" id="btn-demo-beispiel">Beispielfahrten ›</button>
       </div>
-      <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte und Töne" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
+      <span class="kopf-rechts">
+        <button type="button" class="kopf-pip" id="btn-pip" data-icon="pip" aria-label="Bild-in-Bild öffnen" aria-pressed="false" title="Bild-in-Bild öffnen" hidden></button>
+        <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte und Töne" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
+      </span>
     </div>
     <div class="metrics">
       <div class="metric metric-power">
@@ -155,8 +159,8 @@
       </div>
       <!-- Vier Nebenwerte in festem Raster: hochkant 2×2, breit/quer 4 nebeneinander -->
       <div class="row-secondary">
-        <span><i class="si" data-icon="rotate"></i><b id="m-rpm">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
-        <span><i class="si si-hf" data-icon="herzpuls"></i><b id="m-hr">–</b> bpm</span>
+        <span><i class="si" data-icon="rotate"></i><b id="m-rpm" class="rpm-wert">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
+        <span><i class="si" data-icon="herzpuls"></i><b id="m-hr">–</b> bpm</span>
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
         <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
       </div>
@@ -183,20 +187,24 @@
        daneben, Esc oder Zurück schließt. Schiebeschalter wie in den Einstellungen. -->
   <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Geräte und Töne">
     <div class="fahrt-optionen-inhalt">
-      <div class="fo-gruppe">
+      <div class="fo-gruppe fo-geraete">
         <p class="gruppe-titel">Geräte</p>
         <!-- data-geraet wie die Symbole oben links: RideScreen setzt den Zustand an EINER Stelle für beide -->
         <button type="button" class="fo-zeile" data-geraet="trainer"><i class="opt-icon" data-icon="bike"></i><span class="fo-text"><b>Trainer</b><small class="fo-zustand"></small></span><i class="dot"></i></button>
         <button type="button" class="fo-zeile" data-geraet="hr"><i class="opt-icon" data-icon="herzpuls"></i><span class="fo-text"><b>Herzgurt</b><small class="fo-zustand"></small></span><i class="dot"></i></button>
         <button type="button" class="fo-zeile" data-geraet="controller"><i class="opt-icon" data-icon="gamepad"></i><span class="fo-text"><b>Lenker</b><small class="fo-zustand"></small></span><i class="dot"></i></button>
-        <!-- Rückmeldung eines Tipps hier im Panel — die LED-Zeile kann darunter liegen. Feste Höhe: nichts wächst -->
-        <p class="fo-hinweis" id="fo-hinweis" role="status"></p>
+        <!-- Leise (einzeilig), nur ansehen: öffnet das Blatt „Tastenbelegung"; zugeordnet wird in den Einstellungen -->
+        <button type="button" class="fo-zeile" id="fo-belegung" aria-haspopup="dialog"><i class="opt-icon" data-icon="tasten"></i><span class="fo-text"><b>Tastenbelegung ›</b></span></button>
       </div>
-      <div class="fo-gruppe">
-        <p class="gruppe-titel">Töne &amp; Anzeige</p>
+      <!-- Rückmeldung eines Tipps hier im Panel — die LED-Zeile kann darunter liegen.
+           Fester Platz ohne eigene Lücke: hochkant über der Beschriftung „Töne"
+           (solange ausgeblendet), quer unter den Tönen. Nichts wächst, nichts springt -->
+      <p class="fo-hinweis" id="fo-hinweis" role="status"></p>
+      <div class="fo-gruppe fo-toene">
+        <p class="gruppe-titel">Töne</p>
         <label class="schalter-zeile">
           <i class="opt-icon" data-icon="ton"></i>
-          <span class="schalter-text">Signaltöne<small>Countdown vor dem Wechsel, Ton beim Wechsel</small></span>
+          <span class="schalter-text">Signaltöne<small>Beim Start, vor und beim Wechsel, bei Lenkertasten</small></span>
           <input type="checkbox" class="schalter" id="opt-ton">
         </label>
         <label class="schalter-zeile">
@@ -204,10 +212,25 @@
           <span class="schalter-text">Sprachansagen<small>Dauer und Watt jedes neuen Blocks</small></span>
           <input type="checkbox" class="schalter" id="opt-sprache">
         </label>
-        <!-- Bild-in-Bild ist eine Aktion, keine Einstellung: Knopf öffnet bzw. schließt das Fenster sofort -->
-        <button type="button" class="fo-zeile" id="opt-pip" hidden><i class="opt-icon" data-icon="pip"></i><span class="fo-text"><b id="opt-pip-titel">Bild-in-Bild öffnen</b><small>Watt, Ziel und Zeit über anderen Apps</small></span></button>
       </div>
     </div>
+  </dialog>
+  <!-- Tastenbelegung zum Ansehen (Blatt aus dem Panel). Nicht modal und über
+       bzw. neben der Bedienleiste (ride.js setzt die Lage): STOPP und ± bleiben
+       bedienbar, am Lenker wie am Bildschirm. Tipp daneben, Esc oder Zurück schließt. -->
+  <dialog id="dlg-belegung" class="sheet blatt-fahrt" closedby="any" aria-labelledby="belegung-blatt-titel">
+    <form method="dialog">
+      <h2 id="belegung-blatt-titel">Tastenbelegung</h2>
+      <div id="belegung-blatt-karte"></div>
+      <details class="belegung-details">
+        <summary>Als Liste</summary>
+        <ul id="belegung-blatt-liste" class="belegung"></ul>
+      </details>
+      <p class="hint">Ändern: Einstellungen → Geräte → „Tasten zuordnen“</p>
+      <div class="dlg-actions">
+        <button value="cancel" class="ghost">Schließen</button>
+      </div>
+    </form>
   </dialog>
 </section>
 
@@ -346,6 +369,11 @@
       <label>Wattschritt für ±<input type="number" id="set-schritt" min="1" max="50" step="1"></label>
       <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="1"></label>
       <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="1"></label>
+      <!-- Pulsgrenze: Grenzen aus EINSTELLUNGEN (storage.js); der höchste gemessene Wert kommt aus den Fahrten (settings.js) -->
+      <div class="feld-hinweis">
+        <label>Pulsgrenze (bpm, leer = aus)<input type="number" id="set-puls" min="100" max="220" step="1" placeholder="aus" aria-describedby="puls-hinweis"></label>
+        <p class="hint" id="puls-hinweis">Ab diesem Puls wird der Wert in der Fahrt rot.<span id="puls-max" hidden></span></p>
+      </div>
     </div>
     <details class="diagnose">
       <summary>Datenschutz &amp; Sicherheit</summary>
@@ -358,7 +386,7 @@
       <summary>Erweitert</summary>
       <div class="dlg-fields">
         <label class="schalter-zeile">
-          <span class="schalter-text">Signaltöne<small>Countdown und Ton beim Blockwechsel</small></span>
+          <span class="schalter-text">Signaltöne<small>Auftakt, Countdown und Ton beim Blockwechsel, Tick bei Lenkertasten</small></span>
           <input type="checkbox" class="schalter" id="set-ton">
         </label>
         <label class="schalter-zeile">
@@ -401,13 +429,17 @@
         <p class="gruppe-titel">Gedrückt halten</p>
         <p class="hint">Gilt für die Tasten, die mit „Watt hoch“ und „Watt runter“ belegt sind: Halten ändert die Leistung fortlaufend statt nur einmal.</p>
         <label class="schalter-zeile">
-          <span class="schalter-text">Tasten<small id="halten-takt">ein Wattschritt je Takt</small></span>
+          <span class="schalter-text">Tasten<small>Knöpfe am Lenker und am Zwift Click</small></span>
           <input type="checkbox" class="schalter" id="set-halten-tasten">
         </label>
         <label class="schalter-zeile">
-          <span class="schalter-text">Orange Paddles<small>Tempo nach Druck: leicht langsam, fest schnell</small></span>
+          <span class="schalter-text">Orange Paddles<small>gleiches Tempo wie die Tasten, egal wie fest gedrückt</small></span>
           <input type="checkbox" class="schalter" id="set-halten-paddles">
         </label>
+        <!-- Tempo-Stufen und Text aus HALTEN_TEMPO (storage.js), gefüllt in settings.js -->
+        <p class="gruppe-titel" id="halten-tempo-titel">Tempo beim Halten</p>
+        <div class="segment" id="halten-tempo" role="radiogroup" aria-labelledby="halten-tempo-titel" aria-describedby="halten-takt"></div>
+        <p class="hint" id="halten-takt"></p>
       </div>
     </details>
     <details class="diagnose">
@@ -430,9 +462,11 @@
 <dialog id="dlg-mapping">
   <h2>Tasten zuordnen</h2>
   <p id="map-schritt"></p>
+  <div id="map-gewaehlt" class="tasten-gewaehlt" aria-live="polite"></div>
   <p class="hint" id="map-status">Lenker wird verbunden …</p>
   <div id="map-karte"></div>
   <div class="dlg-actions">
+    <button type="button" id="btn-map-weiter" class="ghost haupt" hidden>Weiter</button>
     <button type="button" id="btn-map-skip" class="ghost">Ohne Belegung weiter</button>
     <button type="button" id="btn-map-abbruch" class="ghost">Abbrechen</button>
   </div>

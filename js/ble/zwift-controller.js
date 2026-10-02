@@ -6,13 +6,14 @@
 // Ride:   Feld 1 = 32-Bit-Bitmap, invertierte Logik (Bit 0 → Taste gedrückt);
 //         die orangen Paddles sind analog (−100…+100, Vorzeichen = Richtung)
 //         und werden per Schwelle zu virtuellen Tasten, je Richtung eine
-//         (Bits laut zwift-ride-tasten.json).
+//         (Bits laut zwift-ride-tasten.json) — eine belegte Richtung wirkt
+//         auch in die Gegenrichtung, solange die frei ist (aktionenJeBit).
 //
 // UUID-Falle: Ride-Firmware bis ~1.2.x nutzt den 128-Bit-Service 00000001-19ca-…,
 // neuere Firmware (ab Jan 2025) stattdessen 0xFC82 — beide werden probiert.
 
 import { logInfo, logWarn, hex } from '../logger.js';
-import { STANDARD_TASTEN } from '../storage.js';
+import { STANDARD_TASTEN, HALTEN_TEMPO, EINSTELLUNGEN, tastenVon } from '../storage.js';
 import RIDE_TASTEN from './zwift-ride-tasten.json' with { type: 'json' };
 
 // Klartextname einer Ride-Taste für Lern-Modus und Belegungsanzeige.
@@ -22,12 +23,67 @@ import RIDE_TASTEN from './zwift-ride-tasten.json' with { type: 'json' };
 const TASTE_JE_BIT = new Map(RIDE_TASTEN.tasten.map(t => [t.bit, t]));
 export const tasteInfo = bit => TASTE_JE_BIT.get(bit) ?? null;
 export const alleTasten = () => RIDE_TASTEN.tasten;
-export function tastenName(bit) {
+// ganz = Name der ganzen Taste (Paddle: „Paddle rechts" statt der Richtung)
+export function tastenName(bit, { ganz = false } = {}) {
   const t = TASTE_JE_BIT.get(bit);
   if (!t) return `Taste ${bit}`;
+  const label = ganz ? t.tastenLabel ?? t.label : t.label;
   const farbe = t.gruppe === 'aktion' && t.farbe;
   const zusatz = [farbe, !t.sicher && `Bit ${bit}`].filter(Boolean);
-  return zusatz.length ? `${t.label} (${zusatz.join(', ')})` : t.label;
+  return zusatz.length ? `${label} (${zusatz.join(', ')})` : label;
+}
+
+// Die Richtungen eines Paddles gehören zusammen: Partner = Einträge mit
+// derselben Paddle-Kennung (analogOrt). Ist nur eine Richtung belegt, wirkt
+// das Paddle als EINE Taste (aktionenJeBit, wirktGleich).
+// tastenGruppe(bit) → alle Bits derselben Taste (sonst nur das Bit selbst).
+const GRUPPE_JE_BIT = new Map(RIDE_TASTEN.tasten.map(t => [t.bit,
+  t.analogOrt === undefined ? [t.bit]
+    : RIDE_TASTEN.tasten.filter(p => p.analogOrt === t.analogOrt).sort((a, b) => a.richtung - b.richtung).map(p => p.bit)]));
+export const tastenGruppe = bit => GRUPPE_JE_BIT.get(bit) ?? [bit];
+
+// Belegung → Bit → Aktionen — EINE Auflösung für Controller, Ton und Anzeige.
+// Jedes Bit einer Aktion löst sie aus (Einzelbit oder Liste, tastenVon).
+// Eine belegte Paddle-Richtung wirkt auch in die Gegenrichtung, außer die
+// Gegenrichtung ist selbst ausdrücklich belegt — dann gilt jede für sich
+// (Standard: außen = Watt hoch, innen = Watt runter).
+export function aktionenJeBit(map = {}) {
+  const direkt = new Map();
+  for (const [aktion, wert] of Object.entries(map ?? {}))
+    for (const bit of tastenVon(wert)) {
+      if (!direkt.has(bit)) direkt.set(bit, []);
+      if (!direkt.get(bit).includes(aktion)) direkt.get(bit).push(aktion);
+    }
+  const jeBit = new Map(direkt);
+  for (const [bit, aktionen] of direkt)
+    for (const partner of tastenGruppe(bit))
+      if (!direkt.has(partner)) jeBit.set(partner, [...(jeBit.get(partner) ?? []), ...aktionen]);
+  return jeBit;
+}
+
+// Lösen beide Richtungen dieser Taste dasselbe aus (auch: beide nichts)?
+// Dann zählt sie als eine Taste — Anzeige als ein Symbol, Kippen auf die
+// Gegenseite ist kein neuer Druck.
+export function wirktGleich(jeBit, bit) {
+  const aktionen = String(jeBit.get(bit) ?? []);
+  return tastenGruppe(bit).every(p => String(jeBit.get(p) ?? []) === aktionen);
+}
+
+// Gespeicherte Belegung + Standardbelegung für Aktionen, die darin fehlen —
+// aber nur mit den freien Tasten des Standards: eine gespeicherte Belegung
+// wird nie überschrieben und keine Taste löst durch den Standard doppelt aus
+// (alte Belegung {plus: 26} → Watt runter nur innen links, wirkt dann über
+// die freie Gegenrichtung am ganzen linken Paddle).
+// Controller, Manager und Anzeige nutzen dieselbe Zusammenführung.
+export function mitStandardBelegung(map = {}) {
+  const m = { ...map };
+  const belegt = aktionenJeBit(map);
+  for (const [aktion, wert] of Object.entries(STANDARD_TASTEN)) {
+    if (Object.hasOwn(m, aktion)) continue;
+    const frei = tastenVon(wert).filter(bit => !belegt.has(bit));
+    if (frei.length) m[aktion] = frei.length === 1 ? frei[0] : frei;
+  }
+  return m;
 }
 
 // Paddles schlagen in beide Richtungen aus (Vorzeichen des Analogwerts);
@@ -55,21 +111,14 @@ const PRELL_GLEICHE_QUELLE_MS = 50;    // Geräte-Prellen
 const PRELL_ANDERE_QUELLE_MS = 150;    // Relay-Doppel des zweiten Pads
 
 // Halten = Wiederholen, nur für die Watt-Aktionen — Block vor/zurück und
-// STOPP feuern bewusst nie doppelt. Tasten: fester Takt nach einer Pause;
-// Paddles: Takt folgt dem Druck (Schwelle → langsam, Vollausschlag → schnell).
+// STOPP feuern bewusst nie doppelt. Tasten und Paddles im selben festen Takt
+// nach einer Pause (HALTEN_TEMPO, Einstellung „Gedrückt halten"). Kein Takt
+// nach Paddle-Druck: Die Paddles melden fast immer sofort Vollausschlag, der
+// Takt lief so praktisch immer auf Höchsttempo (Gerätelog: 1 s = +40–50 W).
 const WIEDERHOLBAR = new Set(['plus', 'minus']);
-const HALTEN_PAUSE_MS = 500;
-export const HALTEN_TAKT_MS = 400;     // auch Text in den Einstellungen
-const PADDLE_TAKT_MS = { langsam: 600, schnell: 150 };
-const PADDLE_PAUSE_MIN_MS = 400;       // kurzes Antippen löst nur einmal aus
 // Sicherheitsgrenze: geht die Loslass-Meldung verloren (Funkloch), würde die
 // Wiederholung sonst endlos Watt hochzählen
 const HALTEN_MAX_MS = 10000;
-
-const paddleTakt = druck => {
-  const anteil = Math.min(1, Math.max(0, (druck - PADDLE_AN) / (100 - PADDLE_AN)));
-  return Math.round(PADDLE_TAKT_MS.langsam - anteil * (PADDLE_TAKT_MS.langsam - PADDLE_TAKT_MS.schnell));
-};
 
 export class ZwiftController extends EventTarget {
   // Geräteauswahl (Chooser) für den GeraeteManager — Services hier, damit
@@ -81,15 +130,28 @@ export class ZwiftController extends EventTarget {
   #rideBitmap = 0xffffffff;    // alle Bits 1 = nichts gedrückt
   #paddle = new Map();          // Paddle-Ort → {richtung, bit, spitze, eigen} des laufenden Drucks
   #statusGeloggt = false;       // 0x2a-Statusmeldung nur einmal je Verbindung loggen
-  #gehalten = new Map();        // Taste (Bit bzw. 'plus'/'minus' beim Click) → {timer, druck, seit}
+  #gehalten = new Map();        // Taste (Bit bzw. 'plus'/'minus' beim Click) → {timer, seit}
 
-  // map: { plus, minus, skip, prev, stopp } → Bit-Indizes (per Lern-Modus belegt)
-  // halten: { tasten, paddles } — Halten wiederholt ± (Einstellungen)
+  // map: { plus, minus, skip, prev, stopp } → Bit oder Liste von Bits (per Lern-Modus belegt)
+  // halten: { tasten, paddles, tempo } — Halten wiederholt ± (Einstellungen),
+  // tempo = Schlüssel aus HALTEN_TEMPO
   constructor(map = {}, halten = {}) {
     super();
-    this.map = { ...STANDARD_TASTEN, ...map };
-    this.halten = { tasten: halten.tasten ?? true, paddles: halten.paddles ?? true };
+    this.map = map;
+    this.halten = { tasten: halten.tasten ?? true, paddles: halten.paddles ?? true,
+      tempo: halten.tempo ?? EINSTELLUNGEN.haltenTempo.std };
   }
+
+  // Belegung setzen (auch live aus dem Lern-Modus): Standard ergänzen und
+  // die Auflösung Bit → Aktionen einmal vorab berechnen
+  #map = {};
+  #jeBit = new Map();
+  get map() { return this.#map; }
+  set map(map) {
+    this.#map = mitStandardBelegung(map ?? {});
+    this.#jeBit = aktionenJeBit(this.#map);
+  }
+  aktionen(bit) { return this.#jeBit.get(bit) ?? []; }
 
   get istRide() { return (this.#device?.name ?? '').includes('Ride'); }
   get deviceName() { return this.#device?.name ?? null; }
@@ -223,22 +285,26 @@ export class ZwiftController extends EventTarget {
       const betrag = Math.abs(wert);
       const richtung = Math.sign(wert);
       const p = this.#paddle.get(ort);
+      const bit = PADDLE_BIT.get(`${ort}:${richtung}`);
       if (p) {
         // Losgelassen — oder in einem Zug auf die Gegenseite gekippt, ohne
-        // zwischen zwei Meldungen unter die Schwelle zu fallen
-        if (betrag >= PADDLE_AUS && richtung === p.richtung) {
+        // zwischen zwei Meldungen unter die Schwelle zu fallen. Lösen beide
+        // Richtungen dasselbe aus (ein Paddle = eine Taste), bleibt es beim
+        // Kippen gedrückt — kein zweites Auslösen, Halten läuft weiter (p.bit
+        // bleibt die Taste des Drucks, an ihr hängt die Wiederholung). Sind
+        // die Richtungen verschieden belegt (Standard: außen +, innen −),
+        // ist Kippen Loslassen und neuer Druck der Gegenrichtung
+        if (betrag >= PADDLE_AUS && (richtung === p.richtung || wirktGleich(this.#jeBit, bit))) {
           if (betrag > Math.abs(p.spitze)) p.spitze = wert;
-          const h = this.#gehalten.get(p.bit);
-          if (h) h.druck = betrag;                    // Wiederholtakt folgt dem Druck
+          p.richtung = richtung;
           continue;
         }
         this.#paddleLos(ort, p);
       }
       if (betrag < PADDLE_AN) continue;
-      const bit = PADDLE_BIT.get(`${ort}:${richtung}`);
       // eigen = diese Verbindung hat den Druck gemeldet; das rechte Paddle
       // kommt zusätzlich über das linke Pad an und würde sonst doppelt loggen
-      const eigen = this.#taste(bit, ` — Rohwert ${wert}`, betrag);
+      const eigen = this.#taste(bit, ` — Rohwert ${wert}`, true);
       this.#paddle.set(ort, { richtung, bit, spitze: wert, eigen });
     }
   }
@@ -251,9 +317,9 @@ export class ZwiftController extends EventTarget {
   }
 
   // Eine gedrückte Taste (echt oder virtuell): entprellen, loggen, melden.
-  // druck = Paddle-Betrag (40…100), null bei digitalen Tasten.
+  // paddle = virtuelle Taste eines Paddles (eigener Halten-Schalter).
   // Rückgabe: false, wenn die Entprellung den Druck verworfen hat.
-  #taste(bit, logZusatz = '', druck = null) {
+  #taste(bit, logZusatz = '', paddle = false) {
     const jetzt = Date.now();
     const vorher = letzteFlanke.get(bit);
     const fenster = vorher?.quelle === this ? PRELL_GLEICHE_QUELLE_MS : PRELL_ANDERE_QUELLE_MS;
@@ -261,10 +327,11 @@ export class ZwiftController extends EventTarget {
     letzteFlanke.set(bit, { t: jetzt, quelle: this });
     logInfo('ctrl', `Ride-Taste Bit ${bit} gedrückt (laut Tabelle: ${TASTE_JE_BIT.get(bit)?.id ?? '?'})${logZusatz}`);
     this.dispatchEvent(new CustomEvent('button', { detail: bit }));
-    for (const [aktion, b] of Object.entries(this.map)) {
-      if (b !== bit) continue;
+    // Jedes Bit einer Mehrfachbelegung und die freie Gegenrichtung eines
+    // belegten Paddles lösen aus (aktionenJeBit); Halten hängt am Bit
+    for (const aktion of this.aktionen(bit)) {
       this.dispatchEvent(new Event(aktion));
-      this.#halteFest(bit, aktion, druck);
+      this.#halteFest(bit, aktion, paddle);
     }
     return true;
   }
@@ -272,12 +339,12 @@ export class ZwiftController extends EventTarget {
   // Wiederholung starten, solange die Taste gehalten wird. Nur die Instanz,
   // deren Flanke die Entprellung gewonnen hat, kommt hier an — ein zweites
   // (relayendes) Pad wiederholt also nicht doppelt.
-  #halteFest(taste, aktion, druck = null) {
+  #halteFest(taste, aktion, paddle = false) {
     if (!WIEDERHOLBAR.has(aktion)) return;
-    if (!(druck === null ? this.halten.tasten : this.halten.paddles)) return;
+    if (!(paddle ? this.halten.paddles : this.halten.tasten)) return;
     this.#loslassen(taste);
-    const h = { timer: null, druck, seit: Date.now() };
-    const takt = () => (h.druck === null ? HALTEN_TAKT_MS : paddleTakt(h.druck));
+    const { pause, takt } = HALTEN_TEMPO[this.halten.tempo] ?? HALTEN_TEMPO[EINSTELLUNGEN.haltenTempo.std];
+    const h = { timer: null, seit: Date.now() };
     const planen = ms => {
       h.timer = setTimeout(() => {
         if (Date.now() - h.seit > HALTEN_MAX_MS) {
@@ -287,11 +354,11 @@ export class ZwiftController extends EventTarget {
         }
         // Wiederholung kenntlich machen: sie darf z. B. einen Not-Stopp nie aufheben
         this.dispatchEvent(new CustomEvent(aktion, { detail: { wiederholung: true } }));
-        planen(takt());
+        planen(takt);
       }, ms);
     };
     this.#gehalten.set(taste, h);
-    planen(druck === null ? HALTEN_PAUSE_MS : Math.max(PADDLE_PAUSE_MIN_MS, takt()));
+    planen(pause);
   }
 
   #loslassen(taste) {

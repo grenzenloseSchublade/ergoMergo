@@ -45,7 +45,7 @@ Alles auf einmal: **Einstellungen → Datenschutz & Sicherheit → Alle Daten l�
 |---|---|---|
 | IndexedDB `ergomergo` · sessions | je Fahrt: Zeit, Dauer, Programm, Kennwerte (Watt, kJ, km, NP, TSS), **Herzfrequenz-Mittel/-Maximum**, Zonenzeiten, Plan-Zuordnung | Fahrt öffnen → Löschen |
 | · sessionData | Sekundenwerte der Fahrt: Watt, Ziel, Kadenz, **Herzfrequenz**, Geschwindigkeit | mit der Fahrt |
-| · settings | FTP, Wattschritt, Grenzen, Töne, Tastenbelegung, Trainingsplan, gemerkte Geräte (Name + Browser-ID) | Einstellungen / Plan beenden / Gerät entfernen |
+| · settings | FTP, Wattschritt, Grenzen, Pulsgrenze, Töne, Tastenbelegung, Trainingsplan, gemerkte Geräte (Name + Browser-ID) | Einstellungen / Plan beenden / Gerät entfernen |
 | · programme | importierte `.zwo`-Workouts | Kachel → ✕ |
 | · logs | Diagnose-Log (Gerätenamen, Firmware, Programmnamen, Fehler — keine Herzfrequenz, keine Wattreihen), max. 2000 Einträge | Einstellungen → Diagnose-Log → Leeren |
 | localStorage | `uiState` (zuletzt offener Bildschirm), `rubrik-*` (auf-/zugeklappt), `seed-*` (Fartlek-Ablauf) | Browserdaten löschen |
