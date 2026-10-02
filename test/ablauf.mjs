@@ -268,6 +268,15 @@ try {
     'Paddle rechts außen+Paddle links außen|Paddle rechts innen+Paddle links innen');
   soll('… und die Lenkeransicht mit Marke an jeder Taste', await b.ev(`[...document.querySelectorAll('#belegung-blatt-karte .lk-taste.belegt')].map(t => t.querySelector('.lk-marke').textContent).join('')`), '⏮⏭■+−−+');
   soll('… Paddles je Richtung, übereinander', await b.ev(`[...document.querySelectorAll('#belegung-blatt-karte .lk-stapel .ts-paddle')].map(e => e.querySelectorAll('svg').length).join()`), '1,1,1,1');
+  soll('… nur Griffzonen mit belegten Tasten', await b.ev(`[...document.querySelectorAll('#belegung-blatt-karte .lk-zone small')].map(e => e.textContent).join('|')`), 'Griff oben|Hebel vorne');
+  // Umschalter Lenker ↔ Liste: immer nur eine Ansicht sichtbar, die andere hält ihren Platz
+  const ansicht = () => b.ev(`(() => { const a = document.querySelector('#belegung-blatt-ansicht');
+    return [a.dataset.ansicht, ...[...a.children].map(e => getComputedStyle(e).visibility), document.querySelector('#dlg-belegung .belegung-umschalter').textContent].join(); })()`);
+  soll('… zeigt den Lenker, Liste verdeckt', await ansicht(), 'karte,visible,hidden,Als Liste ›');
+  await b.klick('#dlg-belegung .belegung-umschalter', 300);
+  soll('„Als Liste ›" zeigt die Liste statt des Lenkers', await ansicht(), 'liste,hidden,visible,Als Lenker ›');
+  await b.klick('#dlg-belegung .belegung-umschalter', 300);
+  soll('„Als Lenker ›" wieder zurück', await ansicht(), 'karte,visible,hidden,Als Liste ›');
   soll('Tippflächen im Blatt', await b.ev(`[...document.querySelectorAll('#dlg-belegung button, #dlg-belegung summary')]
     .map(e => e.getBoundingClientRect()).filter(r => r.height < 43.5 || r.width < 43.5).length`), 0);
   // Attrappe eines verbundenen Lenkers: STOPP und + am Lenker wirken bei offenem Blatt
@@ -392,40 +401,47 @@ try {
   // Paddle drücken und loslassen bzw. Taste (Bit) drücken und loslassen
   const paddle = async (ort, wert) => { await b.ev(`__paket(${ort}, ${wert})`); await sleep(100); await b.ev(`__paket(${ort}, 0)`); await sleep(100); };
   const taste = async bit => { await b.ev(`__paket(0, 0, ~(1 << ${bit}))`); await sleep(100); await b.ev(`__paket(0, 0)`); await sleep(100); };
-  const gewaehlt = () => b.ev(`[...document.querySelectorAll('#map-gewaehlt small')].map(e => e.textContent).join('+')`);
+  // Gewählte Tasten des Schritts = Tasten mit seiner Marke in der Lenkeransicht (Reihenfolge der Ansicht: links vor rechts)
+  const gewaehlt = () => b.ev(`import('./js/ble/zwift-controller.js').then(({ tastenName }) => {
+    const marke = document.querySelector('#map-schritt .lk-marke').textContent;
+    return [...document.querySelectorAll('#map-karte .lk-taste')].filter(t => t.querySelector('.lk-marke')?.textContent === marke)
+      .map(t => tastenName(Number(t.dataset.bit))).join('+'); })`);
+  const schritt = () => b.ev(`document.querySelector('#map-kicker').textContent + ' ' + document.querySelector('#map-schritt').textContent`);
   const knoepfe = () => b.ev(`['#btn-map-weiter', '#btn-map-skip'].map(id => document.querySelector(id).hidden ? '-' : document.querySelector(id).textContent).join('|')`);
   const status = () => b.ev(`document.querySelector('#map-status').textContent`);
   await b.klick('#btn-settings', 700);
   await b.klick('#btn-map-lernen', 700);
-  soll('Lern-Modus offen, erster Schritt Watt hoch', await b.ev(`document.querySelector('#dlg-mapping').open && document.querySelector('#map-schritt').textContent`), 'Drücke die Taste für: Watt hoch (+)');
+  soll('Lern-Modus offen, erster Schritt Watt hoch', [await offen(b, 'dlg-mapping'), await schritt()].join(' '), 'true Schritt 1 von 5 +Watt hoch');
+  soll('… Lenkeransicht mit allen Griffzonen', await b.ev(`document.querySelectorAll('#map-karte .lk-zone').length`), 4);
   soll('… ohne Taste nur „Ohne Belegung weiter"', await knoepfe(), '-|Ohne Belegung weiter');
   await paddle(1, 80);
   soll('Erste Taste sofort angezeigt, „Weiter" erscheint', [await gewaehlt(), await knoepfe()].join(' / '), 'Paddle rechts außen / Weiter|-');
+  soll('… nur die gedrückte Richtung trägt die Marke', await b.ev(`['26', '27'].map(bit => document.querySelector('#map-karte .lk-taste[data-bit="' + bit + '"] .lk-marke')?.textContent ?? '·').join('')`), '+·');
   await paddle(0, -80);
-  soll('Zweite Taste dazu', await gewaehlt(), 'Paddle rechts außen+Paddle links außen');
-  soll('… Hinweis für die nächste', await status(), s => s.startsWith('Weitere Taste drücken oder Weiter'));
+  soll('Zweite Taste dazu', await gewaehlt(), 'Paddle links außen+Paddle rechts außen');
+  soll('… Hinweis für die nächste', await status(), 'Weitere Taste oder Weiter · erneut drücken entfernt');
   await taste(11);
-  soll('Ein/Aus wird ignoriert', [await gewaehlt(), await status()].join(' / '), g => g.startsWith('Paddle rechts außen+Paddle links außen / Ein/Aus'));
+  soll('Ein/Aus wird ignoriert', [await gewaehlt(), await status()].join(' / '), g => g.startsWith('Paddle links außen+Paddle rechts außen / Ein/Aus'));
   await paddle(0, -80);
-  soll('Nochmal drücken nimmt die Taste heraus', await gewaehlt(), 'Paddle rechts außen');
+  soll('Nochmal drücken nimmt die Taste heraus', [await gewaehlt(), await status()].join(' / '), 'Paddle rechts außen / Paddle links außen entfernt');
   await paddle(0, -80);
-  soll('… und wieder hinein', await gewaehlt(), 'Paddle rechts außen+Paddle links außen');
+  soll('… und wieder hinein', await gewaehlt(), 'Paddle links außen+Paddle rechts außen');
   soll('Tippflächen im Lern-Modus', await b.ev(`[...document.querySelectorAll('#dlg-mapping button')].filter(e => !e.hidden)
     .map(e => e.getBoundingClientRect()).filter(r => r.height < 43.5 || r.width < 43.5).length`), 0);
   await b.klick('#btn-map-weiter', 300);
-  soll('Weiter: nächste Aktion, Auswahl leer', [await b.ev(`document.querySelector('#map-schritt').textContent`), await gewaehlt(), await knoepfe()].join(' / '),
-    'Drücke die Taste für: Watt runter (−) /  / -|Ohne Belegung weiter');
+  soll('Weiter: nächste Aktion, Auswahl leer', [await schritt(), await gewaehlt(), await knoepfe()].join(' / '),
+    'Schritt 2 von 5 −Watt runter /  / -|Ohne Belegung weiter');
   await paddle(1, 80);
-  soll('Taste einer früheren Aktion abgewiesen', [await gewaehlt(), await status()].join(' / '), ' / Paddle rechts außen ist schon für „Watt hoch“ belegt — andere Taste drücken.');
+  soll('Taste einer früheren Aktion abgewiesen', [await gewaehlt(), await status()].join(' / '), ' / Schon für „Watt hoch“ belegt — andere Taste');
   await paddle(1, -80); await paddle(0, 80);
-  soll('Gegenrichtungen für Watt runter frei', await gewaehlt(), 'Paddle rechts innen+Paddle links innen');
+  soll('Gegenrichtungen für Watt runter frei', await gewaehlt(), 'Paddle links innen+Paddle rechts innen');
   soll('Lenkeransicht im Lern-Modus: außen +, innen −', await b.ev(`[...document.querySelectorAll('#map-karte .lk-stapel .lk-taste')].map(t => t.querySelector('.lk-marke')?.textContent ?? '·').join('')`), '+−−+');
   await b.klick('#btn-map-weiter', 300);
   await taste(2);
   await b.klick('#btn-map-weiter', 300);
   await b.klick('#btn-map-skip', 300);
   await taste(5);
-  soll('Letzter Schritt: „Fertig"', await knoepfe(), 'Fertig|-');
+  soll('Letzter Schritt: „Fertig"', [await schritt(), await knoepfe()].join(' / '), 'Schritt 5 von 5 ■STOPP / Fertig|-');
   await b.klick('#btn-map-weiter', 800);
   soll('Fertig schließt den Lern-Modus', await offen(b, 'dlg-mapping'), false);
   soll('Gespeichert: Listen, Einzelbits, unbelegt', JSON.stringify(await b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.controllerMap)`)),
@@ -484,13 +500,14 @@ try {
   await b.cdp('Page.removeScriptToEvaluateOnNewDocument', { identifier: spion });
 
   // --- Auftakt (signals.js): dieselbe Synthese offline gerendert — der vom
-  // Nutzer abgenommene Klang (v1): laut, aber ohne Übersteuern, der Großteil
-  // der Energie dort, wo ein Handy-Lautsprecher etwas wiedergibt. Dazu live: Fahrtende mitten im
+  // Nutzer gewählte Klang („wuchtig"): laut, aber ohne Übersteuern; bewusst
+  // basslastig, ein hörbarer Rest (Obertöne, Metall, Knall) muss aber über
+  // 150 Hz liegen, sonst bliebe am Handy-Lautsprecher nichts. Dazu live: Fahrtende mitten im
   // Auftakt bricht ihn ab, der Context schläft wieder.
   await b.geh(srv.url, 1500);
   const klang = await b.ev(`(async () => {
     const { auftaktSynth } = await import('./js/signals.js');
-    const SR = 48000, c = new OfflineAudioContext(2, SR * 3, SR);
+    const SR = 48000, c = new OfflineAudioContext(2, SR * 6, SR);
     auftaktSynth(c, c.destination, 0.05);
     const buf = await c.startRendering(), L = buf.getChannelData(0), R = buf.getChannelData(1);
     let spitze = 0;
@@ -515,9 +532,9 @@ try {
     }
     return { spitzeDb: 20 * Math.log10(spitze), tief: tief / summe, mitte: mitte / summe };
   })()`);
-  soll('Auftakt: Spitze zwischen −3 und −0,5 dBFS (laut, nicht übersteuert)', +klang.spitzeDb.toFixed(1), x => x >= -3 && x <= -0.5);
-  soll('Auftakt: 150–3000 Hz ≥ 55 % der Energie', +klang.mitte.toFixed(3), x => x >= 0.55);
-  soll('Auftakt: unter 150 Hz ≤ 45 % der Energie', +klang.tief.toFixed(3), x => x <= 0.45);
+  soll('Auftakt: Spitze zwischen −4 und −1 dBFS (laut, nicht übersteuert)', +klang.spitzeDb.toFixed(1), x => x >= -4 && x <= -1);
+  soll('Auftakt: 150–3000 Hz ≥ 5 % der Energie', +klang.mitte.toFixed(3), x => x >= 0.05);
+  soll('Auftakt: unter 150 Hz ≤ 95 % der Energie', +klang.tief.toFixed(3), x => x <= 0.95);
   // Live: echte Geste entsperrt den Context (initAudio), dann Auftakt und
   // sofort Fahrtende (audioSchlafen)
   // Audio Session API (nachgebildet, Chrome hat sie noch nicht): initAudio

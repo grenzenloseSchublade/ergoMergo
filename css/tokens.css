@@ -89,6 +89,7 @@
   --icon-s: 14px;
   --icon-m: 18px;
   --icon-l: 20px;
+  --icon-pikto: 32px;         /* Griff-Piktogramm je Zone in der Lenkeransicht */
 
   /* --- Bewegung (bei „Bewegung reduzieren" global aus) --- */
   --dauer-kurz: .15s;

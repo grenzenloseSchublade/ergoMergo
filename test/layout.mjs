@@ -5,7 +5,10 @@
 //   · Status, Nebenwerte, Chips, Demo mittig
 //   · nichts springt, wenn etwas passiert (Meldung, Menü, STOPP, Skip, 3-stellige Werte …)
 //   · Panel „⋯" überdeckt die Bedienleiste nie; Tipp daneben schließt nur
-//   · Blatt „Tastenbelegung" (aus dem Panel) ebenso: nie über der Bedienleiste
+//   · Blatt „Tastenbelegung" (aus dem Panel) ebenso: nie über der Bedienleiste;
+//     passt als Lenker und als Liste ohne Scrollen, Umschalten verschiebt nichts
+//   · Lern-Modus „Tasten zuordnen" (nachgebildeter Lenker): passt in jedem
+//     Schritt ohne Scrollen, Höhe und Knöpfe bleiben stehen, Zeilen einzeilig
 // Aufruf: node test/layout.mjs [breitexhöhe …]     (ohne Angabe: alle Standardgrößen)
 // Ausgabe: Befunde je Größe, Exit 1 bei Befunden.
 
@@ -127,7 +130,64 @@ async function pruefe(srv, [breite, hoehe]) {
     if (!blatt.offen) befunde.push('Blatt „Tastenbelegung" öffnet nicht');
     if (blatt.deckt.length) befunde.push(`Blatt überdeckt ${blatt.deckt.join(', ')}`);
     if (blatt.rand) befunde.push('Blatt ragt über den Rand');
-    if (blatt.offen) { await b.ev('history.back()'); await sleep(500); }
+    // Lenker und Liste: ohne Scrollen; der Umschalter verschiebt weder das
+    // Blatt noch sich selbst
+    const blattLage = () => b.ev(`(() => { const d = document.querySelector('#dlg-belegung'), u = d.querySelector('.belegung-umschalter');
+      const q = e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round).join('/'); };
+      // Umschalter: „Als Liste ›"/„Als Lenker ›" ist verschieden breit — die bündige Kante (hochkant rechts, quer links) und die Höhe bleiben
+      const k = u.getBoundingClientRect(), kante = matchMedia('(orientation: landscape) and (max-height: 620px)').matches ? k.left : k.right;
+      return { scrollt: d.scrollHeight > d.clientHeight + 1, hoehe: d.scrollHeight + '/' + d.clientHeight, blatt: q(d),
+        knopf: [kante, k.top, k.height].map(Math.round).join('/') }; })()`);
+    if (blatt.offen) {
+      const karte = await blattLage();
+      if (karte.scrollt) befunde.push(`Blatt (Lenker) muss scrollen: ${karte.hoehe}`);
+      await b.klick('#dlg-belegung .belegung-umschalter', 300);
+      const liste = await blattLage();
+      if (liste.scrollt) befunde.push(`Blatt (Liste) muss scrollen: ${liste.hoehe}`);
+      if (liste.blatt !== karte.blatt || liste.knopf !== karte.knopf) befunde.push(`Umschalten Lenker ↔ Liste verschiebt: ${karte.blatt} ${karte.knopf} → ${liste.blatt} ${liste.knopf}`);
+      await b.klick('#dlg-belegung .belegung-umschalter', 300);
+      await b.ev('history.back()'); await sleep(500);
+    }
+
+    // Lern-Modus mit nachgebildetem Lenker (Tasten als 'button'-Ereignis):
+    // jeder Schritt ohne Scrollen, gleiche Höhe, Knöpfe im Bild, Zeilen einzeilig
+    await b.geh(srv.url, 1500);
+    await b.ev(`(async () => { const { geraeteManager: g } = await import('./js/ble/geraete.js');
+      const pad = Object.assign(new EventTarget(), { deviceName: 'Zwift Ride' }), orig = g.clients.bind(g);
+      g.clients = r => r === 'controller' ? [pad] : orig(r);
+      g.verbindeOderKoppel = async () => ({ ergebnis: 'verbunden' });
+      window.__taste = bit => pad.dispatchEvent(new CustomEvent('button', { detail: bit })); })()`);
+    await b.klick('#btn-settings', 700);
+    await b.klick('#btn-map-lernen', 900);
+    const lern = () => b.ev(`(() => { const d = document.querySelector('#dlg-mapping'), r = d.getBoundingClientRect();
+      const knoepfe = [...d.querySelectorAll('.dlg-actions button')].filter(k => !k.hidden).map(k => k.getBoundingClientRect());
+      const zeilen = ['#map-kicker', '#map-schritt', '#map-status'].filter(s => { const e = document.querySelector(s);
+        return e.scrollWidth > e.clientWidth + 1 || e.getBoundingClientRect().height > parseFloat(getComputedStyle(e).lineHeight) * 1.5; });
+      return { offen: d.open, scrollt: d.scrollHeight > d.clientHeight + 1, hoehe: Math.round(r.height), top: Math.round(r.top), masse: d.scrollHeight + '/' + d.clientHeight,
+        knoepfe: knoepfe.every(k => k.bottom <= innerHeight + .5 && k.bottom <= r.bottom + .5), knopfZeile: [...new Set(knoepfe.map(k => Math.round(k.top)))].length, zeilen,
+        text: document.querySelector('#map-schritt').textContent + ' · ' + document.querySelector('#map-status').textContent }; })()`);
+    const ablauf = [
+      ['Schritt 1 ohne Taste', null],
+      ['Schritt 1, erste Taste', '__taste(26)'], ['Schritt 1, zweite Taste', '__taste(25)'],
+      ['Schritt 2', `document.querySelector('#btn-map-weiter').click()`], ['Schritt 2, schon belegt', '__taste(26)'],
+      ['Schritt 2, zwei Tasten', '__taste(27); __taste(24)'], ['Schritt 2, Taste entfernt', '__taste(24)'],
+      ['Schritt 3', `document.querySelector('#btn-map-weiter').click()`], ['Schritt 3, Taste', '__taste(2)'],
+      ['Schritt 4', `document.querySelector('#btn-map-weiter').click()`], ['Schritt 5', `document.querySelector('#btn-map-skip').click()`],
+      ['Schritt 5, Taste', '__taste(5)'],
+    ];
+    let erst = null;
+    for (const [was, aktion] of ablauf) {
+      if (aktion) { await b.ev(aktion); await sleep(250); }
+      const z = await lern();
+      if (!z.offen) { befunde.push(`Lern-Modus bei „${was}" nicht offen`); break; }
+      erst ??= z;
+      if (z.scrollt) befunde.push(`Lern-Modus muss scrollen (${was}): ${z.masse}`);
+      if (z.hoehe !== erst.hoehe || z.top !== erst.top) befunde.push(`Lern-Modus springt (${was}): Höhe ${erst.hoehe} → ${z.hoehe}, oben ${erst.top} → ${z.top}`);
+      if (!z.knoepfe) befunde.push(`Lern-Modus: Knöpfe nicht im Bild (${was})`);
+      if (z.knopfZeile > 1) befunde.push(`Lern-Modus: Knöpfe in ${z.knopfZeile} Zeilen (${was})`);
+      if (z.zeilen.length) befunde.push(`Lern-Modus: ${z.zeilen.join(', ')} nicht einzeilig (${was}: ${z.text})`);
+    }
+    await b.klick('#btn-map-abbruch', 400);
   } catch (e) {
     befunde.push('Testfehler: ' + e.message);
   } finally {

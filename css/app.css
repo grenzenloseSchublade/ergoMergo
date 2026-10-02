@@ -177,12 +177,37 @@ input.schalter::after {
 input.schalter:checked { background: var(--accent); border-color: var(--accent); }
 input.schalter:checked::after { transform: translateX(1.1rem); background: var(--bg); }
 input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Tastenbelegung: Aktion links, Tastensymbol + Name rechts */
-#map-schritt { font-size: var(--text-lg); margin: var(--abstand-3) 0; }
-/* Lern-Modus: die schon gedrückten Tasten des Schritts; Platz für eine Zeile
-   bleibt frei, damit die erste Taste nichts verschiebt */
-.tasten-gewaehlt { display: flex; flex-wrap: wrap; gap: var(--abstand-2) var(--abstand-4); min-height: 1.6rem; }
-.belegung-titel { margin-top: var(--abstand-3); }
+/* Tasten zuordnen (Lern-Modus): feste Zeilen — Schritt (Kicker), Marke +
+   Aktion, Rückmeldung; keine bricht um, keine wächst. Quer steht die
+   Lenkeransicht rechts daneben (siehe Querformat unten) */
+/* Breiter als andere Dialoge (8 px Rand), damit Rückmeldung und Knöpfe in
+   eine Zeile passen */
+#dlg-mapping { width: min(30rem, calc(100vw - var(--abstand-4))); max-width: none; padding-inline: var(--abstand-4); }
+.map-raster { display: grid; grid-template-columns: minmax(0, 1fr); }
+.map-raster > h2 { margin-bottom: var(--abstand-2); }
+.map-aufforderung p { margin: 0; }
+#map-schritt {
+  display: flex; align-items: center; gap: var(--abstand-2); font-size: var(--text-lg); line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#map-schritt .lk-marke { flex: none; }
+.map-status { margin: var(--abstand-1) 0 var(--abstand-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-status.fehler { white-space: normal; color: var(--danger); }   /* Ende des Ablaufs: Hinweis darf umbrechen */
+#dlg-mapping .dlg-actions { margin-top: var(--abstand-3); }
+#dlg-mapping .dlg-actions button { padding-inline: var(--abstand-2); }   /* „Ohne Belegung weiter" + „Abbrechen" in einer Zeile */
+/* Umschalter Lenker ↔ Liste: beide Ansichten in derselben Zelle, die
+   verdeckte hält ihren Platz (visibility) — Umschalten verschiebt nichts */
+.belegung-ansicht { display: grid; }
+.belegung-ansicht > * { grid-area: 1 / 1; min-width: 0; }
+.belegung-ansicht[data-ansicht="liste"] > :first-child,
+.belegung-ansicht[data-ansicht="karte"] > :last-child { visibility: hidden; }
+.belegung-umschalter { margin-left: auto; font-size: var(--text-sm); white-space: nowrap; }
+.belegung-kopf { display: flex; align-items: center; gap: var(--abstand-2); margin-top: var(--abstand-2); }
+.belegung-kopf .gruppe-titel { margin: 0; }
+.belegung-kopf .text-aktion { background: none; border: 0; padding: 0 var(--abstand-1); }   /* schlägt die Rubrik-Regel „.diagnose button" */
+#dlg-belegung .dlg-kopf { margin-bottom: 0; }   /* der Umschalter bringt mit 44 px eigenen Abstand mit */
+.belegung-aendern { margin: var(--abstand-2) 0 0; }
+#dlg-belegung .dlg-actions { margin-top: var(--abstand-2); }
 .belegung { list-style: none; margin: var(--abstand-15) 0 0; padding: 0; display: grid; gap: var(--abstand-15); font-size: var(--text-md); }
 .belegung li { display: flex; align-items: center; justify-content: space-between; gap: var(--abstand-25); color: var(--ink2); }
 /* Mehrere Tasten je Aktion: untereinander, rechtsbündig; passt es nicht neben
@@ -214,17 +239,21 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .ts-paddle { gap: var(--abstand-1); min-width: 3.4rem; height: 1.6rem; border-width: 2px; border-radius: var(--radius-s); font-size: var(--text-sm); }
 .ts-klein { height: 1.2rem; padding: 0 var(--abstand-15); gap: var(--abstand-1); font-size: var(--text-2xs); }
 .ts-klein svg { width: var(--icon-xs); height: var(--icon-xs); }
-/* Lenkeransicht: Seite links | Zone (Piktogramm) | Seite rechts */
+/* Lenkeransicht: Seite links | Zone (Piktogramm) | Seite rechts — kompakt,
+   damit sie samt Kopf und Knöpfen auf eine Bildschirmseite passt (die
+   Tasten sind hier nur Anzeige, keine Tippflächen) */
 .lk-karte {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-  column-gap: var(--abstand-2); row-gap: var(--abstand-3); margin-top: var(--abstand-2);
-  padding: var(--abstand-25) var(--abstand-2) var(--abstand-3);
+  column-gap: var(--abstand-2); row-gap: var(--abstand-15);
+  padding: var(--abstand-15) var(--abstand-2) var(--abstand-2);
 }
+.lk-kopf { line-height: 1.2; }
 .lk-kopf:first-child { justify-self: end; }
-/* Mittelspalte schmal halten: Zonenname darf zweizeilig werden */
-.lk-zone { display: grid; justify-items: center; gap: var(--abstand-05); max-width: 4.6rem; }
-.lk-zone small { font-size: var(--text-2xs); line-height: 1.15; color: var(--ink3); text-align: center; }
-.lk-pikto { width: 48px; height: 48px; }
+/* Mittelspalte schmal halten, Zonenname einzeilig */
+.lk-zone { display: grid; justify-items: center; max-width: 4.6rem; }
+.lk-zone small { font-size: var(--text-2xs); line-height: 1.15; color: var(--ink3); text-align: center; white-space: nowrap; }
+.lk-leer { margin: var(--abstand-2) 0; }
+.lk-pikto { width: var(--icon-pikto); height: var(--icon-pikto); }
 .lk-pikto .lk-form { fill: var(--bg); stroke: var(--ink2); stroke-width: 1.5; stroke-linejoin: round; }
 .lk-pikto .lk-lenker { fill: none; stroke: var(--ink3); stroke-width: 3; stroke-linecap: round; opacity: .55; }
 /* Zonenmarkierung in Akzentfarbe — Orange steht für orange Tasten */
@@ -235,14 +264,14 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .lk-rechts { justify-content: flex-start; }
 /* Paddle mit verschieden belegten Richtungen: beide Richtungen übereinander,
    jede mit ihrer Marke außen (← oben, → unten) */
-.lk-stapel { flex-direction: column; }
+.lk-stapel { flex-direction: column; gap: var(--abstand-1); }
 .lk-links.lk-stapel { align-items: flex-end; }
 .lk-rechts.lk-stapel { align-items: flex-start; }
 /* Kreuz/Raute bzw. Schalttasten übereinander: festes Raster aus der Tabelle */
-.lk-raster { display: grid; grid-auto-columns: 1.55rem; grid-auto-rows: 1.55rem; gap: var(--abstand-1); place-items: center; }
+.lk-raster { display: grid; grid-auto-columns: 1.4rem; grid-auto-rows: 1.4rem; gap: var(--abstand-1); place-items: center; }
 .lk-links.lk-raster { justify-content: end; }
 .lk-rechts.lk-raster { justify-content: start; }
-.lk-raster .ts:not(.ts-pill) { width: 1.5rem; padding: 0; }   /* Pfeile quadratisch */
+.lk-raster .ts:not(.ts-pill) { width: 1.35rem; height: 1.35rem; min-width: 0; padding: 0; }   /* Pfeile quadratisch */
 /* Belegt = volle Deckkraft + Aktionsmarke seitlich außen; unbelegt gedimmt.
    Außen liegt im Kreuz/in der Raute immer ein freies Feld — keine Überdeckung */
 .lk-taste { position: relative; display: inline-flex; opacity: .35; }
@@ -257,9 +286,11 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .lk-taste.blink { animation: lk-blink .9s ease-out 2; opacity: 1; }
 @keyframes lk-blink { 0% { filter: drop-shadow(0 0 0 var(--accent)); transform: scale(1.25); } 100% { filter: none; transform: scale(1); } }
+/* Legende: so viele Einträge je Zeile wie passen (alle fünf brauchen ab
+   ~430 px eine Zeile, schmaler zwei) */
 .lk-legende {
-  grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--abstand-1) var(--abstand-3);
-  margin-top: var(--abstand-1); padding-top: var(--abstand-2); border-top: 1px solid var(--line); font-size: var(--text-xs); color: var(--ink2);
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--abstand-05) var(--abstand-3);
+  padding-top: var(--abstand-15); border-top: 1px solid var(--line); font-size: var(--text-xs); line-height: 1.5; color: var(--ink2);
 }
 .lk-legende span { display: inline-flex; align-items: center; gap: var(--abstand-1); }
 /* Schmale Geräte (≤ 380 px): Kreuz/Raute etwas kleiner, damit die seitlichen
@@ -267,12 +298,7 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 @media (max-width: 380px) {
   .lk-karte { column-gap: var(--abstand-15); padding-inline: var(--abstand-15); }
   .lk-zone { max-width: 4.1rem; }
-  .lk-raster { grid-auto-columns: 1.4rem; grid-auto-rows: 1.4rem; gap: var(--abstand-1); }
-  .lk-raster .ts:not(.ts-pill) { width: 1.35rem; height: 1.35rem; min-width: 0; }
 }
-.belegung-details { margin-top: var(--abstand-2); }
-.belegung-details summary { cursor: pointer; font-size: var(--text-xs); color: var(--ink3); line-height: var(--tippflaeche); }   /* Tippfläche */
-#map-karte { margin-top: var(--abstand-25); }
 .geraete { list-style: none; margin: var(--abstand-2) 0 0; padding: 0; display: grid; gap: var(--abstand-2); font-size: var(--text-md); }
 .geraete li { display: flex; align-items: center; gap: var(--abstand-3); }
 .g-icon {
@@ -762,6 +788,29 @@ button:disabled { cursor: default; }
   /* Kopfzeile quer flacher: die Höhe gehört dem Graphen */
   .ride-kopf { padding-top: 0; }
   .kopf-geraet, .kopf-pip, .kopf-mehr { height: 38px; }   /* Ausnahme von --tippflaeche: quer zählt jede Zeile; Breite bleibt 44 px */
+  /* Blatt „Tastenbelegung" quer: Lenkeransicht bzw. Liste links, Titel,
+     Umschalter, Hinweis und Schließen rechts — sonst ragt es unten hinaus */
+  dialog.sheet.blatt-fahrt { width: min(40rem, 100vw); }
+  #dlg-belegung > form {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 11rem); column-gap: var(--abstand-5);
+    grid-template-areas: "ansicht kopf" "ansicht hinweis" "ansicht aktionen"; grid-template-rows: auto auto 1fr;
+  }
+  #dlg-belegung .dlg-kopf { grid-area: kopf; flex-wrap: wrap; row-gap: 0; }
+  #dlg-belegung .belegung-umschalter { margin-left: calc(-1 * var(--abstand-1)); }
+  #dlg-belegung .belegung-ansicht { grid-area: ansicht; }
+  .belegung-aendern { grid-area: hinweis; }
+  #dlg-belegung .dlg-actions { grid-area: aktionen; align-self: end; }
+  /* Tasten zuordnen quer: Text und Knöpfe links, Lenkeransicht rechts */
+  #dlg-mapping { width: min(46rem, 96vw); }
+  .map-raster {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); column-gap: var(--abstand-5);
+    grid-template-areas: "titel karte" "aufforderung karte" "status karte" "aktionen karte"; grid-template-rows: auto auto auto 1fr;
+  }
+  .map-raster > h2 { grid-area: titel; }
+  .map-aufforderung { grid-area: aufforderung; }
+  .map-status { grid-area: status; }
+  #map-karte { grid-area: karte; }
+  .map-raster > .dlg-actions { grid-area: aktionen; align-self: end; flex-wrap: wrap; }
   /* Panel quer zweispaltig (Geräte | Töne), sonst ragt es unten hinaus */
   dialog.fahrt-optionen { width: min(36rem, calc(100vw - 16px)); }
   .fahrt-optionen-inhalt { grid-template-columns: 1fr 1fr; grid-template-areas: "geraete toene" "geraete hinweis"; grid-template-rows: auto 1fr; }

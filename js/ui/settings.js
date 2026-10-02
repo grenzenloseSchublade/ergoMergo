@@ -3,7 +3,7 @@
 // FTP-Änderung) laufen über injizierte Callbacks.
 
 import { getSettings, setSetting, setSettings, getLogs, clearLogs, alleDatenLoeschen, listSessions, EINSTELLUNGEN, pruefeEinstellung, HALTEN_TEMPO,
-  tastenVon, MAX_TASTEN_JE_AKTION } from '../storage.js';
+  MAX_TASTEN_JE_AKTION } from '../storage.js';
 
 // Formularfelder ↔ Einstellungen; Grenzen und Standardwerte stehen nur im
 // Schema (EINSTELLUNGEN in storage.js)
@@ -14,8 +14,8 @@ const SCHALTER = { '#set-sprache': 'sprachansagen', '#set-ton': 'tonAn', '#set-z
 import { esc, dateiStempel } from '../format.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';
 import { tastenName, tasteInfo } from '../ble/zwift-controller.js';
-import { lenkerKarte, zeigeBelegung, tasteMitName } from './lenker-karte.js';
-import { CONTROLLER_AKTIONEN, istBelegbar } from './controller-aktionen.js';
+import { lenkerKarte, zeigeBelegung } from './lenker-karte.js';
+import { CONTROLLER_AKTIONEN, istBelegbar, aktionMitTaste } from './controller-aktionen.js';
 import { GL_ROLLEN, GL_ICONS, koppelMitRueckmeldung, geraeteHinweis } from './geraete-leiste.js';
 import { oeffneModal } from '../navigation.js';
 import { toast, toastOk, toastErr } from './toast.js';
@@ -130,7 +130,7 @@ export async function openSettings({ nachSpeichern } = {}) {
   zeigeTakt(s.haltenTempo);
 
   // Tastenbelegung des Controllers: Anzeige + Lern-Modus
-  const zeigeMap = map => zeigeBelegung($('#ctrl-map-karte'), $('#ctrl-map-anzeige'), map);
+  const zeigeMap = map => zeigeBelegung($('#ctrl-map-ansicht'), map);
   zeigeMap(s.controllerMap);
   $('#btn-map-lernen').onclick = () => lerneTasten(zeigeMap);
   for (const [id, k] of Object.entries(ZAHLFELDER)) $(id).value = s[k];
@@ -199,7 +199,9 @@ export async function openSettings({ nachSpeichern } = {}) {
 // Tasten-Lern-Modus: verbindet den Controller und fragt Aktion für Aktion
 // die Tasten ab — ersetzt die alte Bit-Raterei über den Diagnose-Log. Je
 // Aktion beliebig viele Tasten (bis MAX_TASTEN_JE_AKTION) nacheinander
-// drücken; jede steht sofort da, erneutes Drücken nimmt sie wieder heraus.
+// drücken; jede trägt sofort die Marke der Aktion in der Lenkeransicht,
+// erneutes Drücken nimmt sie wieder heraus. Schritt, Aufforderung und
+// Rückmeldung haben je eine feste Zeile — der Dialog ändert seine Höhe nicht.
 // „Weiter" (ab einer Taste) bzw. „Ohne Belegung weiter" geht zur nächsten
 // Aktion. Eine Taste gehört nur zu einer Aktion: schon vergebene Tasten
 // früherer Schritte werden abgewiesen.
@@ -213,20 +215,26 @@ async function lerneTasten(zeigeMap) {
   initAudio();                                   // Klick kam per Geste — Audio freischalten
   // Belegung samt der Tasten des laufenden Schritts (für die Lenkeransicht)
   const bisher = () => ({ ...map, [schritte[i].key]: gewaehlt });
-  // Gewählte Tasten des Schritts sofort zeigen (die gedrückte Richtung, nicht
-  // das ganze Paddle); „Weiter" erst ab einer Taste, sonst „Ohne Belegung weiter"
+  // Knöpfe zum Stand des Schritts: „Weiter" erst ab einer Taste, sonst
+  // „Ohne Belegung weiter" (die Tasten selbst zeigt die Lenkeransicht)
   const zeigeGewaehlt = () => {
-    $('#map-gewaehlt').innerHTML = gewaehlt.map(bit => tasteMitName({ bit, ganz: false })).join('');
     $('#btn-map-weiter').hidden = !gewaehlt.length;
     $('#btn-map-weiter').textContent = i === schritte.length - 1 ? 'Fertig' : 'Weiter';
     $('#btn-map-skip').hidden = gewaehlt.length > 0;
   };
+  // Aufforderung: Schritt als Kicker, darunter Marke + Kurzname der Aktion
+  // (wie an der Taste) — kurz genug für eine Zeile
   const zeigeSchritt = () => {
-    $('#map-schritt').textContent = `Drücke die Taste für: ${schritte[i].label}`;
+    const { marke, kurz } = schritte[i];
+    $('#map-kicker').textContent = `Schritt ${i + 1} von ${schritte.length}`;
+    $('#map-schritt').innerHTML = `<b class="lk-marke">${marke}</b>${kurz}`;
     zeigeGewaehlt();
   };
-  // Lenkeransicht: zeigt die bisher gelernten Tasten, die zuletzt gedrückte blinkt
-  const zeigeKarte = (blink = null) => { $('#map-karte').innerHTML = lenkerKarte(bisher(), { blink }); };
+  const status = text => { $('#map-status').textContent = text; };
+  const HINWEIS_LEER = 'Taste am Lenker drücken';
+  const HINWEIS = 'Weitere Taste oder Weiter · erneut drücken entfernt';
+  // Lenkeransicht: alle Zonen, gewählte Tasten mit Marke, die zuletzt gedrückte blinkt
+  const zeigeKarte = (blink = null) => { $('#map-karte').innerHTML = lenkerKarte(bisher(), { blink, lernen: true }); };
   let lauscher = [];                             // [client, fn] — beim Ende abbauen
   const ende = () => {
     fertig = true;
@@ -255,7 +263,7 @@ async function lerneTasten(zeigeMap) {
     }
     zeigeSchritt();
     zeigeKarte();
-    $('#map-status').textContent = 'Eine oder mehrere Tasten drücken.';
+    status(HINWEIS_LEER);
   };
   $('#btn-map-weiter').onclick = weiter;
   $('#btn-map-skip').onclick = () => { gewaehlt = []; weiter(); };
@@ -263,7 +271,7 @@ async function lerneTasten(zeigeMap) {
     if (fertig || i >= schritte.length) return;
     const bit = e.detail;
     if (!istBelegbar(tasteInfo(bit))) {
-      $('#map-status').textContent = 'Ein/Aus schaltet das Pad aus — bitte eine andere Taste drücken.';
+      status('Ein/Aus schaltet das Pad aus — andere Taste');
       return;
     }
     const name = tastenName(bit);
@@ -273,27 +281,29 @@ async function lerneTasten(zeigeMap) {
       gewaehlt = gewaehlt.filter(b => b !== bit);
       zeigeGewaehlt();
       zeigeKarte();
-      $('#map-status').textContent = `${name} wieder herausgenommen. Andere Taste drücken oder ${gewaehlt.length ? 'Weiter' : 'ohne Belegung weiter'}.`;
+      status(`${name} entfernt`);
       return;
     }
     // Schon für eine frühere Aktion gedrückt? Dann nicht doppelt vergeben.
     // Nur ausdrücklich gedrückte Tasten zählen — die freie Gegenrichtung
     // eines Paddles darf eine eigene Aktion bekommen (außen +, innen −)
-    const andere = schritte.find(a => tastenVon(map[a.key]).includes(bit));
+    const andere = aktionMitTaste(map, bit);
     if (andere) {
-      $('#map-status').textContent = `${name} ist schon für „${andere.kurz}“ belegt — andere Taste drücken.`;
+      status(`Schon für „${andere.kurz}“ belegt — andere Taste`);
       return;
     }
     if (gewaehlt.length >= MAX_TASTEN_JE_AKTION) {
-      $('#map-status').textContent = `Höchstens ${MAX_TASTEN_JE_AKTION} Tasten je Aktion — jetzt Weiter tippen.`;
+      status(`Höchstens ${MAX_TASTEN_JE_AKTION} Tasten je Aktion — Weiter tippen`);
       return;
     }
     gewaehlt = [...gewaehlt, bit];
     tick();
     zeigeGewaehlt();
     zeigeKarte(bit);
-    $('#map-status').textContent = 'Weitere Taste drücken oder Weiter. Nochmal drücken nimmt eine Taste wieder heraus.';
+    status(HINWEIS);
   };
+  $('#map-status').classList.remove('fehler');
+  status('Lenker wird verbunden …');
   oeffneModal(dlg, 'mapping');
   zeigeSchritt();
   zeigeKarte();
@@ -304,14 +314,14 @@ async function lerneTasten(zeigeMap) {
     if (fertig) return;                          // Abbruch — Pool behält die Verbindung
     if (r.ergebnis === 'abgebrochen') { ende(); return; }
     if (!geraeteManager.clients('controller').length) {
-      $('#map-status').textContent = geraeteHinweis('Lenker', r) ?? 'Lenker nicht erreichbar — Gerät wecken und erneut öffnen.';
+      // Ende des Ablaufs: hier darf die Zeile umbrechen (Hinweise sind länger)
+      $('#map-status').classList.add('fehler');
+      status(geraeteHinweis('Lenker', r) ?? 'Lenker nicht erreichbar — Gerät wecken und erneut öffnen.');
       return;
     }
     const clients = geraeteManager.clients('controller');
     for (const c of clients) { c.addEventListener('button', onButton); lauscher.push([c, onButton]); }
-    const namen = clients.map(c => c.deviceName ?? 'Lenker').join(' + ');
-    $('#map-status').textContent =
-      `Verbunden: ${namen} — jetzt eine oder mehrere Tasten drücken. (Zwift Click hat feste ±-Tasten, Lernen ist nur für den Ride nötig.)`;
+    status(`Verbunden${clients.length > 1 ? ` (${clients.length} Pads)` : ''} — Taste am Lenker drücken`);
   } catch (err) {
     toastErr('Lenker-Verbindung fehlgeschlagen: ' + err.message);
     ende();

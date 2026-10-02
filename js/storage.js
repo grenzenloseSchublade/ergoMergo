@@ -101,7 +101,11 @@ const objekt = v => v && typeof v === 'object' && !Array.isArray(v) ? v : v === 
 // lesbar. Eine belegte Paddle-Richtung wirkt auch in die freie Gegenrichtung
 // (aktionenJeBit in zwift-controller.js).
 export const MAX_TASTEN_JE_AKTION = 4;
-const BELEGBARE_BITS = new Set(RIDE_TASTEN.tasten.filter(t => t.gruppe !== 'system').map(t => t.bit));
+// Ein/Aus (Gruppe „system") schaltet das Pad beim Halten aus — nie belegbar,
+// in der Lenkeransicht ausgeblendet und im Lern-Modus ignoriert. EINE Regel
+// für Schema-Prüfung und Oberfläche (controller-aktionen.js reicht sie weiter)
+export const istBelegbar = t => t?.gruppe !== 'system';
+const BELEGBARE_BITS = new Set(RIDE_TASTEN.tasten.filter(istBelegbar).map(t => t.bit));
 // Wert einer Aktion → Liste ihrer Bits (null/fehlt → leer) — EINE Stelle für alle Leser
 export const tastenVon = wert => wert === null || wert === undefined ? [] : [wert].flat();
 const tastenWert = b => {

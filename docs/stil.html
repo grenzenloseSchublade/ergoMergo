@@ -255,18 +255,28 @@
   <p class="einl">Live mit <code>zeigeBelegung()</code> aus <code>js/ui/lenker-karte.js</code> (Standardbelegung) —
     dieselbe Darstellung in den Einstellungen und im Blatt „Tastenbelegung“ der Fahrt. Dort ist das Blatt
     nicht modal und sitzt zwischen Kopfzeile und Bedienleiste (quer links daneben): STOPP bleibt frei.
-    Eine Aktion kann mehrere Tasten haben: jede trägt ihre Marke, die Liste zeigt sie untereinander.
-    Verschieden belegte Paddle-Richtungen stehen übereinander (<code>.lk-stapel</code>, ← oben), die Marke außen.</p>
+    Zum Ansehen nur Griffzonen mit belegten Tasten. Eine Aktion kann mehrere Tasten haben: jede trägt ihre
+    Marke, die Liste zeigt sie untereinander. Verschieden belegte Paddle-Richtungen stehen übereinander
+    (<code>.lk-stapel</code>, ← oben), die Marke außen. „Als Liste ›“ schaltet um — beide Ansichten liegen in
+    derselben Zelle (<code>.belegung-ansicht</code>), nichts verschiebt sich.</p>
   <div class="spalte">
-    <div id="sg-lenker"></div>
-    <details class="belegung-details" open><summary>Als Liste</summary><ul id="sg-belegung" class="belegung"></ul></details>
+    <div class="belegung-kopf">
+      <p class="gruppe-titel">Tastenbelegung</p>
+      <button type="button" class="text-aktion belegung-umschalter" aria-controls="sg-ansicht">Als Liste ›</button>
+    </div>
+    <div id="sg-ansicht" class="belegung-ansicht"><div></div><ul class="belegung"></ul></div>
     <p class="hint">Ändern: Einstellungen → Geräte → „Tasten zuordnen“</p>
   </div>
-  <h3 class="gruppe-titel">Lern-Modus · gewählte Tasten des Schritts</h3>
+  <h3 class="gruppe-titel">Lern-Modus · Schritt im Ablauf</h3>
+  <p class="einl">Kicker, Marke + Aktion und Rückmeldung je genau eine Zeile; die gewählten Tasten zeigt die
+    Lenkeransicht (alle Zonen, Paddles je Richtung) mit der Marke des Schritts — hier Watt hoch an beiden Paddles außen.</p>
   <div class="spalte">
-    <p id="map-schritt">Drücke die Taste für: Watt hoch (+)</p>
-    <div class="tasten-gewaehlt" id="sg-gewaehlt"></div>
-    <p class="hint">Weitere Taste drücken oder Weiter. Nochmal drücken nimmt eine Taste wieder heraus.</p>
+    <div class="map-aufforderung">
+      <p class="gruppe-titel" id="map-kicker">Schritt 1 von 5</p>
+      <p id="map-schritt"><b class="lk-marke">+</b>Watt hoch</p>
+    </div>
+    <p class="hint map-status">Weitere Taste oder Weiter · erneut drücken entfernt</p>
+    <div id="sg-lernen"></div>
   </div>
 </main>
 
@@ -274,7 +284,7 @@
   import { montiereIcons, svgIcon } from '../js/ui/icons.js';
   import { LedZeile } from '../js/ui/led-zeile.js';
   import { tastenSymbol } from '../js/ui/tasten-symbol.js';
-  import { zeigeBelegung, tasteMitName } from '../js/ui/lenker-karte.js';
+  import { zeigeBelegung, lenkerKarte } from '../js/ui/lenker-karte.js';
   import { STANDARD_TASTEN } from '../js/storage.js';
 
   // Tokens aus der Quelldatei lesen (Name, Wert, Kommentar, Abschnitt)
@@ -334,8 +344,8 @@
   document.querySelector('#tasten').innerHTML = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 24, 25, 26, 27]
     .map(b => { try { return tastenSymbol(b); } catch { return ''; } }).join('')
     + [24, 26].map(b => tastenSymbol(b, { ganz: true })).join('');
-  zeigeBelegung(document.querySelector('#sg-lenker'), document.querySelector('#sg-belegung'), STANDARD_TASTEN);
-  document.querySelector('#sg-gewaehlt').innerHTML = [26, 25].map(bit => tasteMitName({ bit, ganz: false })).join('');
+  zeigeBelegung(document.querySelector('#sg-ansicht'), STANDARD_TASTEN);
+  document.querySelector('#sg-lernen').innerHTML = lenkerKarte({ plus: [26, 25] }, { lernen: true });
 </script>
 </body>
 </html>

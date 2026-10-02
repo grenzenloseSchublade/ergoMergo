@@ -3,7 +3,7 @@
 // ZwiftController (ride.js abonniert dieselben Namen), label = Langform,
 // kurz = Legende der Lenkeransicht, marke = Zeichen an der Taste.
 
-import { tastenVon } from '../storage.js';
+import { tastenVon, istBelegbar } from '../storage.js';
 
 export const CONTROLLER_AKTIONEN = [
   { key: 'plus', label: 'Watt hoch (+)', kurz: 'Watt hoch', marke: '+' },
@@ -16,6 +16,9 @@ export const CONTROLLER_AKTIONEN = [
 // Belegt = mindestens eine Taste (Einzelbit oder Liste, tastenVon)
 export const istBelegt = (map, key) => tastenVon(map?.[key]).length > 0;
 
-// Ein/Aus (Gruppe „system") schaltet das Pad beim Halten aus — nie belegbar,
-// in der Lenkeransicht ausgeblendet und im Lern-Modus ignoriert
-export const istBelegbar = t => t?.gruppe !== 'system';
+// Belegbar = alles außer Ein/Aus — Regel in storage.js (auch Schema-Prüfung)
+export { istBelegbar };
+
+// Aktion, der eine Taste AUSDRÜCKLICH zugeordnet ist (ohne die freie
+// Paddle-Gegenrichtung) — Lern-Modus und Lenkeransicht im Lern-Modus
+export const aktionMitTaste = (map, bit) => CONTROLLER_AKTIONEN.find(a => tastenVon(map?.[a.key]).includes(bit));

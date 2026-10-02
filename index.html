@@ -220,13 +220,16 @@
        bedienbar, am Lenker wie am Bildschirm. Tipp daneben, Esc oder Zurück schließt. -->
   <dialog id="dlg-belegung" class="sheet blatt-fahrt" closedby="any" aria-labelledby="belegung-blatt-titel">
     <form method="dialog">
-      <h2 id="belegung-blatt-titel">Tastenbelegung</h2>
-      <div id="belegung-blatt-karte"></div>
-      <details class="belegung-details">
-        <summary>Als Liste</summary>
+      <div class="dlg-kopf">
+        <h2 id="belegung-blatt-titel">Tastenbelegung</h2>
+        <!-- Umschalter Lenker ↔ Liste (lenker-karte.js): beide in einer Zelle, nichts springt -->
+        <button type="button" class="text-aktion belegung-umschalter" aria-controls="belegung-blatt-ansicht">Als Liste ›</button>
+      </div>
+      <div id="belegung-blatt-ansicht" class="belegung-ansicht">
+        <div id="belegung-blatt-karte"></div>
         <ul id="belegung-blatt-liste" class="belegung"></ul>
-      </details>
-      <p class="hint">Ändern: Einstellungen → Geräte → „Tasten zuordnen“</p>
+      </div>
+      <p class="hint belegung-aendern">Ändern: Einstellungen → Geräte → „Tasten zuordnen“</p>
       <div class="dlg-actions">
         <button value="cancel" class="ghost">Schließen</button>
       </div>
@@ -414,14 +417,16 @@
       <p class="hint" id="geraete-hint" hidden>Dauerhaftes Merken braucht <code>chrome://flags/#enable-web-bluetooth-new-permissions-backend</code>
         <button type="button" class="copy-btn" aria-label="Flag-Adresse kopieren" title="kopieren"><i class="si" data-icon="copy"></i></button>
         — ohne Flag bleibt die Geräteauswahl pro Sitzung.</p>
-      <p class="hint">Zwift-Lenker: beim Koppeln den Eintrag „Zwift Ride“ wählen (kryptische Namen sind Nebenkanäle). Linkes und rechtes Pad melden sich als eigene Geräte; „+ 2. Pad“ koppelt die andere Seite zusätzlich.</p>
+      <p class="hint">Zwift-Lenker: beim Koppeln den Eintrag „Zwift Ride“ wählen (kryptische Namen sind Nebenkanäle). Linkes und rechtes Pad melden sich als eigene Geräte; „+ 2. Pad“ koppelt die andere Seite zusätzlich. Zwift Click hat feste ±-Tasten — zuordnen braucht nur der Ride.</p>
       <ul id="geraete-liste" class="geraete"></ul>
-      <p class="gruppe-titel belegung-titel">Tastenbelegung</p>
-      <div id="ctrl-map-karte"></div>
-      <details class="belegung-details">
-        <summary>Als Liste</summary>
+      <div class="belegung-kopf">
+        <p class="gruppe-titel">Tastenbelegung</p>
+        <button type="button" class="text-aktion belegung-umschalter" aria-controls="ctrl-map-ansicht">Als Liste ›</button>
+      </div>
+      <div id="ctrl-map-ansicht" class="belegung-ansicht">
+        <div id="ctrl-map-karte"></div>
         <ul id="ctrl-map-anzeige" class="belegung"></ul>
-      </details>
+      </div>
       <div class="dlg-actions">
         <button type="button" id="btn-map-lernen">Tasten zuordnen</button>
       </div>
@@ -459,16 +464,23 @@
 </dialog>
 
 <!-- ============ TASTEN-LERN-MODUS ============ -->
-<dialog id="dlg-mapping">
-  <h2>Tasten zuordnen</h2>
-  <p id="map-schritt"></p>
-  <div id="map-gewaehlt" class="tasten-gewaehlt" aria-live="polite"></div>
-  <p class="hint" id="map-status">Lenker wird verbunden …</p>
-  <div id="map-karte"></div>
-  <div class="dlg-actions">
-    <button type="button" id="btn-map-weiter" class="ghost haupt" hidden>Weiter</button>
-    <button type="button" id="btn-map-skip" class="ghost">Ohne Belegung weiter</button>
-    <button type="button" id="btn-map-abbruch" class="ghost">Abbrechen</button>
+<!-- Feste Plätze, je eine Zeile: Schritt, Marke + Aktion, Rückmeldung — die
+     gewählten Tasten zeigt die Lenkeransicht (Marke an der Taste). Quer
+     steht die Lenkeransicht rechts neben dem Text -->
+<dialog id="dlg-mapping" aria-labelledby="map-titel">
+  <div class="map-raster">
+    <h2 id="map-titel">Tasten zuordnen</h2>
+    <div class="map-aufforderung">
+      <p class="gruppe-titel" id="map-kicker"></p>
+      <p id="map-schritt"></p>
+    </div>
+    <p class="hint map-status" id="map-status" aria-live="polite">Lenker wird verbunden …</p>
+    <div id="map-karte"></div>
+    <div class="dlg-actions">
+      <button type="button" id="btn-map-weiter" class="ghost haupt" hidden>Weiter</button>
+      <button type="button" id="btn-map-skip" class="ghost">Ohne Belegung weiter</button>
+      <button type="button" id="btn-map-abbruch" class="ghost">Abbrechen</button>
+    </div>
   </div>
 </dialog>
 

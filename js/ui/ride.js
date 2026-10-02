@@ -526,7 +526,7 @@ export class RideScreen {
     const oeffne = async () => {
       const { controllerMap } = await getSettings();
       if (this.#tot || blatt.open) return;
-      zeigeBelegung(this.$('#belegung-blatt-karte'), this.$('#belegung-blatt-liste'), controllerMap);
+      zeigeBelegung(this.$('#belegung-blatt-ansicht'), controllerMap);
       oeffneModal(blatt, 'belegung', { modal: false });
       platziere();
       blatt.scrollTop = 0;

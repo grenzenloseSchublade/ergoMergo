@@ -65,6 +65,17 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.4.2
+
+- **Neuer Auftakt „wuchtig“:** zwei schwere Schläge mit langem Nachhall.
+  Ansagen und Signaltöne folgen, sobald er hörbar verklungen ist.
+- **Tastenbelegung auf einer Seite:** Das Blatt in der Fahrt und der
+  Lern-Modus passen ohne Scrollen auf den Bildschirm. Die Ansicht zeigt nur
+  die belegten Tasten, „Als Liste ›“ schaltet zwischen Lenker und Liste um.
+- **Lern-Modus übersichtlicher:** „Schritt 1 von 5“, darunter die Aktion in
+  einer Zeile; die gewählten Tasten sind direkt am Lenker markiert, nichts
+  springt mehr zwischen den Schritten.
+
 ## Neu in 3.4.1
 
 - **Plan-Karte kompakter:** Über dem Profil steht nur noch so viel Platz, wie
