@@ -121,9 +121,10 @@ class GeraeteManager extends EventTarget {
     // Wer beim Fahrtende gerade getrennt war (Reconnect lief noch) oder zwar
     // einen GATT-Link, aber keine FTMS-Kontrolle hat (halb gescheiterter
     // Reconnect), ist jetzt eine Leiche — raus, sonst übernähme die nächste
-    // Fahrt einen Trainer ohne ERG
+    // Fahrt einen Trainer ohne ERG. GATT auch ohne Link trennen: das bricht
+    // einen laufenden connect() ab (hängt auf Android bis zu ~30 s)
     const tote = this.#clients.trainer.filter(c => !c.device?.gatt.connected || !c.connected);
-    for (const c of tote) c.disconnect({ gatt: !!c.device?.gatt.connected });
+    for (const c of tote) c.disconnect();
     if (tote.length) {
       this.#clients.trainer = this.#clients.trainer.filter(c => !tote.includes(c));
       this.#change();
@@ -229,7 +230,19 @@ class GeraeteManager extends EventTarget {
   // Chooser öffnen (braucht User-Geste), Gerät merken und direkt verbinden.
   async koppel(rolle) {
     const device = await navigator.bluetooth.requestDevice(CHOOSER_FILTER[rolle]);
-    const client = await this.#verbindeClient(rolle, device);
+    let client;
+    try {
+      client = await this.#verbindeClient(rolle, device);
+    } catch (err) {
+      // Fehlender Dienst heißt ebenfalls NotFoundError, darf aber nicht als
+      // abgebrochener Chooser gelten: gewählt wurde ja. Der Filter lässt
+      // Geräte nach Namen durch. Link nur trennen, wenn ihn niemand sonst nutzt
+      if (err.name !== 'NotFoundError') throw err;
+      if (!Object.values(this.#clients).flat().some(c => c.device?.id === device.id)) {
+        try { device.gatt.disconnect(); } catch { /* schon getrennt */ }
+      }
+      throw new Error('Gewähltes Gerät passt nicht — ihm fehlt der nötige Dienst');
+    }
     await merkeGeraet(rolle, device, rolle === 'trainer' && client.firmware ? { fw: client.firmware } : {});
     this.#change();
     return client;
