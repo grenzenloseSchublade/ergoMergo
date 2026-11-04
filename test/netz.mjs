@@ -25,8 +25,9 @@ const anfragen = [];                      // { url, methode, quelle, id, blockie
 const nachId = new Map();
 b.hoere(m => {
   if (m.method === 'Target.attachedToTarget') {
-    b.cdp('Network.enable', {}, m.params.sessionId);
-    b.cdp('Runtime.runIfWaitingForDebugger', {}, m.params.sessionId);
+    // Fehler zählen nicht: ein Service Worker kann vor der Antwort enden
+    b.cdp('Network.enable', {}, m.params.sessionId).catch(() => {});
+    b.cdp('Runtime.runIfWaitingForDebugger', {}, m.params.sessionId).catch(() => {});
   }
   if (m.method === 'Network.requestWillBeSent' && /^https?:/.test(m.params.request.url)) {
     const a = { url: m.params.request.url, methode: m.params.request.method, quelle: m.sessionId ? 'SW' : 'Seite', zeit: Date.now() };
@@ -92,7 +93,7 @@ try {
   soll('SW-Mitschnitt aktiv', anfragen.some(a => a.quelle === 'SW'));
 
   // --- CSP-03: fremde Server sind gesperrt ---
-  const vorCsp = anfragen.length;
+  const vorCsp = anfragen.length, vorCspFehler = b.fehler.length;
   await b.ev(`(async () => {
     try { await fetch('https://example.org/x'); } catch {}
     navigator.sendBeacon('https://example.org/b', 'daten');
@@ -102,9 +103,13 @@ try {
   await sleep(500);
   const versuche = anfragen.slice(vorCsp).filter(a => new URL(a.url).hostname === 'example.org');
   soll('CSP-03 nichts an fremde Server durchgelassen', versuche.every(a => a.blockiert), versuche.map(a => `${a.url} ${a.blockiert ?? 'GESENDET'}`).join(', '));
-  const csp = b.fehler.filter(f => f.includes('CSP-Verstoß'));
-  soll('CSP-03 alle vier Versuche gemeldet', csp.length >= 4, `${csp.length} gemeldet`);
-  b.fehler.splice(0, b.fehler.length, ...b.fehler.filter(f => !f.includes('CSP-Verstoß')));
+  // Nur die Meldungen dieses Versuchs: ein CSP-Verstoß aus den Abläufen davor
+  // bleibt in b.fehler und lässt den Test scheitern
+  const diese = b.fehler.splice(vorCspFehler);
+  const csp = diese.filter(f => f.includes('CSP-Verstoß'));
+  for (const ziel of ['https://example.org/x', 'https://example.org/b', 'wss://example.org/w', 'https://example.org/p.png'])
+    soll(`CSP-03 Versuch gemeldet: ${ziel}`, csp.some(f => f.includes(ziel)), `gemeldet: ${csp.join(' | ')}`);
+  b.fehler.push(...diese.filter(f => !f.includes('CSP-Verstoß')));
 
   // --- STO-01/02: Speicher-Inventar ---
   const kekse = (await b.cdp('Network.getAllCookies')).result?.cookies ?? [];
@@ -130,7 +135,7 @@ try {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {
   abweichungen.push(...b.fehler.map(f => 'JS-Fehler: ' + f));
-  b.schliesse();
+  await b.schliesse();
   srv.schliesse();
 }
 

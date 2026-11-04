@@ -300,6 +300,7 @@ Farben, Schriftgrößen, Radien und Abstände kommen nur aus `css/tokens.css`
 ```sh
 node tools/stil-check.mjs   # feste Werte außerhalb der Tokens (läuft auch in release.mjs)
 node tools/datenschutz-check.mjs  # jede Netzstelle freigegeben, CSP unverändert (läuft auch in release.mjs)
+node test/werkzeuge.mjs     # prüft die Prüfungen: release.mjs, eingebaute Verstöße, Pfade, Testbibliothek
 node test/sicherheit.mjs    # präparierte Sicherung: kein Schadcode, bereinigt
 node test/netz.mjs          # Netz-Mitschnitt aller Abläufe inkl. Service Worker, CSP, Speicher
 node test/layout.mjs        # Fahrbildschirm in 5 Größen: Bedienleiste, Überlauf, Zentrierung, Sprünge, Panel

@@ -1040,13 +1040,13 @@ try {
     }
   } finally {
     abweichungen.push(...b2.fehler.map(f => 'JS-Fehler (2): ' + f));
-    b2.schliesse();
+    await b2.schliesse();
   }
 } catch (e) {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {
   abweichungen.push(...b.fehler.map(f => 'JS-Fehler: ' + f));
-  b.schliesse();
+  await b.schliesse();
   srv.schliesse();
 }
 
