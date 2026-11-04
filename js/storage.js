@@ -93,6 +93,15 @@ const ausOder = (min, max) => v => { const g = ganz(0, max)(v); return g ? Math.
 const jaNein = v => typeof v === 'boolean' ? v : undefined;
 const auswahl = werte => v => typeof v === 'string' && Object.hasOwn(werte, v) ? v : undefined;
 const objekt = v => v && typeof v === 'object' && !Array.isArray(v) ? v : v === null ? null : undefined;
+// Trainingsplan: Mindestform — ein defekter Plan (Sicherung) sperrte sonst Karte und Dialog
+const istDatum = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const istTageListe = v => Array.isArray(v) && v.length > 0 && v.every(t => Number.isInteger(t) && t >= 0 && t <= 6);
+const planForm = v => {
+  if (v === null) return null;
+  return objekt(v) && istTageListe(v.tage) && Number.isFinite(v.dauer) && istDatum(v.start) && (v.angelegt === undefined || istDatum(v.angelegt))
+    && (v.laenge === null || v.laenge === undefined || (Number.isInteger(v.laenge) && v.laenge > 0))
+    && (!v.pause || istDatum(v.pause.seit)) ? v : undefined;
+};
 // Tastenbelegung: Aktion → Bit 0–63, Liste von Bits (Mehrfachbelegung aus
 // dem Lern-Modus) oder null (bewusst unbelegt). Eine Liste ist eindeutig, hat
 // 1–MAX_TASTEN_JE_AKTION Einträge und nur bekannte, belegbare Tasten der
@@ -130,7 +139,7 @@ export const EINSTELLUNGEN = {
   tonAn: { std: true, pruefe: jaNein },
   glut: { std: true, pruefe: jaNein },                          // Zonen-Glut hinter den Fahrwerten (nur quer)
   zwoImport: { std: false, pruefe: jaNein },                    // .zwo-Import, standardmäßig aus
-  plan: { std: null, pruefe: objekt },                          // Trainingsplan (js/plan.js)
+  plan: { std: null, pruefe: planForm },                          // Trainingsplan (js/plan.js)
   // Gemerkte Geräte: Web-Bluetooth-IDs gelten nur in diesem Browserprofil —
   // nie exportieren, nie importieren
   geraete: { std: undefined, pruefe: objekt, lokal: true },

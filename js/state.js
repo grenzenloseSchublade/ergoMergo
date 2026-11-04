@@ -91,7 +91,18 @@ export class Session extends EventTarget {
   setTarget(watt, { instant = false, rampMs = RAMP_MS } = {}) {
     const w = Math.min(Math.max(0, Math.round(watt)), this.settings.maxWatt);
     if (instant) { this.#ramp = null; this.target = w; }
-    else { this.#ramp = { from: this.#currentRampValue(), to: w, t0: performance.now(), ms: rampMs }; this.target = w; }
+    else {
+      const von = this.#currentRampValue();     // beendet eine abgelaufene Rampe
+      // Läuft der sanfte Wiedereinstieg, darf ein höheres Ziel (±-Tap, gehaltener
+      // Knopf, Blockwechsel) ihn nicht abkürzen: das neue Ziel kommt in seiner
+      // Restzeit. Nach unten gilt die normale Rampe
+      const alt = this.#ramp;
+      const sanft = rampMs === RESUME_RAMP_MS || (alt?.sanft && w > von);
+      const rest = alt?.sanft ? alt.ms - (performance.now() - alt.t0) : 0;
+      const ms = rampMs === RESUME_RAMP_MS ? rampMs : sanft ? Math.max(RAMP_MS, rest) : rampMs;
+      this.#ramp = { from: von, to: w, t0: performance.now(), ms, sanft };
+      this.target = w;
+    }
     this.dispatchEvent(new Event('target'));
     // Sofort schreiben statt auf den 250-ms-Timer warten: im Hintergrund
     // drosselt Chrome Timer massiv — der BLE-Tastendruck selbst liefert
@@ -155,7 +166,7 @@ export class Session extends EventTarget {
     // niedrigeren Zwischenwert nachschreiben) — plus Diagnosespur. Der
     // sanfte Wiedereinstieg nach Not-Stopp bleibt: er läuft im Takt der
     // BLE-Notifications weiter (#onData), sonst stünde sofort volle Last an
-    if (document.hidden && this.#ramp?.ms !== RESUME_RAMP_MS) this.#ramp = null;
+    if (document.hidden && !this.#ramp?.sanft) this.#ramp = null;
     const w = this.#currentRampValue();
     if (w === this.#lastWritten) return;
     this.#letzterWriteT = jetzt;

@@ -193,11 +193,14 @@ export class ProgramRun extends EventTarget {
   // Geklemmt, sodass der laufende Block zwischen 0 W und maxWatt bleibt —
   // sonst liefen Taps an der Grenze ins Leere und Anzeige/Ansage zeigten
   // negative oder unerreichbare Ziele. anwenden=false: nur den Offset
-  // setzen (Wiedereinstieg nach Not-Stopp fährt ihn selbst sanft an).
+  // setzen (Wiedereinstieg nach Not-Stopp fährt ihn selbst sanft an). Liegt der
+  // Block selbst über maxWatt (hohe FTP, Rampentest), ist die Grenze negativ —
+  // sie darf den Offset nie senken, sonst führe der Rest des Programms zu tief.
   adjust(delta, { anwenden = true } = {}) {
     let neu = this.offset + delta;
     const b = this.aktuellerBlock;
-    if (b) neu = Math.min(Math.max(neu, -b.watt), (this.session.settings.maxWatt ?? Infinity) - b.watt);
+    if (b) neu = Math.min(Math.max(neu, -b.watt),
+      Math.max((this.session.settings.maxWatt ?? Infinity) - b.watt, 0, this.offset));
     this.offset = neu;
     if (anwenden) this.#apply();
   }
@@ -246,7 +249,7 @@ export class ProgramRun extends EventTarget {
   aktuellesZiel() {
     if (this.vorbei) return this.session.zielVorStopp ?? this.session.target;
     const b = this.aktuellerBlock;
-    return b ? b.watt + this.offset : 0;
+    return b ? Math.max(0, Math.min(b.watt + this.offset, this.session.settings.maxWatt ?? Infinity)) : 0;
   }
 
   blockAt(t) {

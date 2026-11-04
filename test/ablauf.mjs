@@ -207,6 +207,36 @@ try {
   soll('… ohne Wochenstreifen', await b.ev(`document.querySelector('#plan-woche').hidden`), true);
   await b.klick('#plan-aktion', 1000);
   soll('Fortsetzen', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => !t.includes('pausiert') && t.includes('Woche'));
+  // Zeit abgelaufen ist kein Erfolg: Karte nach Bilanz, Weitermachen gibt neue Wochen
+  const setzePlan = p => b.ev(`import('./js/storage.js').then(m => m.setSetting('plan', ${JSON.stringify(p)})).then(() => document.dispatchEvent(new Event('plan-geaendert')))`);
+  const planJetzt = await b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.plan)`);
+  await setzePlan({ ...planJetzt, laenge: 4, start: '2020-01-06', angelegt: '2020-01-06', aktivAb: '2020-01-06' }); await sleep(800);
+  soll('Ohne Fahrt: Plan abgelaufen', await b.ev(`document.querySelector('#plan-titel').textContent + '|' + document.querySelector('#plan-kicker').textContent`), 'Plan abgelaufen|Trainingsplan · abgelaufen');
+  soll('… mit Bilanz', await b.ev(`document.querySelector('#plan-sub').textContent`), t => t.startsWith('0 von '));
+  soll('… und Knöpfen', await b.ev(`document.querySelector('#plan-aktion').textContent + '|' + document.querySelector('#plan-aktion-2').textContent`), 'Weitermachen|Neu starten');
+  await b.klick('#btn-plan', 700);
+  soll('Abgelaufen: Pausieren ausgeblendet', await b.ev(`document.querySelector('#plan-pausieren').hidden`), true);
+  await b.ev(`document.querySelector('#dlg-plan').close()`); await sleep(300);
+  await b.klick('#plan-aktion', 1000);
+  soll('Weitermachen: Plan läuft wieder', await b.ev(`document.querySelector('#plan-kicker').textContent`), t => /Woche \d+ von 8/.test(t) && !t.includes('abgelaufen'));
+  // Verlängerte Länge außerhalb der Liste: der Dialog öffnet und zeigt sie
+  await setzePlan({ ...planJetzt, laenge: 16 }); await sleep(800);
+  await b.klick('#btn-plan', 700);
+  soll('Länge 16: Dialog offen', await offen(b, 'dlg-plan'), true);
+  soll('… mit gewählter Länge', await b.ev(`document.querySelector('[name="plan-laenge"]:checked')?.value`), '16');
+  soll('… und laufender Woche', await b.ev(`document.querySelector('#plan-vorschau-titel').textContent`), t => t === 'Diese Woche' || t === 'Nächste Woche');
+  // Enter löst nicht den ersten Knopf des Formulars aus (Pausieren)
+  soll('Enter im Formular pausiert nicht', await b.ev(`!document.querySelector('#plan-tage input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))`), true);
+  // Einsteiger-Haken zeigt seine Wirkung in der Vorschau
+  const vorschauText = () => b.ev(`[...document.querySelectorAll('#plan-vorschau li')].map(l => l.textContent).join('|')`);
+  await b.ev(`(() => { const h = document.querySelector('#plan-einsteiger'); h.checked = false; h.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(100);
+  await b.ev(`(() => { const h = document.querySelector('#plan-einsteiger'); h.checked = true; h.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(100);
+  soll('Haken: nur Grundlage in der Vorschau', await vorschauText(), t => !t || !/VO2|Schwelle|Intervalle|Sprint|HIIT|Test/.test(t));
+  soll('Haken: Wirkung beschrieben', await b.ev(`document.querySelector('#plan-umfang').textContent`), t => t.includes('nur locker und kürzer'));
+  await b.ev(`document.querySelector('#dlg-plan').close()`); await sleep(300);
+  // Defekter Plan aus einer Sicherung wird verworfen statt Karte und Dialog zu sperren
+  soll('Defekter Plan abgelehnt', await b.ev(`import('./js/storage.js').then(m => [m.pruefeEinstellung('plan', {}), m.pruefeEinstellung('plan', { pause: { seit: '2026-01-01' } }), m.pruefeEinstellung('plan', null)].join())`), ',,');
+  await setzePlan(planJetzt); await sleep(800);
   await b.klick('#btn-plan', 700);
   soll('Ändern-Dialog', await b.ev(`document.querySelector('#plan-ok').textContent + '|' + !document.querySelector('#plan-beenden').hidden`), 'Übernehmen|true');
   await b.ev(`window.confirm = () => true; document.querySelector('#plan-beenden').click()`); await sleep(1000);
@@ -250,6 +280,27 @@ try {
   soll('Nach der Sperre: WEITER', await stopp(), 'WEITER');
   await druck('#btn-plus', 4, 'pointerdown'); await druck('#btn-plus', 4, 'pointerup'); await sleep(400);
   soll('± nach der Sperre fährt weiter', await stopp(), 'STOPP');
+
+  // Tastatur: gehaltene Taste (Auto-Repeat) hebt den Not-Stopp nie auf, die
+  // Leertaste schaltet nur beim ersten Druck — panisches Halten gibt keine Last frei
+  const tastatur = (key, repeat = false) => b.ev(`dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, repeat: ${repeat}, bubbles: true, cancelable: true }))`);
+  await tastatur(' '); await sleep(3300);
+  soll('Leertaste: gestoppt', await stopp(), 'WEITER');
+  const zStopp = await ziel();
+  await tastatur(' ', true); await sleep(150);
+  soll('Leertaste gehalten: bleibt gestoppt', await stopp(), 'WEITER');
+  await tastatur('ArrowUp', true); await tastatur('ArrowDown', true); await sleep(150);
+  soll('Pfeil gehalten: bleibt gestoppt', [await stopp(), await ziel()].join(), `WEITER,${zStopp}`);
+  // Sanfter Wiedereinstieg: ein gehaltenes + darf die 10-s-Rampe nicht abkürzen
+  await b.ev(`(() => { window.__writes = []; const f = __ftms, o = f.setTargetPower.bind(f); f.setTargetPower = w => { __writes.push(w); return o(w); }; })()`);
+  await druck('#btn-plus', 5, 'pointerdown'); await sleep(1000); await druck('#btn-plus', 5, 'pointerup'); await sleep(2500);
+  // 3,5 s nach WEITER: bei 10 s Rampe gut zwei Drittel des Ziels, abgekürzt wäre es schon alles
+  soll('Halten nach WEITER: Rampe bleibt sanft', await b.ev(`(() => { const z = +document.querySelector('#m-target').textContent, m = Math.max(...__writes); return __writes.length > 1 && m < z * 0.85 ? 'sanft' : 'hart ' + m + ' von ' + z; })()`), 'sanft');
+  // Block über der Obergrenze: ± verschiebt nie den Rest des Programms
+  soll('Block über maxWatt: + senkt den Rest nicht', await b.ev(`import('./js/program.js').then(({ ProgramRun }) => {
+    const s = Object.assign(new EventTarget(), { settings: { maxWatt: 400 }, elapsed: 0, gestoppt: false, setTarget() {} });
+    const r = new ProgramRun(s, [{ dauer: 60, watt: 504 }, { dauer: 60, watt: 190 }]);
+    r.adjust(10); const a = r.offset; r.adjust(-10); const c = r.offset; r.adjust(10); return [a, c, r.offset].join(); })`), '0,-10,0');
 
   // Blatt „Tastenbelegung" aus dem Panel: nur ansehen, gespeicherte Belegung
   // auch ohne Lenker; Lenker-Tasten wirken weiter; Esc, Tipp daneben, Zurück schließen
@@ -599,6 +650,12 @@ try {
       await sleep(600);
       soll('Ohne Vorbelastung: Heute fahren frei', await b2.ev(`!document.querySelector('#plan-starten').disabled`), true);
       await heuteFahrenAbbrechen(b2, vorher);
+      // Start scheitert erst nach dem Dialog (Bluetooth aus): auch dann keine Verschiebung
+      await spaeterenTagWaehlen(b2); await sleep(600);
+      await b2.ev(`navigator.bluetooth.getAvailability = async () => false`);
+      await b2.klick('#plan-starten', 1000);
+      await b2.klick('#dlg-start button[value="ok"]', 1200);
+      soll('Start gescheitert: Verschiebung zurückgenommen', await b2.ev(`[...document.querySelectorAll('.plan-tag')].map(l => l.title).join('|')`), vorher);
     }
   } finally {
     abweichungen.push(...b2.fehler.map(f => 'JS-Fehler (2): ' + f));

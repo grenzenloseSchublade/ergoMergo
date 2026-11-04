@@ -8,7 +8,9 @@
 //   · 4-Wochen-Blöcke: 3 Wochen Steigerung über die Dauer, 1 Woche Erholung
 //     mit FTP-Rampentest als letzter Einheit (ausgeruht)
 //   · nur FTP-relative Generatoren — nach jedem Test passt sich alles an
-//   · FTP unbekannt: nie hart auf Basis der Annahme — erst der Test
+//   · FTP unbekannt: nie hart auf Basis der Annahme — erst der Test, und der
+//     Termin verfällt nicht: jede Woche wieder, bis eine FTP da ist
+//   · Einsteiger: 2 Wochen nur locker und kürzer, dann steigt die Intensität
 //   · verpasste Einheiten werden nicht nachgeholt
 
 import { WORKOUTS } from './workouts.js';
@@ -36,6 +38,13 @@ export const TYPEN = {
   R: { name: 'Regeneration', art: 'locker', farbe: '--z1', sub: 'Locker rollen, die Beine erholen sich' },
   T: { name: 'FTP-Test', art: 'test', farbe: '--accent' },
 };
+
+// Ab diesem Anteil gefahrener Einheiten gilt ein Plan als geschafft
+export const GESCHAFFT_AB = 0.7;
+// Einsteiger: Tage ab Anlegen bzw. Setzen des Hakens und was dann gilt
+const EINSTEIGER_STUFEN = [{ bis: 14, einrollen: true }, { bis: 28, intensitaet: 90 }, { bis: 42, intensitaet: 95 }];
+const LOCKER_OHNE_FTP = 80;      // Grundlage ohne FTP: die Annahme ist für Einsteiger oft zu hoch
+const TEST_SCHWELLE_S = 480;     // FTP-Test zählt ab 8 min: die Rampe beginnt erst nach dem Einrollen
 
 const TAG_MS = 864e5;
 const INTERVALL_FOLGE = ['vo2max', 'hiit4020', 'sprint3030'];   // wechselt je Block
@@ -105,7 +114,7 @@ export function rollen(tage, ziel = 'fitness') {
 // Dauer und Programm einer Rolle in einer Blockwoche (0–2 Aufbau, 3 Erholung)
 function einheit(rolleTyp, plan, blockNr, blockWoche) {
   const D = plan.dauer;
-  const intensitaet = plan.einsteiger && blockNr === 0 ? 95 : 100;
+  const intensitaet = 100;
   const stufe = [-5, 0, 7][blockWoche];
   switch (rolleTyp) {
     case 'H1': {
@@ -142,19 +151,50 @@ function testTag(plan) {
 
 const grundlage = plan => ({ typ: 'E', programmId: 'ausdauer',
   opts: { dauer: klemme('ausdauer', plan.dauer), intensitaet: 100, tempo: false } });
-const rampentest = plan => ({ typ: 'T', programmId: 'rampentest',
-  opts: { start: plan.ftp ? Math.min(200, Math.max(50, Math.round(plan.ftp * 0.5 / 10) * 10)) : 100 } });
+const rampentest = (plan, ftpJetzt = plan.ftp) => {
+  const ftp = ftpJetzt || plan.ftp;
+  return { typ: 'T', programmId: 'rampentest',
+    opts: { start: ftp ? Math.min(200, Math.max(50, Math.round(ftp * 0.5 / 10) * 10)) : 100 } };
+};
+
+// Einsteiger-Stufe eines Tages: { einrollen } | { intensitaet } | null (vorbei, kein Haken)
+function einsteigerStufe(plan, tag) {
+  if (!plan.einsteiger) return null;
+  const seit = tageZwischen(ausIso(plan.einsteigerAb ?? plan.angelegt ?? plan.start), tag);
+  return seit < 0 ? null : EINSTEIGER_STUFEN.find(s => seit < s.bis) ?? null;
+}
+
+// Frühester Tag für einen Test: nach dem Start und nach dem Einrollen
+function fruehesterTest(plan) {
+  const aktiv = ausIso(plan.aktivAb ?? plan.angelegt ?? plan.start);
+  if (!plan.einsteiger) return aktiv;
+  const ende = plusTage(ausIso(plan.einsteigerAb ?? plan.angelegt ?? plan.start), EINSTEIGER_STUFEN[0].bis);
+  return ende > aktiv ? ende : aktiv;
+}
+// Erster Plantag ab einem Datum
+function ersterPlantagAb(plan, datum) {
+  for (let i = 0; i < 14; i++) {
+    const d = plusTage(datum, i);
+    if (plan.tage.includes(wochentag(d))) return d;
+  }
+  return datum;
+}
+// Termin des Eingangstests eines ohne FTP angelegten Plans
+export const ersterTestTag = plan => ersterPlantagAb(plan, fruehesterTest(plan));
 
 // Plan anlegen. tage: Wochentag-Indizes (Mo = 0), dauer: 30/45/60,
 // ftp: bekannte FTP oder 0 (dann beginnt der Plan mit dem Test)
 export function planAnlegen({ tage, dauer = 45, ziel = 'fitness', einsteiger = false, ftp = 0, laenge = 8, heute = new Date() }) {
+  const sortiert = [...new Set(tage)].sort((a, b) => a - b);
+  // Kein Plantag mehr in dieser Woche: Woche 1 ist die nächste, sonst wäre der Plan eine Woche kürzer
+  const mo = sortiert.some(t => t >= wochentag(heute)) ? montag(heute) : plusTage(montag(heute), 7);
   return {
     version: PLAN_VERSION,
-    tage: [...new Set(tage)].sort((a, b) => a - b),
+    tage: sortiert,
     dauer, ziel, einsteiger,
     laenge,                               // Wochen (4/8/12) oder null = fortlaufend
     ftp,                                  // FTP beim Anlegen (0 = unbekannt)
-    start: tagIso(montag(heute)),         // Montag der Planwoche 1 (Pausen verschieben ihn)
+    start: tagIso(mo),                    // Montag der Planwoche 1 (Pausen verschieben ihn)
     angelegt: tagIso(heute),
   };
 }
@@ -169,8 +209,12 @@ export const istAbgeschlossen = (plan, heute) => !!plan.laenge && planWoche(plan
 // der Plan nicht hart (Ziele wären nur geschätzt)
 export function einheitAm(plan, datum, ftpJetzt = plan.ftp) {
   const tag = new Date(datum.getFullYear(), datum.getMonth(), datum.getDate());
+  const iso = tagIso(tag);
+  // Tage vor einer Änderung der Wochentage gelten mit den alten Tagen
+  if (plan.frueher && iso <= plan.frueher.bis) { const { frueher, ...rest } = plan; plan = { ...rest, tage: frueher.tage }; }
   // vor dem Start bzw. vor dem Wiedereinstieg, während einer Pause, nach dem Ende: nichts
   if (tag < ausIso(plan.aktivAb ?? plan.angelegt ?? plan.start)) return null;
+  if (plan.ruhe && iso >= plan.ruhe.von && iso <= plan.ruhe.bis) return null;
   if (plan.pause && tag >= ausIso(plan.pause.seit)) return null;
   const woche = planWoche(plan, tag);
   const wt = wochentag(tag);
@@ -179,34 +223,40 @@ export function einheitAm(plan, datum, ftpJetzt = plan.ftp) {
   const blockNr = Math.floor(woche / 4), blockWoche = woche % 4;
   const rolle = rollen(plan.tage, plan.ziel);
   let e;
+  const ein = plan.einstieg;
   if (blockWoche === 3) {
     // Erholungswoche: letzte Einheit der Woche = Rampentest, sonst kurz und
-    // locker. Ohne FTP gestartet: im ersten Block lag der Test schon am Anfang
-    const testNoetig = plan.ftp || blockNr > 0;
-    e = wt === testTag(plan) && testNoetig ? rampentest(plan)
+    // locker. Ohne FTP gestartet: im ersten Block lag der Test schon am Anfang;
+    // ein Wiedereinstieg ab 14 Tagen verlangt ihn immer
+    const testNoetig = plan.ftp || blockNr > 0 || ein?.testWoche === woche;
+    e = wt === testTag(plan) && testNoetig ? rampentest(plan, ftpJetzt)
       : rolle.get(wt) === 'R' ? einheit('R', plan, blockNr, 0)
       : { typ: 'E', programmId: 'ausdauer', opts: { dauer: klemme('ausdauer', Math.min(45, plan.dauer * 0.7)), intensitaet: 100, tempo: false } };
   } else {
     e = einheit(rolle.get(wt), plan, blockNr, blockWoche);
   }
-  // FTP unbekannt: erste Woche ohne harte Einheiten auf Basis der Annahme.
-  // Regelmäßig Fahrende testen am ersten Plantag, Einsteiger rollen erst
-  // eine Woche locker ein und testen am ersten harten Tag der zweiten Woche.
-  // Die Lage des Tests hängt an der FTP beim Anlegen (bleibt stehen, auch
-  // wenn er gefahren ist); harte Einheiten entfallen, solange FTP fehlt.
-  if (!plan.ftp && woche <= 1 && e.typ !== 'T') {
-    const ersterHarterTag = plan.tage.find(t => TYPEN[rolle.get(t)]?.art === 'hart');
-    if (!plan.einsteiger && woche === 0 && wt === plan.tage[0]) e = rampentest(plan);
-    else if (!plan.einsteiger && woche === 0 && wt - plan.tage[0] < 2 && TYPEN[e.typ].art === 'hart') e = grundlage(plan);
-    else if (plan.einsteiger && woche === 1 && wt === ersterHarterTag) e = rampentest(plan);
-    else if (plan.einsteiger && woche === 0 && TYPEN[e.typ].art === 'hart') e = grundlage(plan);
+  // FTP unbekannt: der Test kommt am ersten erreichbaren Plantag und danach jede
+  // Woche wieder, bis eine FTP da ist; bis dahin nichts Hartes und kein Tempo.
+  // Ein gefahrener Test bleibt an seinem Tag stehen, am Tag danach bleibt es locker.
+  const gefahrenerTest = plan.ftpTestAm ?? (plan.ftp ? null : tagIso(ersterTestTag(plan)));
+  const frueh = fruehesterTest(plan);
+  if (iso === gefahrenerTest) e = rampentest(plan, ftpJetzt);
+  else if (!ftpJetzt && tag >= frueh && wt === plan.tage.find(t => plusTage(montag(tag), t) >= frueh)) e = rampentest(plan, ftpJetzt);
+  else if (gefahrenerTest && tageZwischen(ausIso(gefahrenerTest), tag) === 1 && TYPEN[e.typ].art === 'hart') e = grundlage(plan);
+  if (!ftpJetzt && (TYPEN[e.typ].art === 'hart' || e.typ === 'Et')) e = grundlage(plan);
+  // Einsteiger: erst nur locker und kürzer, dann harte Einheiten mit reduzierter
+  // Intensität und ohne die Dauer-Zuschläge des Blocks
+  const stufe = einsteigerStufe(plan, tag);
+  if (stufe?.einrollen && e.typ !== 'R') {
+    e = { typ: 'E', programmId: 'ausdauer', opts: { dauer: klemme('ausdauer', Math.min(45, plan.dauer) * 0.75), intensitaet: 100, tempo: false } };
+  } else if (stufe && TYPEN[e.typ].art === 'hart') {
+    e = { ...e, opts: { ...e.opts, intensitaet: stufe.intensitaet, dauer: Math.min(e.opts.dauer, klemme(e.programmId, plan.dauer)) } };
   }
-  if (!ftpJetzt && TYPEN[e.typ].art === 'hart') e = grundlage(plan);
+  if (!ftpJetzt && (e.typ === 'E' || e.typ === 'L')) e = { ...e, opts: { ...e.opts, intensitaet: LOCKER_OHNE_FTP } };
   // Wiedereinstieg nach einer Pause: harte Einheiten sanfter, die erste locker
-  const ein = plan.einstieg;
-  if (ein && tagIso(tag) >= ein.ab && tagIso(tag) <= ein.bis && TYPEN[e.typ].art === 'hart') {
-    const ersterPlantag = [...Array(7).keys()].map(i => plusTage(ausIso(ein.ab), i)).find(d => plan.tage.includes(wochentag(d)));
-    if (ein.lockerZuerst && ersterPlantag && tagIso(ersterPlantag) === tagIso(tag)) e = grundlage(plan);
+  if (ein && iso >= ein.ab && iso <= ein.bis && TYPEN[e.typ].art === 'hart') {
+    const ersterPlantag = ersterPlantagAb(plan, ausIso(ein.ab));
+    if (ein.lockerZuerst && tagIso(ersterPlantag) === iso) e = grundlage(plan);
     else e = { ...e, opts: { ...e.opts, intensitaet: Math.min(e.opts.intensitaet ?? 100, ein.intensitaet ?? 100) } };
   }
   return { ...e, ...TYPEN[e.typ], datum: tagIso(tag), woche, blockNr, blockWoche, ref: `plan:${tagIso(tag)}` };
@@ -218,31 +268,73 @@ export function einheitAm(plan, datum, ftpJetzt = plan.ftp) {
 //   7–13      unterbrochene Woche wiederholen, erste Einheit locker, harte mit 95 %
 //   14–27     leichte Woche mit FTP-Test, danach neuer Block
 //   ≥ 28      wie 14–27, der neue Block beginnt mit 95 %
+const stufeNachTagen = tage => (tage <= 6 ? 0 : tage <= 13 ? 1 : tage < 28 ? 2 : 3);
+
+// Plan so setzen, dass die Planwoche „ziel" jetzt läuft. Reicht die laufende
+// Kalenderwoche nicht mehr (kein Plantag übrig, Testtag vorbei), beginnt der
+// Einstieg am nächsten Montag — sonst fiele die sanfte Einheit oder der Test aus.
+function setzeEinstieg(plan, { stufe, ziel, laenge, heuteT, pauseAb = null, neueWochen = false }) {
+  const wt = wochentag(heuteT);
+  const zuSpaet = stufe >= 2 ? testTag(plan) < wt : (stufe === 1 || neueWochen) && !plan.tage.some(t => t >= wt);
+  const mo = zuSpaet ? plusTage(montag(heuteT), 7) : montag(heuteT);
+  const ab = zuSpaet ? mo : heuteT;
+  let einstieg = null;
+  if (stufe === 1) {
+    einstieg = { ab: tagIso(ab), bis: tagIso(plusTage(ersterPlantagAb(plan, ab), 6)), lockerZuerst: true, intensitaet: 95 };
+  } else if (stufe >= 2) {
+    einstieg = { ab: tagIso(plusTage(mo, 7)), bis: tagIso(plusTage(mo, 13)), intensitaet: stufe === 3 ? 95 : 100, testWoche: ziel };
+  }
+  const start = tagIso(plusTage(mo, -7 * ziel));
+  const gleich = start === plan.start;
+  const neu = { ...plan, start, laenge, pause: null, einstieg, anpassungen: gleich ? plan.anpassungen : undefined,
+    // Gleiche Woche: gefahrene Tage bleiben sichtbar, nur die Pause fällt aus der Wertung
+    aktivAb: gleich && stufe === 0 ? plan.aktivAb : tagIso(ab) };
+  if (gleich && stufe === 0 && pauseAb && pauseAb < tagIso(heuteT)) {
+    neu.ruhe = { von: plan.ruhe && plan.ruhe.von < pauseAb ? plan.ruhe.von : pauseAb, bis: tagIso(plusTage(heuteT, -1)) };
+  } else delete neu.ruhe;
+  for (const k of ['anpassungen', 'einstieg', 'aktivAb']) if (!neu[k]) delete neu[k];
+  return { plan: neu, abMontag: zuSpaet };
+}
+
 export function wiedereinstieg(plan, pauseAb, heute = new Date()) {
   const ab = ausIso(pauseAb);
-  const heuteT = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate());
-  const tage = Math.max(0, Math.round((heuteT - ab) / TAG_MS));
-  const unterbrochen = Math.max(0, planWoche(plan, ab));
-  const mo = montag(heuteT), so = plusTage(mo, 6);
-  let ziel = unterbrochen, einstieg = null, text;
-  if (tage <= 6) text = 'weiter wie geplant';
-  else if (tage <= 13) {
-    einstieg = { ab: tagIso(heuteT), bis: tagIso(so), lockerZuerst: true, intensitaet: 95 };
-    text = 'die unterbrochene Woche wird wiederholt, zum Einstieg locker';
-  } else {
+  const heuteT = nullUhr(heute);
+  const tage = Math.max(0, tageZwischen(ab, heuteT));
+  const unterbrochen = Math.min(Math.max(0, planWoche(plan, ab)), plan.laenge ? plan.laenge - 1 : Infinity);
+  const stufe = stufeNachTagen(tage);
+  let ziel = unterbrochen, laenge = plan.laenge, text = 'weiter wie geplant';
+  if (stufe === 1) text = 'die unterbrochene Woche wird wiederholt, zum Einstieg locker';
+  if (stufe >= 2) {
     ziel = Math.floor(unterbrochen / 4) * 4 + 3;
-    if (plan.laenge) ziel = Math.min(ziel, plan.laenge - 1);
-    if (tage >= 28) einstieg = { ab: tagIso(plusTage(mo, 7)), bis: tagIso(plusTage(mo, 13)), intensitaet: 95 };
-    text = tage >= 28 ? 'Neubeginn: leichte Woche mit FTP-Test, danach ein sanfter Block'
+    // Der neue Block ist versprochen: Restlänge erhalten. Nur wer ohnehin kurz
+    // vor dem Ende war (≤ 2 Wochen), schließt mit der leichten Woche ab
+    if (plan.laenge) {
+      const rest = plan.laenge - unterbrochen;
+      laenge = ziel + 1 + (rest > 2 ? Math.ceil((rest - 1) / 4) * 4 : 0);
+    }
+    const blockFolgt = !laenge || laenge > ziel + 1;
+    text = !blockFolgt ? 'leichte Woche mit FTP-Test zum Abschluss'
+      : stufe === 3 ? 'Neubeginn: leichte Woche mit FTP-Test, danach ein sanfter Block'
       : 'leichte Woche mit FTP-Test, danach ein neuer Block';
   }
-  // Nahtlos: dieselbe Planwoche gilt jetzt für die laufende Kalenderwoche
-  const start = tagIso(plusTage(mo, -7 * ziel));
-  const anpassungen = start === plan.start ? plan.anpassungen : undefined;   // alte Zuordnung passt nicht mehr
-  const neu = { ...plan, start, aktivAb: tagIso(heuteT), pause: null, einstieg, anpassungen };
-  if (!neu.anpassungen) delete neu.anpassungen;
-  if (!neu.einstieg) delete neu.einstieg;
-  return { plan: neu, tage, text };
+  const r = setzeEinstieg(plan, { stufe, ziel, laenge, heuteT, pauseAb });
+  return { plan: r.plan, tage, text: r.abMontag ? `${text} (ab Montag)` : text };
+}
+
+// „Weitermachen" am Planende: immer die neuen Wochen ab jetzt. Der Einstieg
+// richtet sich nach der Zeit seit der letzten Fahrt, nicht nach dem Planende.
+export function verlaengern(plan, sessions, heute = new Date(), wochen = 4) {
+  const heuteT = nullUhr(heute);
+  const { seit } = tageOhneFahrt(plan, sessions, heute);
+  const stufe = stufeNachTagen(Math.max(0, seit));
+  const laenge = plan.laenge + wochen;
+  // Ab 14 Tagen läuft zuerst die leichte Woche mit Test: die letzte des alten Plans
+  const ziel = stufe >= 2 ? plan.laenge - 1 : plan.laenge;
+  const text = stufe === 0 ? `${wochen} neue Wochen`
+    : stufe === 1 ? `${wochen} neue Wochen, zum Einstieg locker`
+    : `leichte Woche mit FTP-Test, danach ${wochen} neue Wochen`;
+  const r = setzeEinstieg(plan, { stufe, ziel, laenge, heuteT, neueWochen: true });
+  return { plan: r.plan, tage: seit, text: r.abMontag ? `${text} (ab Montag)` : text };
 }
 export const pausieren = (plan, heute = new Date()) => ({ ...plan, pause: { seit: tagIso(heute) } });
 
@@ -253,22 +345,31 @@ export const zaehltAlsTrainingstag = f => !!f.planRef || (f.dauer ?? 0) >= 900;
 // ab = erster Tag ohne Fahrt (Beginn einer gedachten Pause). Bezug ist die
 // letzte Fahrt, frühestens der Start bzw. Wiedereinstieg des Plans.
 export function tageOhneFahrt(plan, sessions, heute = new Date()) {
-  let letzte = plusTage(ausIso(plan.aktivAb ?? plan.angelegt), -1);
+  let letzte = plusTage(ausIso(plan.aktivAb ?? plan.angelegt ?? plan.start), -1);
   for (const f of sessions) if (zaehltAlsTrainingstag(f) && f.start > letzte.getTime()) letzte = nullUhr(new Date(f.start));
   return { seit: tageZwischen(letzte, heute) - 1, ab: tagIso(plusTage(letzte, 1)) };
 }
 
 // Bilanz am Planende: Trainingstage (Fahrt aus dem Plan oder ≥ 15 min) vom
 // Anlegen bis heute bzw. Planende — über Pausen und Wiedereinstiege hinweg —
-// gegen die geplanten Einheiten (Länge × Tage pro Woche)
+// gegen die Einheiten, die der Plan wirklich ausgespielt hat: ab Start bzw.
+// Wiedereinstieg bis zum Ende, ohne Ausgelassenes; davor zählt, was gefahren wurde.
 export function planBilanz(plan, sessions, heute = new Date()) {
   const ende = planEnde(plan);
   const bis = tagIso(ende && ende < heute ? ende : heute);
   const tage = new Set(sessions
     .filter(zaehltAlsTrainingstag)
     .map(f => tagIso(new Date(f.start)))
-    .filter(d => d >= plan.angelegt && d <= bis));
-  return { gefahren: tage.size, geplant: (plan.laenge ?? 0) * plan.tage.length };
+    .filter(d => d >= (plan.angelegt ?? plan.start) && d <= bis));
+  if (!ende) return { gefahren: tage.size, geplant: 0, geschafft: false };
+  const aktiv = plan.aktivAb ?? plan.angelegt ?? plan.start;
+  let geplant = [...tage].filter(d => d < aktiv).length;
+  for (let mo = montag(ausIso(aktiv)); mo <= ende; mo = plusTage(mo, 7)) {
+    for (const t of wocheMitAnpassungen(plan, mo)) {
+      if (t.einheit && !t.ausgelassen && t.datum >= aktiv && t.datum <= tagIso(ende)) geplant++;
+    }
+  }
+  return { gefahren: tage.size, geplant, geschafft: geplant > 0 && tage.size / geplant >= GESCHAFFT_AB };
 }
 
 // Sieben Tage ab dem Montag der Woche von datum
@@ -287,16 +388,20 @@ export function naechsteEinheit(plan, datum, ftpJetzt = plan.ftp, tage = 14) {
 }
 
 // Erledigt: eine Fahrt aus dem Plan (planRef) oder irgendeine Fahrt
-// ≥ 15 min an dem Tag — wer an einem Plantag anders fährt, hat trotzdem trainiert
+// ≥ 15 min an dem Tag — wer an einem Plantag anders fährt, hat trotzdem
+// trainiert. Nur der FTP-Test braucht einen Test: sonst entsteht keine FTP.
 export function erledigtDurch(einheit, sessions) {
+  const amTag = s => tagIso(new Date(s.start)) === einheit.datum;
+  if (einheit.typ === 'T') return sessions.find(s => s.programmId === 'rampentest' && zaehltFuerPlan(s) && (s.planRef === einheit.ref || amTag(s))) ?? null;
   return sessions.find(s => s.planRef === einheit.ref && zaehltFuerPlan(s))
-    ?? sessions.find(s => tagIso(new Date(s.start)) === einheit.datum && (s.dauer ?? 0) >= 900)
+    ?? sessions.find(s => amTag(s) && (s.dauer ?? 0) >= 900)
     ?? null;
 }
 
-// Zählt eine Fahrt für den Plan? ≥ 15 min; der FTP-Test ≥ 5 min (er endet
-// gewollt an der Erschöpfung). Ein Abbruch nach 2 min ist nicht „gefahren".
-export const zaehltFuerPlan = s => (s.dauer ?? 0) >= (s.programmId === 'rampentest' ? 300 : 900);
+// Zählt eine Fahrt für den Plan? ≥ 15 min; der FTP-Test ab 8 min (er endet
+// gewollt an der Erschöpfung, die Rampe beginnt aber erst nach dem Einrollen).
+// Ein Abbruch nach 2 min ist nicht „gefahren".
+export const zaehltFuerPlan = s => (s.dauer ?? 0) >= (s.programmId === 'rampentest' ? TEST_SCHWELLE_S : 900);
 
 // Plan-Info, die mit der Fahrt gespeichert wird — bleibt lesbar, auch wenn
 // der Plan später geändert oder beendet wird. ersatz: frei oder mit einem
@@ -353,10 +458,18 @@ export function wocheWirksam(plan, datum, sessions, heute = new Date(), ftpJetzt
     return i - davor >= 2 && danach - i >= 2;
   };
   let offen = null;                                  // { einheit, von } sucht einen Platz
+  // Vergangene Tage bleiben, wie sie waren: Verschobenes landet dort nur, wenn
+  // die Fahrt dieses Tages genau diese Einheit war — eine spätere Änderung darf
+  // eine lockere Fahrt nicht rückwirkend zu „Intervalle ✓" machen
+  const darfHierher = (t, e) => t.datum >= heuteIso || sessions.some(s => s.planRef === `plan:${t.datum}` && s.plan?.typ === e.typ);
   for (let i = 0; i < 7; i++) {
     const t = tage[i];
-    // eigene Änderungen haben Vorrang: kein Überschreiben manuell gesetzter oder ausgelassener Tage
-    if (offen && t.einheit && !t.einheit.manuell && !t.ausgelassen && prio(offen.einheit) > prio(t.einheit) && abstandOk(i)) {
+    if (t.verlegtNach) { t.status = 'verpasst'; t.hinweis = `verschoben auf ${t.verlegtNach}`; continue; }
+    // eigene Änderungen haben Vorrang: kein Überschreiben manuell gesetzter, geänderter oder
+    // ausgelassener Tage. Harte Einheiten verdrängen nur lockere, der Test auch harte.
+    if (offen && t.einheit && !t.einheit.manuell && !t.einheit.variante && !t.ausgelassen
+      && prio(offen.einheit) > prio(t.einheit) && (!prio(t.einheit) || offen.einheit.typ === 'T')
+      && darfHierher(t, offen.einheit) && abstandOk(i)) {
       t.einheit = { ...offen.einheit, datum: t.datum, ref: `plan:${t.datum}`, verschobenVon: offen.einheit.verschobenVon ?? tage[offen.von].datum };
       tage[offen.von].hinweis = `verschoben auf ${t.kurz}`;
       offen = null;
@@ -371,10 +484,12 @@ export function wocheWirksam(plan, datum, sessions, heute = new Date(), ftpJetzt
     if (erledigtDurch(t.einheit, sessions)) t.status = 'erledigt';
     else if (t.datum < heuteIso) {
       t.status = 'verpasst';
-      if (offen) tage[offen.von].hinweis = 'entfällt';   // ein älterer Rückstand verfällt
-      offen = null;
-      if (prio(t.einheit)) offen = { einheit: t.einheit, von: i };
-      else t.hinweis = 'entfällt';
+      // Es sucht immer nur eine Einheit einen Platz: die wichtigere, bei
+      // gleichem Rang die jüngere; die andere verfällt
+      if (prio(t.einheit) && (!offen || prio(t.einheit) >= prio(offen.einheit))) {
+        if (offen) tage[offen.von].hinweis = 'entfällt';
+        offen = { einheit: t.einheit, von: i };
+      } else t.hinweis = 'entfällt';
     } else t.status = 'geplant';
   }
   if (offen) tage[offen.von].hinweis = 'entfällt';
@@ -384,6 +499,7 @@ export function wocheWirksam(plan, datum, sessions, heute = new Date(), ftpJetzt
 // --- Eigene Änderungen ---
 // plan.anpassungen[Montag 'JJJJ-MM-TT'] = Liste in Reihenfolge:
 //   { art: 'verschieben', von, nach } (belegter Zieltag = Tausch)
+//   { art: 'fest', von, nach } (automatische Verschiebung festgeschrieben)
 //   { art: 'auslassen' | 'kuerzer' | 'leichter', datum }
 // Sie gelten nur für ihre Woche und werden nach dem Erzeugen angewendet —
 // der Generator bleibt unverändert. Anpassungen erzeugen immer eine neue
@@ -407,10 +523,16 @@ export function wocheMitAnpassungen(plan, datum, ftpJetzt = plan.ftp) {
     const i = tage.findIndex(t => t.datum === (op.von ?? op.datum));
     if (i < 0 || !tage[i].einheit) continue;
     const e = tage[i].einheit;
-    if (op.art === 'verschieben') {
+    if (op.art === 'fest') {
       const j = tage.findIndex(t => t.datum === op.nach);
       if (j < 0 || j === i) continue;
-      const b = tage[j].einheit;
+      tage[j] = { ...tage[j], einheit: umdatieren(e, tage[j].datum, tage[i].datum), ausgelassen: false };
+      tage[i] = { ...tage[i], verlegtNach: tage[j].kurz };
+    } else if (op.art === 'verschieben') {
+      const j = tage.findIndex(t => t.datum === op.nach);
+      if (j < 0 || j === i) continue;
+      // Ein ausgelassener Zieltag gilt als frei: seine Einheit kommt nicht zurück
+      const b = tage[j].ausgelassen ? null : tage[j].einheit;
       tage[j] = { ...tage[j], einheit: umdatieren(e, tage[j].datum, tage[i].datum), ausgelassen: tage[i].ausgelassen };
       tage[i] = { ...tage[i], einheit: b ? umdatieren(b, tage[i].datum, tage[j].datum) : null, ausgelassen: false };
     } else if (op.art === 'auslassen') tage[i] = { ...tage[i], ausgelassen: true };
@@ -429,9 +551,12 @@ export function wocheMitAnpassungen(plan, datum, ftpJetzt = plan.ftp) {
 // keinen Tag Abstand hätten — mit Grund.
 export function verschiebeZiele(plan, von, sessions, heute = new Date(), ftpJetzt = plan.ftp) {
   const mo = montag(ausIso(von)), heuteIso = tagIso(heute);
-  const vorher = wocheWirksam(plan, mo, sessions, heute, ftpJetzt);
-  return vorher.filter(t => t.datum >= heuteIso && t.datum !== von && t.status !== 'erledigt').map(t => {
-    const probe = mitAnpassung(plan, mo, { art: 'verschieben', von, nach: t.datum });
+  const basis = festschreiben(plan, mo, sessions, heute, ftpJetzt);
+  const vorher = wocheWirksam(basis, mo, sessions, heute, ftpJetzt);
+  // Heute schon gefahren: die Fahrt erledigte die hergelegte Einheit sofort
+  const heuteGefahren = sessions.some(f => tagIso(new Date(f.start)) === heuteIso && zaehltAlsTrainingstag(f));
+  return vorher.filter(t => t.datum >= heuteIso && t.datum !== von && t.status !== 'erledigt' && !(t.datum === heuteIso && heuteGefahren)).map(t => {
+    const probe = mitAnpassung(basis, mo, { art: 'verschieben', von, nach: t.datum });
     const nachher = wocheWirksam(probe, mo, sessions, heute, ftpJetzt);
     const konflikt = harterKonflikt(probe, nachher, [t.datum, von], ftpJetzt, sessions, heute);
     const tausch = t.einheit && !t.ausgelassen ? titel(t.einheit) : null;
@@ -447,6 +572,44 @@ export function mitAnpassung(plan, datum, op) {
   const alle = Object.fromEntries(Object.entries(plan.anpassungen ?? {}).filter(([k]) => k >= grenze));
   return { ...plan, anpassungen: { ...alle, [woche]: [...(alle[woche] ?? []), op] } };
 }
+// Automatische Verschiebungen der Woche festschreiben, bevor eine eigene Änderung
+// dazukommt: die Änderung meint die Einheit, die auf der Karte steht, nicht die
+// ursprünglich erzeugte — und die Verschiebung darf sich danach nicht mehr ändern
+export function festschreiben(plan, datum, sessions, heute = new Date(), ftpJetzt = plan.ftp) {
+  return wocheWirksam(plan, datum, sessions, heute, ftpJetzt)
+    .filter(t => t.einheit?.verschobenVon && !t.einheit.manuell)
+    .reduce((p, t) => mitAnpassung(p, datum, { art: 'fest', von: t.einheit.verschobenVon, nach: t.datum }), plan);
+}
+export const mitAnpassungWirksam = (plan, datum, op, sessions, heute = new Date(), ftpJetzt = plan.ftp) =>
+  mitAnpassung(festschreiben(plan, datum, sessions, heute, ftpJetzt), datum, op);
+
+// Einstellungen eines laufenden Plans ändern: Start und Stand bleiben. Der neu
+// gesetzte Einsteiger-Haken beginnt heute; neue Wochentage gelten ab heute, ältere
+// Tage bleiben mit den alten bewertet, Änderungen der laufenden Woche entfallen.
+export function planAendern(alt, wahl, heute = new Date()) {
+  const neu = { ...alt, ...planAnlegen({ ...wahl, ftp: alt.ftp, heute }), start: alt.start, angelegt: alt.angelegt, ftp: alt.ftp };
+  if (wahl.einsteiger && !alt.einsteiger) neu.einsteigerAb = tagIso(heute);
+  if (!wahl.einsteiger) delete neu.einsteigerAb;
+  if (neu.tage.join() !== alt.tage.join()) {
+    neu.frueher = { bis: tagIso(plusTage(heute, -1)), tage: alt.tage };
+    const woche = tagIso(montag(heute));
+    if (alt.anpassungen) neu.anpassungen = Object.fromEntries(Object.entries(alt.anpassungen).filter(([k]) => k < woche));
+  }
+  return neu;
+}
+
+// Was der Einsteiger-Haken bzw. die fehlende FTP bewirkt — ein Satz für den Dialog
+export function einstiegsHinweis(plan, ftpJetzt) {
+  const teile = [];
+  if (plan.einsteiger) {
+    const wochen = s => Math.round(s.bis / 7);
+    const [a, b, c] = EINSTEIGER_STUFEN;
+    teile.push(`Einstieg: ${wochen(a)} Wochen nur locker und kürzer, dann harte Einheiten mit ${b.intensitaet} %, ab Woche ${wochen(b) + 1} mit ${c.intensitaet} %, ab Woche ${wochen(c) + 1} wie geplant.`);
+  }
+  if (!ftpJetzt) teile.push(`Ohne FTP: Rampentest am ${WOCHENTAGE[wochentag(ersterTestTag(plan))]}, ${ersterTestTag(plan).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}, und jede Woche wieder, bis eine FTP da ist.`);
+  return teile.join(' ');
+}
+
 export function ohneAnpassungen(plan, datum) {
   const anpassungen = { ...plan.anpassungen };
   delete anpassungen[tagIso(montag(datum))];
@@ -468,7 +631,7 @@ function harterKonflikt(plan, tage, pruefDaten, ftpJetzt, sessions, heute) {
     const hier = nah.find(t => t.datum === d);
     if (!hier) continue;
     const anderer = nah.find(t => t !== hier && Math.abs(t.idx - hier.idx) < 2);
-    if (anderer) return `${anderer.einheit ? titel(anderer.einheit).split(' · ')[0] : 'der harten Fahrt'} am ${WOCHENTAGE[(anderer.idx + 7) % 7]}`;
+    if (anderer) return `${anderer.fremdHart || !anderer.einheit ? 'der harten Fahrt' : titel(anderer.einheit).split(' · ')[0]} am ${WOCHENTAGE[(anderer.idx + 7) % 7]}`;
   }
   return null;
 }

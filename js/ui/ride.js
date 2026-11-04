@@ -753,9 +753,11 @@ export class RideScreen {
       // Tasten in einem offenen Panel (Leertaste auf einem Schalter) gehören
       // dem Panel — sonst löste die Leertaste zugleich STOPP aus
       if (e.target.closest?.('dialog')) return;
-      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') this.steuere(step);
-      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') this.steuere(-step);
-      else if (e.key === ' ') { e.preventDefault(); this.#stoppTaste(); }
+      // Gehaltene Taste (e.repeat) wie beim Halten am Knopf: hebt einen Not-Stopp
+      // nie auf; die Leertaste schaltet nur beim ersten Druck
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') this.steuere(step, { wiederholung: e.repeat });
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') this.steuere(-step, { wiederholung: e.repeat });
+      else if (e.key === ' ') { e.preventDefault(); if (!e.repeat) this.#stoppTaste(); }
     };
     addEventListener('keydown', this.#keys);
   }

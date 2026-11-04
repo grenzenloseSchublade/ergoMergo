@@ -65,6 +65,30 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.5
+
+- **Cockpit im Querformat:** Riesige Wattzahl links, Graph in der Mitte,
+  Bedienleiste rechts über die volle Höhe, auf dem Handy und auf dem Tablet.
+- **Zonen-Glut:** Die Werte leuchten quer in der Farbe der aktuellen Zone;
+  abschaltbar im ⋯-Menü und in den Einstellungen.
+- **Bild-in-Bild besser treffbar:** größere Tippfläche und Abstand zu „⋯“.
+- **Plan nur geschafft, wenn er gefahren wurde:** „Plan geschafft ✓“ erst ab 70 %
+  der Einheiten, sonst „Plan abgelaufen“ mit Weitermachen oder Neu starten.
+  Weitermachen bringt immer vier neue Wochen, der Einstieg richtet sich nach der
+  letzten Fahrt.
+- **Einsteiger-Option wirkt:** 2 Wochen nur locker und kürzer, dann harte
+  Einheiten mit 90 %, 95 % und schließlich 100 %, auch nachträglich im laufenden
+  Plan; die Vorschau zeigt es.
+- **Der FTP-Test verfällt nicht mehr:** Ohne FTP kommt er am ersten erreichbaren
+  Plantag und danach jede Woche, bis eine FTP da ist.
+- **Sicherer Not-Stopp:** Eine gehaltene Taste hebt ihn nicht mehr auf, die 10-s-Rampe
+  danach lässt sich nicht abkürzen, und ein Tipp in einem Block über der
+  Watt-Obergrenze senkt nicht mehr den Rest des Programms.
+- **Viele Plan-Korrekturen:** Änderungen treffen die Einheit auf der Karte auch
+  nach automatischem Verschieben, die Karte wechselt um Mitternacht den Tag,
+  verlängerte Pläne sperren den Dialog nicht mehr, ein gescheiterter Start nimmt
+  „Heute fahren“ zurück.
+
 ## Neu in 3.4.2
 
 - **Neuer Auftakt „wuchtig“:** zwei schwere Schläge mit langem Nachhall.

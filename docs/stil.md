@@ -84,6 +84,10 @@ Rollen:
   (64 px); Bild-in-Bild in der Kopfzeile `--tippflaeche-breit` (56 px). Einzige
   Ausnahme: Wochentag-Reihen mit 7 Spalten (Wochenstreifen, Tagewahl): lückenlos, 44 px hoch, bei 360 px
   knapp 40 px breit.
+- Fahrbildschirm quer („Cockpit“, ab 480 px Breite): Werte links, Graph in der
+  Mitte, Bedienleiste rechts über die volle Höhe. Die Zonen-Glut (`--glut`, Stärke
+  `--glut-staerke`) färbt die Werte-Fläche nach der Zone des Ziels; kleine Schrift
+  steht darauf in `--ink2`, weil `--ink3` dort unter 4,5:1 fällt.
 - Symbole: `--icon-xs` 12 · `--icon-s` 14 · `--icon-m` 18 · `--icon-l` 20 · `--icon-xl` 24.
 
 ## Bausteine
