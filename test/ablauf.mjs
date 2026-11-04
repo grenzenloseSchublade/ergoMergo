@@ -298,7 +298,7 @@ try {
   soll('Halten nach WEITER: Rampe bleibt sanft', await b.ev(`(() => { const z = +document.querySelector('#m-target').textContent, m = Math.max(...__writes); return __writes.length > 1 && m < z * 0.85 ? 'sanft' : 'hart ' + m + ' von ' + z; })()`), 'sanft');
   // Block über der Obergrenze: ± verschiebt nie den Rest des Programms
   soll('Block über maxWatt: + senkt den Rest nicht', await b.ev(`import('./js/program.js').then(({ ProgramRun }) => {
-    const s = Object.assign(new EventTarget(), { settings: { maxWatt: 400 }, elapsed: 0, gestoppt: false, setTarget() {} });
+    const s = Object.assign(new EventTarget(), { settings: { maxWatt: 400 }, elapsed: 0, gestoppt: false, setTarget() {}, holeAuf() {} });
     const r = new ProgramRun(s, [{ dauer: 60, watt: 504 }, { dauer: 60, watt: 190 }]);
     r.adjust(10); const a = r.offset; r.adjust(-10); const c = r.offset; r.adjust(10); return [a, c, r.offset].join(); })`), '0,-10,0');
 
@@ -633,6 +633,169 @@ try {
   soll('Log: Reconnect mit Zustand und Ziel', p6, t => t.includes('Reconnect während der Fahrt: riding, Ziel 185 W'));
   soll('Log: Fahrtende 0 W bestätigt bzw. Grund', p6, t => t.includes('Ziel 0 W bestätigt')
     && t.includes('nicht bestätigt | Trainer nicht verbunden') && t.includes('nicht bestätigt | Fehler: Keine Antwort'));
+  // Programmuhr bei gedrosseltem Timer (Bildschirm aus, Bild-in-Bild): die
+  // Wanduhr wird vorgestellt, der echte 1-s-Timer bzw. eine Notification holt
+  // auf. Sample für Sample, ohne Tonsalve, mit Obergrenze gegen Standby
+  const uhr = await b.ev(`(async () => {
+    const { Session } = await import('./js/state.js'), { ProgramRun } = await import('./js/program.js');
+    const echt = performance.now.bind(performance);
+    let vor = 0;
+    performance.now = () => echt() + vor;
+    const warte = ms => new Promise(r => setTimeout(r, ms));
+    const neu = (blocks, settings = { startWatt: 100, maxWatt: 600 }) => {
+      const writes = [], ereignisse = { tick: 0, block: [], countdown: 0, done: 0 };
+      const f = Object.assign(new EventTarget(), { connected: true, busy: false, setTargetPower: async w => { writes.push(w); } });
+      const s = new Session(f, settings);
+      s.save = async () => {};
+      s.addEventListener('tick', () => ereignisse.tick++);
+      const r = blocks ? new ProgramRun(s, blocks) : null;
+      if (r) {
+        r.addEventListener('block', e => ereignisse.block.push(e.detail.index));
+        r.addEventListener('countdown', () => ereignisse.countdown++);
+        r.addEventListener('done', () => ereignisse.done++);
+      }
+      return { f, s, r, writes, ereignisse, daten: d => f.dispatchEvent(new CustomEvent('data', { detail: d })) };
+    };
+    const feld = (s, k, n) => s.samples[k * 6 + n];
+    const out = {};
+    try {
+      // Timer gedrosselt: 15 s in einem Schub, Blockwechsel und Ziel je Sample
+      {
+        const { s, r, ereignisse, daten } = neu([{ dauer: 10, watt: 100 }, { dauer: 10, watt: 200 }, { dauer: 100, watt: 150 }]);
+        daten({ watt: 150, rpm: 90, kmh: 30 });
+        vor += 15000; await warte(1100);
+        out.schub = { count: s.count, index: r.index, ziel: s.target, tick: ereignisse.tick, block: ereignisse.block.join(), countdown: ereignisse.countdown,
+          lueckenlos: Array.from({ length: s.count }, (_, k) => feld(s, k, 0) === k).every(Boolean), z3: feld(s, 3, 2), z13: feld(s, 13, 2),
+          watt1: feld(s, 1, 1), watt8: feld(s, 8, 1), kj: s.kj };
+        vor += 12000; await warte(1100);
+        out.zweiWechsel = { index: r.index, ziel: s.target, block: ereignisse.block.join() };
+        await s.finish();
+      }
+      // Notification treibt die Uhr ohne Timer
+      {
+        const { s, daten } = neu();
+        daten({ watt: 150 });
+        vor += 5000;
+        const vorher = s.count;
+        daten({ watt: 160 });
+        out.notification = s.count - vorher;
+        await s.finish();
+      }
+      // Standby: über der Obergrenze zählt nichts
+      {
+        const { s, r } = neu([{ dauer: 600, watt: 100 }]);
+        vor += 3600000; await warte(1100);
+        out.standby = { count: s.count, rest: r.restImBlock };
+        await s.finish();
+      }
+      // Not-Stopp: Sekunden vor dem Stopp zählen noch, im Stopp steht die Programmuhr
+      {
+        const { s, r, writes } = neu([{ dauer: 60, watt: 200 }, { dauer: 60, watt: 100 }]);
+        vor += 10000;
+        s.emergencyStop();
+        const beiStopp = s.count, rest = r.restImBlock;
+        vor += 20000; await warte(1100);
+        out.stopp = { beiStopp, rest, restDanach: r.restImBlock, count: s.count, ziel: s.target, index: r.index, letzter: writes.at(-1) };
+        vor += 5000;
+        s.weiterZu(r.aktuellesZiel());
+        const c = s.count;
+        await warte(1100);
+        out.weiter = { imStopp: c, rest: r.restImBlock, pause: r.pauseLog.length, geschlossen: r.pauseLog[0].bis !== null };
+        await s.finish();
+      }
+      // Ausfahren: Programmende auf die Sekunde genau, nur einmal „fertig"
+      {
+        const { s, r, ereignisse } = neu([{ dauer: 5, watt: 100 }]);
+        vor += 8000; await warte(1100);
+        vor += 8000; await warte(1100);
+        out.ausfahren = { ende: s.programmEndeBei, done: ereignisse.done, vorbei: r.vorbei, ueber: r.ueberzeit(s.elapsed) === s.count - 5, ziel: s.target };
+        await s.finish();
+      }
+      // Fahrtende nach einer Lücke: alles aufgezeichnet, keine Töne
+      {
+        const { s, ereignisse } = neu([{ dauer: 3, watt: 100 }, { dauer: 60, watt: 150 }]);
+        vor += 7000;
+        await s.finish();
+        out.finish = { count: s.count, block: ereignisse.block.join(), countdown: ereignisse.countdown };
+      }
+      // Vordergrund: keine Sekunde doppelt
+      {
+        const { s } = neu();
+        await warte(3250);
+        out.vordergrund = s.count;
+        await s.finish();
+      }
+      // Reconnect im Hintergrund: Ziel sofort, nicht erst mit dem gedrosselten Timer
+      {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+        const { f, s, writes, daten } = neu();
+        s.setTarget(185, { instant: true });
+        await warte(300);
+        writes.length = 0;
+        f.dispatchEvent(new Event('reconnected'));
+        out.reconnect = writes.join();
+        // Offenes Ziel (Write fehlgeschlagen o. Ä.): die nächste Notification schreibt
+        await warte(300);
+        s.target = 195;
+        writes.length = 0;
+        daten({ watt: 100 });
+        out.offenesZiel = writes.join();
+        delete document.hidden;
+        await s.finish();
+      }
+      // Erste Rampe: kein Wert über der Obergrenze, sofort der erste Block
+      {
+        const { s, writes } = neu([{ dauer: 60, watt: 70 }], { startWatt: 300, maxWatt: 100 });
+        await warte(50);
+        out.startRampe = { ziel: s.target, erster: writes[0] };
+        await s.finish();
+        const frei = neu(null, { startWatt: 300, maxWatt: 100 });
+        out.startFrei = frei.s.target;
+        await frei.s.finish();
+      }
+      // Blockwechsel im Not-Stopp: Meldung kommt nach WEITER, ohne die sanfte Rampe zu ersetzen
+      {
+        const { s, r, writes, ereignisse } = neu([{ dauer: 60, watt: 200 }, { dauer: 60, watt: 90 }, { dauer: 60, watt: 200 }]);
+        await warte(50);
+        s.emergencyStop();
+        r.skip();
+        out.stoppSkip = { index: r.index, block: ereignisse.block.join() };
+        s.weiterZu(r.aktuellesZiel());
+        await warte(1300);
+        out.nachWeiter = { block: ereignisse.block.join(), ziel: s.target, letzter: writes.at(-1) };
+        await s.finish();
+      }
+    } finally { performance.now = echt; }
+    return out;
+  })()`);
+  const j = v => JSON.stringify(v);
+  soll('Programmuhr: 15 s Lücke aufgeholt', uhr.schub.count, n => n >= 15 && n <= 17);
+  soll('… Blockwechsel und Ziel stimmen', [uhr.schub.index, uhr.schub.ziel].join(), '1,200');
+  soll('… Samples lückenlos', uhr.schub.lueckenlos, true);
+  soll('… jedes Sample mit dem damaligen Ziel', [uhr.schub.z3, uhr.schub.z13].join(), '100,200');
+  soll('… Watt nur solange Daten frisch waren', [uhr.schub.watt1, uhr.schub.watt8].join(), '150,0');
+  soll('… Energie nicht aus eingefrorenen Werten', uhr.schub.kj, k => k > 0.2 && k < 0.8);
+  soll('… Anzeige einmal je Schub, kein Countdown-Geplapper', [uhr.schub.tick, uhr.schub.countdown].join(), '1,0');
+  soll('… nur der laufende Block wird gemeldet', uhr.schub.block, '1');
+  soll('… zwei Wechsel in einem Schub: nur der letzte', j(uhr.zweiWechsel), j({ index: 2, ziel: 150, block: '1,2' }));
+  soll('Notification treibt die Uhr ohne Timer', uhr.notification, n => n >= 5 && n <= 6);
+  soll('Standby über der Obergrenze zählt nicht', uhr.standby.count, n => n <= 2);
+  soll('… und die Programmuhr bleibt stehen', uhr.standby.rest, n => n >= 598);
+  soll('Stopp nach Lücke: Sekunden davor zählen', uhr.stopp.beiStopp, n => n >= 10 && n <= 11);
+  // Die Pause beginnt mit der ersten Sekunde nach dem Stopp, wie im Vordergrund
+  soll('Stopp: Programmuhr steht, Aufzeichnung läuft', [uhr.stopp.rest - uhr.stopp.restDanach <= 1, uhr.stopp.count >= uhr.stopp.beiStopp + 20].join(), 'true,true');
+  soll('Stopp: Last bleibt 0', [uhr.stopp.ziel, uhr.stopp.letzter, uhr.stopp.index].join(), '0,0,0');
+  soll('WEITER nach Lücke: Stoppzeit zählt nicht als Programm', uhr.weiter.rest, n => n >= uhr.stopp.rest - 3 && n <= uhr.stopp.rest);
+  soll('… Lücke vor WEITER liegt in der Pause', [uhr.weiter.imStopp >= uhr.stopp.count + 5, uhr.weiter.pause, uhr.weiter.geschlossen].join(), 'true,1,true');
+  soll('Ausfahren: Programmende auf die Sekunde, einmal gemeldet', j(uhr.ausfahren), j({ ende: 5, done: 1, vorbei: true, ueber: true, ziel: 100 }));
+  soll('Fahrtende holt die Lücke auf, ohne Töne', [uhr.finish.count >= 7, uhr.finish.block, uhr.finish.countdown].join(), 'true,,0');
+  soll('Vordergrund: keine Sekunde doppelt oder verloren', uhr.vordergrund, n => n >= 3 && n <= 4);
+  soll('Reconnect im Hintergrund: Ziel sofort geschrieben', uhr.reconnect, '185');
+  soll('Offenes Ziel: die nächste Notification schreibt', uhr.offenesZiel, '195');
+  soll('Erste Rampe: gleich der erste Block, nie über der Obergrenze', j(uhr.startRampe), j({ ziel: 70, erster: 70 }));
+  soll('Startwert über der Obergrenze: geklemmt', uhr.startFrei, 100);
+  soll('Skip im Stopp: Index folgt still', j(uhr.stoppSkip), j({ index: 1, block: '' }));
+  soll('… Meldung nach WEITER, sanfte Rampe bleibt', [uhr.nachWeiter.block, uhr.nachWeiter.ziel, uhr.nachWeiter.letzter < 75].join(), '1,90,true');
   // Zweiter Durchlauf ohne Beispieldaten: „Heute fahren ›" ist frei → Startdialog, Abbrechen nimmt zurück
   const b2 = await browser({ breite: 412, hoehe: 900 });
   try {
