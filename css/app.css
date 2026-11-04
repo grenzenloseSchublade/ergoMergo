@@ -531,6 +531,9 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   grid-template-columns: 1fr 1fr;
   grid-template-areas: "power power" "target time" "sec sec" "status status";
   padding: var(--abstand-2) var(--abstand-4) 0;
+  /* Zonen-Glut: Schein hinter der Wattzahl, der zu allen Rändern ausläuft */
+  background: radial-gradient(closest-side at 50% 45%, color-mix(in srgb, var(--glut) var(--glut-staerke), transparent), transparent);
+  transition: --glut 1s;
 }
 .metrics > .led-tafel { grid-area: status; margin: var(--abstand-2) auto 0; }
 .metric { display: grid; justify-items: center; gap: 0; font-variant-numeric: tabular-nums; }
@@ -667,7 +670,6 @@ dialog.fahrt-optionen {
   grid-template-areas: "geraete" "toene";
 }
 .fo-gruppe { display: grid; gap: var(--abstand-15); align-content: start; }
-.fo-nur-quer { display: none; }                   /* nur wo sie wirkt: Cockpit */
 .fo-geraete { grid-area: geraete; }
 .fo-toene { grid-area: toene; }
 .fahrt-optionen .schalter-zeile { min-height: var(--tippflaeche-zeile); }
@@ -777,6 +779,10 @@ button:disabled { cursor: default; }
 .ride-grid.fokus-graph .row-secondary { font-size: clamp(.95rem, 3vmin, 1.15rem); }
 .ride-grid.fokus-graph .restbalken { display: none; }
 
+/* Auf der Glut trägt --ink3 kleine Schrift nicht (zu wenig Kontrast) */
+.metrics .label, .metric .unit, .gesamt, .row-secondary { color: var(--ink2); }
+.gesamt b, .row-secondary b { color: var(--ink); }
+
 /* Glut: Zonenfarbe des aktuellen Ziels (setzt ride.js). Als registrierte
    Eigenschaft, damit der Verlauf beim Blockwechsel weich überblendet */
 @property --glut { syntax: '<color>'; inherits: true; initial-value: transparent; }
@@ -804,12 +810,7 @@ button:disabled { cursor: default; }
     padding: 0 var(--abstand-25) var(--abstand-1) max(var(--abstand-25), env(safe-area-inset-left));
     background: linear-gradient(to right, color-mix(in srgb, var(--glut) var(--glut-staerke), transparent), transparent 90%);
     border-radius: 0 var(--radius-l) var(--radius-l) 0;
-    transition: --glut 1s;
   }
-  .fo-nur-quer { display: grid; }
-  /* Auf der Glut trägt --ink3 kleine Schrift nicht (zu wenig Kontrast) */
-  .metrics .label, .metric .unit, .gesamt, .row-secondary { color: var(--ink2); }
-  .gesamt b, .row-secondary b { color: var(--ink); }
   .metric-power .value { font-size: clamp(3rem, min(42cqi, 100dvh - var(--rest)), var(--watt-max)); line-height: .95; }
   .metric-power .unit { display: none; }           /* „Watt" steht beim Ziel; die Höhe gehört der Zahl */
   .metric:not(.metric-power) .value { font-size: clamp(1.6rem, 11vmin, 4rem); }

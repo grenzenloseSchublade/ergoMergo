@@ -34,7 +34,6 @@
   --taste-gruen: #4cc76e; --taste-magenta: #e0489a; --taste-blau: #4a9bd8; --taste-orange: #f0892f;
   /* Graphen */
   --power-line: #ecf3f5;
-  --target-fill: rgba(69, 199, 212, .18);
   --hr-line: #ff6f8a;         /* Herzfrequenz: Pulskurve und Puls ab der Pulsgrenze (Symbole neutral) */
   /* LED-Statuszeile */
   --status-mulde: #050809;    /* eingelassene Tafel */

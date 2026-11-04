@@ -85,9 +85,18 @@ Rollen:
   Ausnahme: Wochentag-Reihen mit 7 Spalten (Wochenstreifen, Tagewahl): lückenlos, 44 px hoch, bei 360 px
   knapp 40 px breit.
 - Fahrbildschirm quer („Cockpit“, ab 480 px Breite): Werte links, Graph in der
-  Mitte, Bedienleiste rechts über die volle Höhe. Die Zonen-Glut (`--glut`, Stärke
-  `--glut-staerke`) färbt die Werte-Fläche nach der Zone des Ziels; kleine Schrift
-  steht darauf in `--ink2`, weil `--ink3` dort unter 4,5:1 fällt.
+  Mitte, Bedienleiste rechts über die volle Höhe.
+- Zonen-Glut (`--glut`, Stärke `--glut-staerke`): färbt die Werte-Fläche nach der
+  Zone des Ziels, quer als Verlauf von links, hochkant als Schein hinter der
+  Wattzahl, der zu allen Rändern ausläuft. Kleine Schrift steht darauf in `--ink2`,
+  weil `--ink3` dort unter 4,5:1 fällt.
+- Graph in der Fahrt: Vergangenes tritt zurück (16 %), der laufende Block ist am
+  hellsten (50 %, mit Oberkante), Kommendes liegt dazwischen (34 %). Mehr als 50 %
+  lässt die helle Schrift auf Zone 4 unter 4,5:1 fallen. Die Jetzt-Linie ist
+  durchgezogen, am Ende der Leistungslinie sitzt ein Punkt. Die Linie wird nur in
+  der Anzeige nach Auflösung geglättet (etwa 2,5 Pixel, mindestens 3 s); gespeichert
+  bleiben die Rohwerte. Im Detail steht die Wattachse in einer eigenen Spalte links,
+  Blocklabels stehen in einer Reihe am Fuß der Balken.
 - Symbole: `--icon-xs` 12 · `--icon-s` 14 · `--icon-m` 18 · `--icon-l` 20 · `--icon-xl` 24.
 
 ## Bausteine

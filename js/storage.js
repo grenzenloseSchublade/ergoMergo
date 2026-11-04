@@ -137,7 +137,7 @@ export const EINSTELLUNGEN = {
   haltenTempo: { std: 'ruhig', pruefe: auswahl(HALTEN_TEMPO) },   // Schlüssel aus HALTEN_TEMPO
   sprachansagen: { std: true, pruefe: jaNein },
   tonAn: { std: true, pruefe: jaNein },
-  glut: { std: true, pruefe: jaNein },                          // Zonen-Glut hinter den Fahrwerten (nur quer)
+  glut: { std: true, pruefe: jaNein },                          // Zonen-Glut hinter den Fahrwerten
   zwoImport: { std: false, pruefe: jaNein },                    // .zwo-Import, standardmäßig aus
   plan: { std: null, pruefe: planForm },                          // Trainingsplan (js/plan.js)
   // Gemerkte Geräte: Web-Bluetooth-IDs gelten nur in diesem Browserprofil —

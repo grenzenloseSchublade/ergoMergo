@@ -831,7 +831,7 @@ export class RideScreen {
     el.textContent = watt;
     el.style.color = zoneColor(watt, ftp);
     this.$('#m-target').textContent = s.target;
-    // Glut (nur quer sichtbar): Zone des Ziels — ruhig, springt nicht mit der Leistung
+    // Glut: Zone des Ziels — ruhig, springt nicht mit der Leistung
     this.$('.metrics').style.setProperty('--glut', this.glutAn ? zoneColor(s.target, ftp) : 'transparent');
     const zeit = this.#zeitAnzeige();
     this.$('#m-time-label').textContent = zeit.label;

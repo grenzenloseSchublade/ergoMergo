@@ -130,17 +130,23 @@ function zeichneZeitachse(ctx, css, w, h, fuss, total, s = 1, blocks = null, von
 
 // Watt-Achse links (nur große Canvas). Zwei Phasen: Rasterlinien liegen
 // unter den Balken, die Beschriftung darüber — sonst verdecken Balken den Text.
-function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
-  // Mindestabstand fix (Schrift ist gedeckelt) — nicht mit s skalieren,
-  // sonst bleibt auf Handygröße nur eine einzige Rasterlinie übrig
-  const raster = [25, 50, 100, 200].find(r => (h - kopf - fuss) * r / maxW >= 30) ?? 200;
+// inSpalte (Fahrbildschirm-Detail): Zahlen in der Randspalte links vom Plot
+// (Ursprung bereits verschoben, x < 0) — dort stört sie weder Balken noch Linie;
+// yFrei: Höhe, die der Spalte gehört (FTP-Marke), dort keine Zahl.
+function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase, inSpalte = false, yFrei = null) {
+  // Mindestabstand fest (Schrift ist gedeckelt) — nicht mit s skalieren, sonst
+  // bleibt auf Handygröße nur eine Rasterlinie übrig; auf hohen Flächen höchstens
+  // rund sieben Linien, sonst wird das Raster selbst zum Rauschen
+  const hoehe = h - kopf - fuss;
+  const raster = [25, 50, 100, 200].find(r => hoehe * r / maxW >= Math.max(30, hoehe / 7)) ?? 200;
   ctx.strokeStyle = css('--line');
   ctx.fillStyle = css('--ink2');
   ctx.lineWidth = 1;
   ctx.font = canvasSchrift(axisFont(s));
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'bottom';
+  ctx.textAlign = inSpalte ? 'right' : 'left';
+  ctx.textBaseline = inSpalte ? 'middle' : 'bottom';
   ctx.beginPath();
+  let yOben = null;
   for (let v = raster; v < maxW / 1.02; v += raster) {
     const y = kopf + (h - kopf - fuss) * (1 - v / maxW);
     if (phase !== 'labels') {
@@ -148,10 +154,29 @@ function zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, phase) {
       ctx.lineTo(w, y + 0.5);
     }
     // oben abgeschnittene Beschriftung weglassen statt halb zeigen
-    if (phase !== 'linien' && y - 2 - axisFont(s) >= 0) beschrifte(ctx, css, `${v} W`, 3, y - 2);
+    if (phase === 'linien') continue;
+    if (inSpalte) {
+      if (yFrei !== null && Math.abs(y - yFrei) < axisFont(s) + 2) continue;
+      if (y - axisFont(s) / 2 >= 0) ctx.fillText(String(v), SPALTE_X, y);
+      yOben = y;
+    } else if (y - 2 - axisFont(s) >= 0) beschrifte(ctx, css, `${v} W`, 3, y - 2);
   }
   ctx.stroke();
+  if (inSpalte && phase === 'labels' && yOben !== null && yOben - 1.5 * axisFont(s) - 2 >= 0) {
+    ctx.fillText('W', SPALTE_X, yOben - axisFont(s) - 2);    // Einheit einmal, über der obersten Zahl
+  }
 }
+
+// Randspalte der Achse im Fahrbildschirm-Detail: Breite für drei Ziffern
+const SPALTE_X = -5;
+function spaltenBreite(ctx, s) {
+  ctx.font = canvasSchrift(axisFont(s));
+  return Math.ceil(ctx.measureText('000').width) + 9;
+}
+
+// Höhe der FTP-Linie (null: keine FTP oder außerhalb der Skala)
+const ftpHoehe = (h, kopf, fuss, maxW, ftp) =>
+  ftp && ftp < maxW ? kopf + (h - kopf - fuss) * (1 - ftp / maxW) : null;
 
 // Achsentext mit Hof in Canvas-Hintergrundfarbe: bleibt lesbar, auch wenn
 // eine Linie darunter durchläuft. Transparente Canvas (Fahrbildschirm)
@@ -182,6 +207,11 @@ function zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s, xLabel = w - 
   ctx.fillStyle = css('--ink2');
   ctx.font = canvasSchrift(axisFont(s));
   ctx.textAlign = 'right';
+  if (xLabel < 0) {                            // Randspalte: mittig zur Linie
+    ctx.textBaseline = 'middle';
+    ctx.fillText('FTP', xLabel, y);
+    return;
+  }
   ctx.textBaseline = 'bottom';
   beschrifte(ctx, css, 'FTP', xLabel, y - 1);
 }
@@ -271,6 +301,39 @@ function zeichneBlockLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s) 
     }
     t += b.dauer;
   }
+}
+
+// Blocklabels im Fahrbildschirm: Reihe am Fuß der Balken. Dort läuft weder die
+// Leistungslinie noch die FTP-Linie, und alle Zahlen stehen auf einer Höhe —
+// mit Blick vom Lenker schneller zu lesen als an der wechselnden Oberkante.
+// Vergangene Blöcke treten zurück.
+function zeichneFussLabels(ctx, css, blocks, total, w, h, kopf, fuss, maxW, s, jetzt) {
+  const unten = h - fuss;
+  const fw = labelFont(s), fd = axisFont(1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  let t = 0;
+  for (const b of blocks) {
+    const bw = b.dauer / total * w;
+    const balken = (unten - kopf) * b.watt / maxW;
+    const mitte = (t + b.dauer / 2) / total * w;
+    const dauer = b.dauer % 60 === 0 ? `${b.dauer / 60} min`
+      : `${Math.floor(b.dauer / 60)}:${String(b.dauer % 60).padStart(2, '0')}`;
+    ctx.globalAlpha = t + b.dauer <= jetzt ? 0.55 : 1;
+    ctx.font = canvasSchrift(fd);
+    const mitDauer = bw >= ctx.measureText(dauer).width + 4 && balken >= fw + fd + 8;
+    if (mitDauer) {
+      ctx.fillStyle = css('--power-line');
+      ctx.fillText(dauer, mitte, unten - 3);
+    }
+    ctx.font = canvasSchrift(fw, 600);
+    if (bw >= ctx.measureText(String(b.watt)).width + 4 && balken >= fw + 6) {
+      ctx.fillStyle = css('--ink');
+      ctx.fillText(String(b.watt), mitte, unten - 3 - (mitDauer ? fd + 3 : 0));
+    }
+    t += b.dauer;
+  }
+  ctx.globalAlpha = 1;
 }
 
 // Gefahrene Leistung als Linie über den Samples. xFn darf null liefern
@@ -391,7 +454,7 @@ export class WorkoutChart {
   draw(blocks, total, samples, count, offset, ftp, zeitMap = t => t, blink = false, istPause = null, gross = null) {
     const p = prepCanvas(this.canvas);
     if (!p) return;
-    const { ctx, w, h, css } = p;
+    const { ctx, w: voll, h, css } = p;
     const s = scaleOf(h);
     gross ??= h >= 220;
     const gruppen = sammleGruppen(blocks);
@@ -399,56 +462,80 @@ export class WorkoutChart {
     // dieselbe Abbildung für Balken, Linie, Achse, FTP-Linie und Labels
     const kopf = (gruppen.size ? 13 * s : 0) + 6 * s;
     const fuss = 13 * s;
+    // Detail: Achse in eigener Spalte, alles andere zeichnet im Plot rechts davon
+    const spalte = gross ? spaltenBreite(ctx, s) : 0;
+    const w = voll - spalte;
+    // Ausfahren nach Programmende: Achse wächst mit, statt die Linie rechts
+    // aus dem Canvas laufen zu lassen (Livetest: „nichts mehr getrackt")
+    const jetzt = count ? zeitMap(samples[(count - 1) * FIELDS]) : 0;
+    const anzeigeTotal = Math.max(total, jetzt);
+    const { watt, linie } = glatteLinie(samples, count, anzeigeTotal / w);
     // Skala über ALLE Samples (nicht nur die letzten): sonst springt sie,
     // sobald eine Spitze aus dem Fenster fällt
     let maxW = 150;
     for (const b of blocks) maxW = Math.max(maxW, b.watt + offset);
-    for (let k = 0; k < count; k++) maxW = Math.max(maxW, samples[k * FIELDS + 1]);
+    for (let k = 0; k < count; k++) maxW = Math.max(maxW, watt[k]);
     maxW *= 1.15;
-    // Ausfahren nach Programmende: Achse wächst mit, statt die Linie rechts
-    // aus dem Canvas laufen zu lassen (Livetest: „nichts mehr getrackt")
-    const letzteT = count ? zeitMap(samples[(count - 1) * FIELDS]) : 0;
-    const anzeigeTotal = Math.max(total, letzteT);
     const x = t => t / anzeigeTotal * w;
     const y = v => (h - fuss) - Math.max(0, v) / maxW * (h - fuss - kopf);
     // Blocklabels/Balken zeigen die effektiven Watt (inkl. ±-Offset)
     const effBlocks = offset ? blocks.map(b => ({ ...b, watt: b.watt + offset })) : blocks;
+    const yFtp = gross ? ftpHoehe(h, kopf, fuss, maxW, ftp) : null;
 
-    if (gross) zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien');
+    ctx.save();
+    ctx.translate(spalte, 0);
+    if (gross) zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien', true);
+    // Vergangen tritt zurück, der laufende Block ist auf einen Blick zu finden
     let t = 0;
-    ctx.globalAlpha = 0.42;
     for (const b of effBlocks) {
+      const bis = t + b.dauer;
+      const laeuft = t <= jetzt && jetzt < bis;
+      ctx.globalAlpha = bis <= jetzt ? 0.16 : laeuft ? 0.5 : 0.34;  // 0.5: helle Schrift hält auf jeder Zone 4,5:1
       ctx.fillStyle = css(zoneVar(b.watt, ftp));
-      ctx.fillRect(x(t) + 0.5, y(b.watt), x(t + b.dauer) - x(t) - 1, (h - fuss) - y(b.watt));
-      t += b.dauer;
+      ctx.fillRect(x(t) + 0.5, y(b.watt), x(bis) - x(t) - 1, (h - fuss) - y(b.watt));
+      if (laeuft) {
+        ctx.globalAlpha = 1;
+        ctx.fillRect(x(t) + 0.5, y(b.watt) - 1, x(bis) - x(t) - 1, 2);
+      }
+      t = bis;
     }
     ctx.globalAlpha = 1;
     // Ausfahr-Bereich optisch absetzen: gedämpfte Fläche + Endlinie des Programms
     if (anzeigeTotal > total) zeichneAusfahrBereich(ctx, css, x(total), w, kopf, h - fuss);
     if (gross) {
-      zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
-      zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
-      zeichneBlockLabels(ctx, css, effBlocks, anzeigeTotal, w, h, kopf, fuss, maxW, s);
+      zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels', true, yFtp);
+      zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s, SPALTE_X);
+      zeichneFussLabels(ctx, css, effBlocks, anzeigeTotal, w, h, kopf, fuss, maxW, s, jetzt);
     }
     zeichneZeitachse(ctx, css, w, h, fuss, anzeigeTotal, s, blocks);
 
-    zeichneLeistungslinie(ctx, css, samples, count, k => {
+    zeichneLeistungslinie(ctx, css, linie, count, k => {
       const t = samples[k * FIELDS];
       return istPause?.(t) ? null : x(zeitMap(t));
     }, y, 1.5 * Math.min(s, 1.6), k => zeitMap(samples[k * FIELDS]));
 
     if (count) {
-      const px = x(zeitMap(samples[(count - 1) * FIELDS]));
-      ctx.strokeStyle = blink ? css('--accent') : css('--ink2');
-      ctx.lineWidth = blink ? 2.5 : 1;
-      ctx.setLineDash([3, 3]);
+      const px = x(jetzt);
+      ctx.strokeStyle = blink ? css('--accent') : css('--ink');
+      ctx.lineWidth = blink ? 3 : 2;
       ctx.beginPath();
       ctx.moveTo(px, kopf);
       ctx.lineTo(px, h - fuss);
       ctx.stroke();
-      ctx.setLineDash([]);
+      // Punkt am Linienende: „hier bin ich" (nicht im Not-Stopp, dort ruht die Linie)
+      if (!istPause?.(samples[(count - 1) * FIELDS])) {
+        const r = 3.5 * Math.min(s, 1.4);
+        ctx.fillStyle = css('--power-line');
+        ctx.strokeStyle = css('--bg');
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px, y(watt[count - 1]), r, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      }
     }
     zeichneKlammern(ctx, css, w, gruppen, anzeigeTotal, s);
+    ctx.restore();
   }
 }
 
@@ -464,40 +551,44 @@ export class LiveChart {
   draw(samples, count, target, ftp = 0, gross = null) {
     const p = prepCanvas(this.canvas);
     if (!p || !count) return;
-    const { ctx, w, h, css } = p;
+    const { ctx, w: voll, h, css } = p;
     const s = scaleOf(h);
     gross ??= h >= 220;
     const from = Math.max(0, count - WINDOW_S);
+    const spalte = gross ? spaltenBreite(ctx, s) : 0;
+    const w = voll - spalte;
+    const { watt, linie } = glatteLinie(samples.subarray(from * FIELDS), count - from, WINDOW_S / w);
     let maxW = target;
     for (let k = from; k < count; k++)
-      maxW = Math.max(maxW, samples[k * FIELDS + 1], samples[k * FIELDS + 2]);
+      maxW = Math.max(maxW, watt[k - from], samples[k * FIELDS + 2]);
     maxW = Math.max(150, Math.ceil(maxW * 1.15 / 50) * 50);
     const kopf = 6 * s;
     const fuss = gross ? 13 * s : 0;
     const x = k => (k - from) / WINDOW_S * w;
     const y = v => (h - fuss) - v / maxW * (h - fuss - kopf);
 
-    zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien');
+    ctx.save();
+    ctx.translate(spalte, 0);
+    zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'linien', gross);
 
-    // Zielleistung als gefüllte Stufenfläche
-    ctx.fillStyle = css('--target-fill');
-    ctx.beginPath();
-    ctx.moveTo(x(from), h - fuss);
-    for (let k = from; k < count; k++) {
-      const v = samples[k * FIELDS + 2];
-      ctx.lineTo(x(k), y(v));
-      ctx.lineTo(x(k + 1), y(v));
+    // Zielleistung als Stufenfläche, zonengefärbt wie die Programm-Blöcke
+    ctx.globalAlpha = 0.42;
+    for (let a = from, k = from + 1; k <= count; k++) {
+      const ziel = samples[a * FIELDS + 2];
+      if (k < count && samples[k * FIELDS + 2] === ziel) continue;
+      if (ziel > 0) {
+        ctx.fillStyle = css(zoneVar(ziel, ftp));
+        ctx.fillRect(x(a), y(ziel), x(k) - x(a), (h - fuss) - y(ziel));
+      }
+      a = k;
     }
-    ctx.lineTo(x(count), h - fuss);
-    ctx.closePath();
-    ctx.fill();
+    ctx.globalAlpha = 1;
 
-    zeichneLeistungslinie(ctx, css, samples.subarray(from * FIELDS), count - from,
-      k => x(from + k), y, 2);
+    zeichneLeistungslinie(ctx, css, linie, count - from, k => x(from + k), y, 2);
 
     if (gross) {
-      zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels');
-      zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s);
+      zeichneWattachse(ctx, css, w, h, kopf, fuss, maxW, s, 'labels', true, ftpHoehe(h, kopf, fuss, maxW, ftp));
+      zeichneFtpLinie(ctx, css, w, h, kopf, fuss, maxW, ftp, s, SPALTE_X);
       zeichneZeitachse(ctx, css, w, h, fuss, from + WINDOW_S, s, null, from);
     } else {
       // Reduziert: nur die Skalen-Obergrenze als Orientierung
@@ -507,6 +598,7 @@ export class LiveChart {
       ctx.textBaseline = 'top';
       beschrifte(ctx, css, `${maxW} W`, 4, 2);
     }
+    ctx.restore();
   }
 }
 
@@ -516,16 +608,31 @@ export class LiveChart {
 function glaette(samples, count, feld, fenster, mitNullen = true) {
   const out = new Float32Array(count);
   const r = Math.floor(fenster / 2);
+  let sum = 0, n = 0, lo = 0, hi = -1;         // laufende Summe: läuft jede Sekunde auch bei 3-h-Fahrten
   for (let k = 0; k < count; k++) {
-    if (!mitNullen && !samples[k * FIELDS + feld]) { out[k] = NaN; continue; }
-    let sum = 0, n = 0;
-    for (let j = Math.max(0, k - r); j <= Math.min(count - 1, k + r); j++) {
-      const v = samples[j * FIELDS + feld];
+    while (hi < Math.min(count - 1, k + r)) {
+      const v = samples[++hi * FIELDS + feld];
       if (mitNullen || v) { sum += v; n++; }
     }
-    out[k] = sum / n;
+    while (lo < k - r) {
+      const v = samples[lo++ * FIELDS + feld];
+      if (mitNullen || v) { sum -= v; n--; }
+    }
+    out[k] = !mitNullen && !samples[k * FIELDS + feld] ? NaN : sum / n;
   }
   return out;
+}
+
+// Leistungslinie für die Anzeige: rohe 1-s-Werte zappeln und werden auf dem
+// schmalen Graphen zur Bürste. Fenster nach Auflösung (rund 2,5 Pixel, mindestens
+// 3 s, ungerade): Kanten bleiben scharf, das Rauschen verschwindet.
+// Liefert die Werte (watt) und eine Sample-Kopie mit geglätteter Leistung (linie).
+function glatteLinie(samples, count, sekundenProPixel = 0) {
+  const fenster = Math.max(3, Math.round(2.5 * sekundenProPixel)) | 1;
+  const watt = glaette(samples, count, 1, fenster);
+  const linie = Int16Array.from(samples.subarray(0, count * FIELDS));
+  for (let k = 0; k < count; k++) linie[k * FIELDS + 1] = Math.round(watt[k]);
+  return { watt, linie };
 }
 
 // Detailansicht einer gespeicherten Fahrt (klein und im Vollbild-Overlay):
@@ -543,7 +650,7 @@ export function drawSessionChart(canvas, samples, count, { ftp = 0, programmEnde
   const kopf = 6 * s;
   const fuss = 13 * s;
   const unten = h - fuss;
-  const watt = glaette(samples, count, 1, 3);
+  const { watt, linie } = glatteLinie(samples, count);
   let maxW = 100;
   for (let k = 0; k < count; k++) maxW = Math.max(maxW, watt[k], samples[k * FIELDS + 2]);
   maxW *= 1.1;
@@ -581,9 +688,7 @@ export function drawSessionChart(canvas, samples, count, { ftp = 0, programmEnde
   const yHf = v => unten - (v - hfLo) / (hfHi - hfLo) * (unten - kopf);
 
   const breite = 1.4 * Math.min(s, 1.3);     // wächst im Overlay kaum mit
-  const geglaettet = Int16Array.from(samples.subarray(0, count * FIELDS));
-  for (let k = 0; k < count; k++) geglaettet[k * FIELDS + 1] = Math.round(watt[k]);
-  zeichneLeistungslinie(ctx, css, geglaettet, count, x, y, breite);
+  zeichneLeistungslinie(ctx, css, linie, count, x, y, breite);
 
   if (mitHf) {
     ctx.strokeStyle = css('--hr-line');

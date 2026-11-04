@@ -109,25 +109,38 @@ async function pruefe(srv, [breite, hoehe]) {
           befunde.push(`${modus}: Beschriftung bricht um`);
         if (w.watt <= w.ziel) befunde.push(`${modus}: Wattzahl ${w.watt} px nicht größer als Ziel ${w.ziel} px`);
       }
-      await fokus('normal');
-      const glut = () => b.ev(`getComputedStyle(document.querySelector('.metrics')).getPropertyValue('--glut')`);
-      const an = await glut();
-      if (!an || an.includes('rgba(0, 0, 0, 0)') || an === 'transparent') befunde.push(`Glut an, aber Farbe „${an}"`);
-      const glutLage = await lage();
-      await b.klick('#btn-mehr', 400);
-      if (!(await b.ev(`!!document.querySelector('#opt-glut').offsetParent`))) befunde.push('Glut-Schalter fehlt im Panel');
-      await b.klick('#opt-glut', 1300);
-      const aus = await b.ev(`getComputedStyle(document.querySelector('.metrics')).backgroundImage`);
-      if (!/rgba\(0, 0, 0, 0\)|transparent/.test(aus) || /color\(srgb [^ ]*[1-9]/.test(aus)) befunde.push(`Glut aus, aber Verlauf ${aus}`);
-      if ((await b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.glut)`)) !== false) befunde.push('Glut-Schalter wird nicht gespeichert');
-      vergleiche('Glut aus', glutLage, await lage());
-      await b.klick('#opt-glut', 300);
-      await b.klick('#btn-mehr', 300);
-    } else {
-      await b.klick('#btn-mehr', 400);
-      if (await b.ev(`!!document.querySelector('#opt-glut').offsetParent`)) befunde.push('Glut-Schalter hochkant sichtbar, wirkt dort aber nicht');
-      await b.klick('#btn-mehr', 300);
     }
+
+    // Zonen-Glut, hochkant wie quer: folgt dem Schalter, ohne dass etwas springt
+    await fokus('normal');
+    const glut = () => b.ev(`getComputedStyle(document.querySelector('.metrics')).getPropertyValue('--glut')`);
+    const an = await glut();
+    if (!an || an.includes('rgba(0, 0, 0, 0)') || an === 'transparent') befunde.push(`Glut an, aber Farbe „${an}"`);
+    const glutLage = await lage();
+    await b.klick('#btn-mehr', 400);
+    if (!(await b.ev(`!!document.querySelector('#opt-glut').offsetParent`))) befunde.push('Glut-Schalter fehlt im Panel');
+    await b.klick('#opt-glut', 1300);
+    const aus = await b.ev(`getComputedStyle(document.querySelector('.metrics')).backgroundImage`);
+    if (!/rgba\(0, 0, 0, 0\)|transparent/.test(aus) || /color\(srgb [^ ]*[1-9]/.test(aus)) befunde.push(`Glut aus, aber Verlauf ${aus}`);
+    if ((await b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.glut)`)) !== false) befunde.push('Glut-Schalter wird nicht gespeichert');
+    vergleiche('Glut aus', glutLage, await lage());
+    await b.klick('#opt-glut', 300);
+    await b.klick('#btn-mehr', 300);
+
+    // Graph im Detail: Beschriftungen stehen nirgends aufeinander. Mitschnitt
+    // aller Canvas-Texte einer Zeichnung, gleiche Stelle zählt einmal.
+    await fokus('graph');
+    await b.ev(`(() => { const p = CanvasRenderingContext2D.prototype; if (!p.__alt) { p.__alt = p.fillText; p.fillText = function (t, x, y) {
+      if (window.__texte && this.canvas.id === 'live-chart') { const m = this.measureText(t), c = this.getTransform(), f = c.a, gx = c.a * x + c.e, gy = c.d * y + c.f;
+        window.__texte.set(t + '@' + Math.round(gx) + ',' + Math.round(gy), { t, l: (gx - m.actualBoundingBoxLeft * f) / f, r: (gx + m.actualBoundingBoxRight * f) / f, o: (gy - m.actualBoundingBoxAscent * f) / f, u: (gy + m.actualBoundingBoxDescent * f) / f }); }
+      return p.__alt.apply(this, arguments); }; } window.__texte = new Map(); })()`);
+    await sleep(1300);
+    const decken = await b.ev(`(() => { const a = [...window.__texte.values()]; window.__texte = null; const paare = [];
+      for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
+        const p = a[i], q = a[j]; if (p.l < q.r - 1 && q.l < p.r - 1 && p.o < q.u - 1 && q.o < p.u - 1) paare.push(p.t + ' / ' + q.t); }
+      return { n: a.length, paare }; })()`);
+    if (!decken.n) befunde.push('Graph-Detail: keine Beschriftung gezeichnet');
+    if (decken.paare.length) befunde.push(`Graph-Detail: Texte überdecken sich: ${decken.paare.join(', ')}`);
 
     // Panel „⋯": nie über der Bedienleiste, passt ohne Scrollen
     await fokus('normal');

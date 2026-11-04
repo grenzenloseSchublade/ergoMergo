@@ -136,7 +136,7 @@
       </div>
       <span class="kopf-rechts">
         <button type="button" class="kopf-pip" id="btn-pip" data-icon="pip" aria-label="Bild-in-Bild öffnen" aria-pressed="false" title="Bild-in-Bild öffnen" hidden></button>
-        <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte und Töne" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
+        <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte, Töne und Anzeige" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
       </span>
     </div>
     <div class="metrics">
@@ -185,7 +185,7 @@
   <!-- Optionen der Fahrt als kleines Panel unter „⋯" (ride.js setzt die
        Lage). Nicht modal: STOPP und ± bleiben daneben sofort bedienbar; Tap
        daneben, Esc oder Zurück schließt. Schiebeschalter wie in den Einstellungen. -->
-  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Geräte und Töne">
+  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Geräte, Töne und Anzeige">
     <div class="fahrt-optionen-inhalt">
       <div class="fo-gruppe fo-geraete">
         <p class="gruppe-titel">Geräte</p>
@@ -201,7 +201,7 @@
            (solange ausgeblendet), quer unter den Tönen. Nichts wächst, nichts springt -->
       <p class="fo-hinweis" id="fo-hinweis" role="status"></p>
       <div class="fo-gruppe fo-toene">
-        <p class="gruppe-titel">Töne</p>
+        <p class="gruppe-titel">Töne und Anzeige</p>
         <label class="schalter-zeile">
           <i class="opt-icon" data-icon="ton"></i>
           <span class="schalter-text">Signaltöne<small>Beim Start, vor und beim Wechsel, bei Lenkertasten</small></span>
@@ -209,17 +209,14 @@
         </label>
         <label class="schalter-zeile">
           <i class="opt-icon" data-icon="sprache"></i>
-          <span class="schalter-text">Sprachansagen<small>Dauer und Watt jedes neuen Blocks</small></span>
+          <span class="schalter-text">Sprachansagen<small>Dauer und Watt je Block</small></span>
           <input type="checkbox" class="schalter" id="opt-sprache">
         </label>
-        <div class="fo-gruppe fo-nur-quer">
-          <p class="gruppe-titel">Anzeige</p>
-          <label class="schalter-zeile">
-            <i class="opt-icon" data-icon="flamme"></i>
-            <span class="schalter-text">Zonen-Glut<small>Werte leuchten in der Zonenfarbe</small></span>
-            <input type="checkbox" class="schalter" id="opt-glut">
-          </label>
-        </div>
+        <label class="schalter-zeile">
+          <i class="opt-icon" data-icon="flamme"></i>
+          <span class="schalter-text">Zonen-Glut<small>Werte in der Zonenfarbe</small></span>
+          <input type="checkbox" class="schalter" id="opt-glut">
+        </label>
       </div>
     </div>
   </dialog>
@@ -405,7 +402,7 @@
           <input type="checkbox" class="schalter" id="set-sprache">
         </label>
         <label class="schalter-zeile">
-          <span class="schalter-text">Zonen-Glut<small>Im Querformat leuchten die Fahrwerte in der Farbe der aktuellen Zone</small></span>
+          <span class="schalter-text">Zonen-Glut<small>Die Fahrwerte leuchten in der Farbe der aktuellen Zone</small></span>
           <input type="checkbox" class="schalter" id="set-glut">
         </label>
         <label class="schalter-zeile">
