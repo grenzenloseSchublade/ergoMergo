@@ -1000,7 +1000,9 @@ try {
   await b.ev(`localStorage.removeItem('test-alert')`);
 
   // Kadenz-Dämpfung zählt Sekunden: schnelle ±-Taps zählen nicht, 5 s daneben schon
-  await b.geh(srv.url + '?demo=programm', 2500);
+  // Freie Demo-Fahrt, 160 W bei FTP 200: Bereich 85–95 rpm (unter 60 % FTP gäbe es keinen)
+  await b.ev(`import('./js/storage.js').then(m => m.setSetting('ftp', 200))`);
+  await b.geh(srv.url + '?demo', 2500);
   await b.ev(`(() => { const f = __ftms, o = f.dispatchEvent.bind(f);
     f.dispatchEvent = e => { if (e.type === 'data') e.detail.rpm = 30; return o(e); };
     window.__normal = () => { delete f.dispatchEvent; };
@@ -1008,6 +1010,7 @@ try {
   const bereich = () => b.ev(`document.querySelector('#m-rpm').dataset.bereich ?? ''`);
   await b.ev(`(() => { for (const key of ['ArrowUp', 'ArrowDown', 'ArrowUp', 'ArrowDown', 'ArrowUp', 'ArrowDown', 'ArrowUp', 'ArrowDown'])
     dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); })()`);
+  soll('Kadenz: Bereich wird angezeigt', await b.ev(`document.querySelector('#m-rpm-range').hidden`), false);
   soll('Kadenz: 8 schnelle Taps sind keine 5 s', await bereich(), '');
   await sleep(6500);
   soll('Kadenz: nach 5 s daneben', await bereich(), 'daneben');
