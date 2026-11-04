@@ -3,6 +3,7 @@
 
 import { listSessions, getAllSamples, saveSession, saveSamples, listProgramme, saveProgramm, getGespeicherteEinstellungen,
   setSetting, EINSTELLUNGEN, pruefeEinstellung, FIELDS } from './storage.js';
+import { PCT_MAX } from './zwo.js';
 
 const FORMAT = 'ergomergo-backup';
 const FORMAT_VERSION = 1;
@@ -58,7 +59,7 @@ export function bereinigeFahrt(s) {
 export function bereinigeProgramm(p) {
   if (!p || typeof p !== 'object' || typeof p.id !== 'string' || !Array.isArray(p.bloecke)) return null;
   const bloecke = p.bloecke.slice(0, 2000).map(b => {
-    if (!b || !zahlOk(b.dauer) || b.dauer < 0 || !zahlOk(b.pct) || b.pct < 0 || b.pct > 5) return null;
+    if (!b || !zahlOk(b.dauer) || b.dauer < 0 || !zahlOk(b.pct) || b.pct < 0 || b.pct > PCT_MAX) return null;
     const blk = { dauer: b.dauer, pct: b.pct };
     if (b.rpm && zahlOk(b.rpm.low) && zahlOk(b.rpm.high)) blk.rpm = { low: b.rpm.low, high: b.rpm.high };
     if (typeof b.gruppe === 'string') blk.gruppe = b.gruppe.slice(0, 32);           // Wiederholungsklammer

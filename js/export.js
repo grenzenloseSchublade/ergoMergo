@@ -18,7 +18,8 @@ export function toTCX(session, samples, count) {
     const i = k * FIELDS;
     sumW += samples[i + 1];
     maxW = Math.max(maxW, samples[i + 1]);
-    const t = new Date(session.start + samples[i] * 1000).toISOString();
+    // 1 Sample = 1 s; das Sekundenfeld ist int16 und liefe nach 9,1 h über
+    const t = new Date(session.start + k * 1000).toISOString();
     const kmh = samples[i + 5] / 10;
     dist += kmh / 3.6;
     const hr = samples[i + 4];
