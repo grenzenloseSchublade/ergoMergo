@@ -93,7 +93,7 @@ try {
   // --- datenschutz-check.mjs ---
   soll('Datenschutz: Ausgangsstand ok', lauf(SCHUTZ).status === 0, lauf(SCHUTZ).stderr);
   for (const senke of ["location = 'x';", "location.search = 'x';", "location.hash = 'x';", "a.href = '//host.example';", "s.src = '//host.example';",
-    's.src = u;', 'import(u);', "/* k */ fetch('x');", "/* k\n*/ sendBeacon('x');", "`${''}`; fetch('x');", "const u = 'https://host.example';"]) {
+    's.src = u;', 'a.href = u;', 'import(u);', "/* k */ fetch('x');", "/* k\n*/ sendBeacon('x');", "`${''}`; fetch('x');", "const u = 'https://host.example';"]) {
     dazu('js/format.js', senke, () => {
       const r = lauf(SCHUTZ);
       soll(`Datenschutz meldet: ${senke}`, r.status === 1, r.stdout);

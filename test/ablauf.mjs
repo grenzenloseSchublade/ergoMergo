@@ -6,7 +6,8 @@
 // (Skip, +30 s, zweistufiges Beenden), die Demo-Wege, Bildschirm wach
 // halten (Hinweis, gebremste Neuanforderung), der Auftakt (Pegel,
 // Bandanteile, Abbruch beim Fahrtende), Audio Session und Diagnose-Log
-// am Fahrtende — mit Sollwerten.
+// am Fahrtende, Programmuhr bei gedrosseltem Timer, Geräte (Reconnect, Gerät
+// ohne Dienst, Lern-Modus), .zwo-Import, TCX — mit Sollwerten.
 // Aufruf: node test/ablauf.mjs     Exit 1, wenn ein Schritt abweicht.
 
 import { server, browser, sleep, historieAnlegen } from './lib.mjs';

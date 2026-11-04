@@ -32,7 +32,6 @@ const FARBNAME = new RegExp(`(?<![\\w-])(?:${('aliceblue antiquewhite aqua aquam
 // nur mit Grund; jeder muss noch gebraucht werden. altbestand: schon vorhanden,
 // als die Prüfung schärfer wurde — beim nächsten Griff in die Stelle beheben
 const AUSNAHMEN = [
-  { datei: 'css/app.css', eig: 'mask-image', muster: /^linear-gradient\(to right, transparent, black/, grund: 'Maske: „black" ist die Deckkraft, keine Farbe' },
   { datei: 'css/app.css', eig: 'gap', muster: /^3px$/, altbestand: true, grund: 'außerhalb des 4-px-Rasters' },
   { datei: 'css/app.css', eig: 'font-size', muster: /^\.78em$/, altbestand: true, grund: 'relative Größe statt --text-*' },
 ];

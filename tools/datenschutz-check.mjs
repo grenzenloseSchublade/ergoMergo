@@ -16,7 +16,7 @@ export const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; sty
 
 // Alles, was Daten bewegen könnte: Netz-APIs, Navigation, Nachladen, Vorabladen,
 // externe und protokollrelative URLs, Sprachdienst, Cookies
-const SENKE = /fetch\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|RTCPeerConnection|new Image\(|window\.open|\blocation\s*=(?!=)|location\.(?:(?:href|search|pathname|hash|host|hostname|port|protocol)\s*=(?!=)|assign|replace)|\.src\s*=(?!=)|\bimport\(|<script\b|<iframe\b|rel="(?:preconnect|dns-prefetch|prefetch|prerender|preload)"|<form\b|speechSynthesis\.speak|@import|url\(|https?:\/\/|["'`]\/\/[a-z0-9]|importScripts|navigator\.share|document\.cookie/g;
+const SENKE = /fetch\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|RTCPeerConnection|new Image\(|window\.open|\blocation\s*=(?!=)|location\.(?:(?:search|pathname|hash|host|hostname|port|protocol)\s*=(?!=)|assign|replace)|\.(?:src|href)\s*=(?!=)|\bimport\(|<script\b|<iframe\b|rel="(?:preconnect|dns-prefetch|prefetch|prerender|preload)"|<form\b|speechSynthesis\.speak|@import|url\(|https?:\/\/|["'`]\/\/[a-z0-9]|importScripts|navigator\.share|document\.cookie/g;
 
 // Freigabeliste: Datei, Muster der Zeile, Begründung (= Datenfluss-Register)
 export const FREIGABEN = [
@@ -34,6 +34,7 @@ export const FREIGABEN = [
   { datei: 'js/ui/settings.js', muster: /location\.replace\(location\.pathname\)/, ziel: 'eigene Adresse', grund: 'Neustart der App nach „Alle Daten löschen"' },
   { datei: 'index.html', muster: /<form method="dialog">/, ziel: '—', grund: 'Dialog-Formulare, senden nichts (method="dialog")' },
   { datei: 'index.html', muster: /rel="canonical"|property="og:(?:url|image)"|"@context": "https:\/\/schema\.org"|"url": "https:\/\/grenzenloseschublade/, ziel: '—', grund: 'Metadaten für Suchmaschinen/Vorschauen — lädt der Browser nicht' },
+  { datei: 'js/export.js', muster: /a\.href = URL\.createObjectURL\(new Blob\(/, ziel: 'Gerät', grund: 'Datei-Download (Sicherung, TCX, Log) aus dem Speicher, keine Anfrage' },
   { datei: 'js/export.js', muster: /xmlns(?::ns3)?="http:\/\/www\.garmin\.com\/xmlschemas\//, ziel: '—', grund: 'XML-Namensraum im TCX-Export (Text, keine Anfrage)' },
   { datei: 'js/ble/zwift-ride-tasten.json', muster: /^\s*"https:\/\//, ziel: '—', grund: 'Quellenangaben der Tastentabelle (Text, keine Anfrage)' },
   { datei: 'sitemap.xml', muster: /xmlns="http:\/\/www\.sitemaps\.org|<loc>https:\/\/grenzenloseschublade/, ziel: '—', grund: 'Sitemap für Suchmaschinen' },
