@@ -23,7 +23,8 @@ const flag = name => args.includes(name);
 const opt = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
 
 const PORT = 9222;
-const APP_URL = /grenzenloseschublade\.github\.io\/ergoMergo|localhost.*ergoMergo/i;
+// Auch die Entwicklungsversion aus dem Repo (README: Server auf der Wurzel)
+const APP_URL = /grenzenloseschublade\.github\.io\/ergoMergo|^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//i;
 
 function adb(...a) {
   return execFileSync('adb', a, { encoding: 'utf8' });
@@ -87,11 +88,15 @@ const DUMP_EXPR = (mitSamples) => `(async () => {
     const t = d.transaction(s, 'readonly').objectStore(s).getAll();
     t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
   });
-  const [logs, sessions, settings${mitSamples ? ', sessionData' : ''}] = await Promise.all([
-    getAll('logs'), getAll('sessions'), getAll('settings')${mitSamples ? ", getAll('sessionData')" : ''}
-  ]);
-  return JSON.stringify({ logs, sessions, settings${mitSamples
-    ? ', sessionData: sessionData.map(x => ({ id: x.id, count: x.count, samples: Array.from(x.samples) }))' : ''} });
+  // Verbindung immer schließen: sie blockierte sonst im App-Tab „Alle Daten
+  // löschen" und Datenbank-Upgrades
+  try {
+    const [logs, sessions, settings${mitSamples ? ', sessionData' : ''}] = await Promise.all([
+      getAll('logs'), getAll('sessions'), getAll('settings')${mitSamples ? ", getAll('sessionData')" : ''}
+    ]);
+    return JSON.stringify({ logs, sessions, settings${mitSamples
+      ? ', sessionData: sessionData.map(x => ({ id: x.id, count: x.count, samples: Array.from(x.samples) }))' : ''} });
+  } finally { d.close(); }
 })()`;
 
 // Die Weiterleitung auf den DevTools-Port nach dem Lauf immer wieder abbauen —

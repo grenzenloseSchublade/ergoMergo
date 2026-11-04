@@ -82,6 +82,7 @@ export class LedZeile {
     this.bild = text ? raster(text) : null;
     this.start = performance.now();
     clearTimeout(this.#stillTimer);
+    this.#stillTimer = null;                  // sonst plant #zeichne nie wieder einen
     this.#zeichne();
   }
 

@@ -4,15 +4,15 @@
 // Einstellung „plan" in der Datenbank (und damit auch in der Sicherung).
 
 import { getSettings, setSetting, listSessions } from '../storage.js';
-import { planAnlegen, wocheAb, wocheWirksam, naechsteEinheit, wochenMinuten, titel, programmFuer,
-  verschiebeZiele, mitAnpassung, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart, erledigtDurch,
-  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg, planInfo, tageOhneFahrt, plusTage,
+import { planAnlegen, planAendern, wocheAb, wocheWirksam, naechsteEinheit, wochenMinuten, titel, programmFuer,
+  verschiebeZiele, mitAnpassungWirksam, ohneAnpassungen, hatAnpassungen, kuerzerDauer, istHart, erledigtDurch,
+  planWoche, planEnde, planBilanz, istAbgeschlossen, pausieren, wiedereinstieg, verlaengern, einstiegsHinweis, planInfo, tageOhneFahrt, plusTage,
   tagIso, montag, WOCHENTAGE, DAUERN, LAENGEN, ZIELE } from '../plan.js';
 import { baueBlocks } from '../program.js';
 import { drawProfile, beobachte } from './chart.js';
 import { effektiveFtp } from '../metrics.js';
 import { oeffneModal } from '../navigation.js';
-import { toastOk, toastRueckgaengig } from './toast.js';
+import { toastOk, toastErr, toastRueckgaengig } from './toast.js';
 import { fmtTime } from '../format.js';
 
 const $ = s => document.querySelector(s);
@@ -36,7 +36,40 @@ export async function planErsatzHeute(heute = new Date()) {
 // Karte auf Home. starte(programm, { vorgaben, planInfo }) öffnet den Startdialog.
 let gewaehlt = null;                      // im Wochenstreifen gewählter Tag ('JJJJ-MM-TT')
 
-export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {}) {
+// Tageswechsel: die Karte hängt am Datum. Über Nacht offen (PWA im Hintergrund)
+// stünde sonst der Vortag als „Heute" da und die Fahrt zählte für gestern.
+let letzterAufbau = null;                 // { starte, oeffneFahrt, tag }
+let tagesTimer = null;
+const pruefeTag = () => {
+  if (!letzterAufbau || letzterAufbau.tag === tagIso(new Date())) return;
+  gewaehlt = null;
+  renderPlan(letzterAufbau);
+};
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pruefeTag(); });
+function merkeAufbau(starte, oeffneFahrt, heute) {
+  letzterAufbau = { starte, oeffneFahrt, tag: tagIso(heute) };
+  clearTimeout(tagesTimer);
+  tagesTimer = setTimeout(pruefeTag, plusTage(heute, 1) - heute + 1000);
+}
+
+// Rückgängig gilt nur, solange nichts Neueres gespeichert wurde: ein alter Toast
+// darf eine spätere Änderung nicht still zurückdrehen
+let planStand = 0;
+async function speichereMitRueckgaengig(neu, alt, meldung, zeichne) {
+  const mein = ++planStand;
+  await setSetting('plan', neu);
+  zeichne();
+  toastRueckgaengig(meldung, async () => {
+    if (mein !== planStand) { toastErr('Nicht mehr möglich — der Plan wurde inzwischen geändert'); return; }
+    planStand++;
+    await setSetting('plan', alt);
+    zeichne();
+  });
+}
+
+export async function renderPlan({ starte, oeffneFahrt } = {}) {
+  const heute = new Date();
+  merkeAufbau(starte, oeffneFahrt, heute);
   const [settings, sessions] = await Promise.all([getSettings(), listSessions()]);
   const plan = settings.plan;
   const karte = $('#plan-karte');
@@ -51,12 +84,8 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
 
   const ftp = settings.ftp;
   const heuteIso = tagIso(heute);
-  const neuZeichnen = () => renderPlan({ starte, oeffneFahrt, heute });
-  const speichern = async (neu, meldung) => {
-    await setSetting('plan', neu);
-    neuZeichnen();
-    toastRueckgaengig(meldung, async () => { await setSetting('plan', plan); neuZeichnen(); });
-  };
+  const neuZeichnen = () => renderPlan({ starte, oeffneFahrt });
+  const speichern = (neu, meldung) => speichereMitRueckgaengig(neu, plan, meldung, neuZeichnen);
   const hinweis = (text, aktion, aktion2 = null) => {
     $('#plan-hinweis').hidden = !text && !aktion;
     $('#plan-hinweis-text').hidden = !text;
@@ -86,23 +115,22 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
     hinweis('', { label: 'Fortsetzen', fn: () => speichern(vorschau.plan, `Plan läuft wieder — ${vorschau.text}`) });
     return;
   }
-  // Abgeschlossen: Bilanz, dann weiter (+4 Wochen) oder neuer Plan
+  // Zeit um: „geschafft" nur nach Bilanz (GESCHAFFT_AB), sonst nur abgelaufen.
+  // Danach weiter (+4 Wochen, Einstieg nach der letzten Fahrt) oder neuer Plan
   if (istAbgeschlossen(plan, heute)) {
-    const bilanz = planBilanz(plan, sessions, heute);
-    sonderzustand('Trainingsplan · abgeschlossen', 'Plan geschafft ✓',
-      `${bilanz.gefahren} Trainingstage in ${plan.laenge} Wochen (${bilanz.geplant} Einheiten geplant)`
+    const b = planBilanz(plan, sessions, heute);
+    sonderzustand(`Trainingsplan · ${b.geschafft ? 'abgeschlossen' : 'abgelaufen'}`, b.geschafft ? 'Plan geschafft ✓' : 'Plan abgelaufen',
+      `${b.gefahren} von ${b.geplant} Einheiten gefahren`
       + (plan.ftp && ftp ? ` · FTP ${plan.ftp} → ${ftp} W` : ftp ? ` · FTP jetzt ${ftp} W` : ''));
-    const ende = tagIso(plusTage(planEnde(plan), 1));
     hinweis('', {
-      label: '4 Wochen weiter',
-      fn: () => { const w = wiedereinstieg({ ...plan, laenge: plan.laenge + 4 }, ende, heute);
-        speichern(w.plan, `Plan verlängert — ${w.text}`); },
-    }, { label: 'Neuer Plan', fn: () => oeffnePlanDialog({ heute, neu: true }).then(g => g && neuZeichnen()) });
+      label: b.geschafft ? '4 Wochen weiter' : 'Weitermachen',
+      fn: () => { const w = verlaengern(plan, sessions, heute); speichern(w.plan, `Plan verlängert — ${w.text}`); },
+    }, { label: b.geschafft ? 'Neuer Plan' : 'Neu starten', fn: () => oeffnePlanDialog({ heute, neu: true }).then(g => g && neuZeichnen()) });
     return;
   }
   // Die Woche, wie sie wirklich läuft: verpasste harte Einheiten sind schon verschoben
   const woche = wocheWirksam(plan, heute, sessions, heute, ftp);
-  const naechste = woche.find(t => t.datum > heuteIso && t.einheit)?.einheit
+  const naechste = woche.find(t => t.datum > heuteIso && t.einheit && !t.ausgelassen)?.einheit
     ?? naechsteEinheit(plan, plusTage(montag(heute), 7), ftp);
 
   // Kopf: Planwoche (von Länge), leichte Woche benannt
@@ -152,6 +180,7 @@ export async function renderPlan({ starte, oeffneFahrt, heute = new Date() } = {
   // Was mit Verpasstem passiert ist, in einer Zeile
   const info = woche.filter(t => t.status === 'verpasst' && t.hinweis)
     .map(t => `${wochentagLang(t.datum)} verpasst — ${t.hinweis.replace('verschoben auf ', 'auf ')}${t.hinweis.startsWith('verschoben') ? ' verschoben' : ''}`);
+  if (!ftp) info.push('FTP fehlt — harte Einheiten erst nach dem Test');
   $('#plan-info').hidden = !info.length;
   $('#plan-info').textContent = info.join(' · ');
 
@@ -174,6 +203,10 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
   const vorlage = alt ?? settings.plan;          // „Neuer Plan": Einstellungen des alten übernehmen
   const wahl = { tage: vorlage?.tage ?? [1, 3, 5], dauer: vorlage?.dauer ?? 45, ziel: vorlage?.ziel ?? 'fitness',
     einsteiger: vorlage?.einsteiger ?? false, laenge: vorlage && 'laenge' in vorlage ? vorlage.laenge : 8 };
+  // Verlängerte Pläne haben Längen außerhalb der Liste: beim Ändern als eigene
+  // Wahl anbieten, ein neuer Plan beginnt mit dem Standard
+  if (!LAENGEN.includes(wahl.laenge) && !alt) wahl.laenge = 8;
+  const laengen = LAENGEN.includes(wahl.laenge) ? LAENGEN : [...LAENGEN.filter(Boolean), wahl.laenge, null].sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
 
   // Wochentage als Umschalter
   const tageEl = $('#plan-tage');
@@ -187,7 +220,7 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
     l.innerHTML = `<input type="radio" name="plan-dauer" value="${d}"${d === wahl.dauer ? ' checked' : ''}>${d} min`;
     return l;
   }));
-  $('#plan-laenge').replaceChildren(...LAENGEN.map(l => {
+  $('#plan-laenge').replaceChildren(...laengen.map(l => {
     const el = document.createElement('label');
     el.innerHTML = `<input type="radio" name="plan-laenge" value="${l ?? ''}"${l === wahl.laenge ? ' checked' : ''}>${l ? `${l} Wochen` : 'Fortlaufend'}`;
     return el;
@@ -200,14 +233,14 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
   }));
   $('#plan-einsteiger').checked = wahl.einsteiger;
   $('#plan-beenden').hidden = !alt;
-  $('#plan-pausieren').hidden = !alt || !!alt.pause;
+  $('#plan-pausieren').hidden = !alt || !!alt.pause || istAbgeschlossen(alt, heute);
   $('#plan-ok').textContent = alt ? 'Übernehmen' : 'Plan starten';
 
   const lies = () => ({
     tage: [...tageEl.querySelectorAll('input:checked')].map(i => +i.value),
     dauer: +dlg.querySelector('[name="plan-dauer"]:checked').value,
     ziel: dlg.querySelector('[name="plan-ziel"]:checked').value,
-    laenge: +dlg.querySelector('[name="plan-laenge"]:checked').value || null,
+    laenge: +dlg.querySelector('[name="plan-laenge"]:checked')?.value || null,
     einsteiger: $('#plan-einsteiger').checked,
   });
   // Vorschau: erste bzw. aktuelle Woche mit Farbpunkt, Tag, Einheit; Umfang
@@ -221,22 +254,29 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
       $('#plan-umfang').textContent = w.tage.length < 2 ? 'Mindestens 2 Tage wählen.' : 'Höchstens 6 Tage — ein Ruhetag pro Woche gehört dazu.';
       return;
     }
-    const plan = planAnlegen({ ...w, ftp: settings.ftp, heute });
-    const woche = wocheAb(plan, heute, settings.ftp).filter(t => t.einheit);
-    for (const t of woche) {
+    // Derselbe Plan, der beim Speichern entstünde — ohne Pause, sonst stünde nichts da
+    const { pause, ...plan } = alt ? planAendern(alt, w, heute) : planAnlegen({ ...w, ftp: settings.ftp, heute });
+    // Keine Einheit mehr in dieser Woche: die nächste zeigen
+    const naechste = !wocheAb(plan, heute, settings.ftp).some(t => t.einheit);
+    const bezug = naechste ? plusTage(montag(heute), 7) : heute;
+    $('#plan-vorschau-titel').textContent = naechste ? 'Nächste Woche' : alt ? 'Diese Woche' : 'Erste Woche';
+    for (const t of wocheAb(plan, bezug, settings.ftp).filter(x => x.einheit)) {
       const li = document.createElement('li');
       li.innerHTML = `<i style="--farbe: var(${t.einheit.farbe})"></i><b>${t.kurz}</b><span></span>`;
       li.querySelector('span').textContent = titel(t.einheit);
       liste.append(li);
     }
-    const min = wochenMinuten(plan, heute, settings.ftp);
-    const ende = planEnde(alt ? { ...plan, start: alt.start } : plan);
-    $('#plan-umfang').textContent = `≈ ${minutenText(min)} in dieser Woche · jeder 4-Wochen-Block steigt 3 Wochen, die 4. ist leicht mit FTP-Test.`
+    const min = wochenMinuten(plan, bezug, settings.ftp);
+    const ende = planEnde(plan);
+    const hinweisText = einstiegsHinweis(plan, settings.ftp);
+    $('#plan-umfang').textContent = `≈ ${minutenText(min)} in ${naechste ? 'der nächsten' : 'dieser'} Woche · jeder 4-Wochen-Block steigt 3 Wochen, die 4. ist leicht mit FTP-Test.`
       + (ende ? ` Endet ${datumLang(tagIso(ende))}` : ' Läuft fortlaufend weiter.')
-      + (alt && w.laenge && planWoche({ ...alt, laenge: w.laenge }, heute) >= w.laenge ? ' — damit ist der Plan schon abgeschlossen.' : '')
-      + (settings.ftp ? '' : ' Ohne FTP beginnt der Plan mit dem Rampentest.');
+      + (alt && w.laenge && planWoche(plan, heute) >= w.laenge ? ' — damit ist der Plan schon abgeschlossen.' : ende ? '.' : '')
+      + (hinweisText ? ` ${hinweisText}` : '');
   };
   dlg.querySelector('.plan-form').oninput = vorschau;
+  // Enter in einem Feld löst sonst den ersten Knopf des Formulars aus: „Pausieren"
+  dlg.querySelector('form').onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); };
   vorschau();
 
   return new Promise(resolve => {
@@ -244,17 +284,17 @@ export async function oeffnePlanDialog({ heute = new Date(), neu = false } = {})
       if (dlg.returnValue === 'ok') {
         const w = lies();
         // Ändern behält den Start (Woche im Block läuft weiter); neu = diese Woche
-        const neuPlan = planAnlegen({ ...w, ftp: settings.ftp, heute });
-        await setSetting('plan', alt ? { ...alt, ...neuPlan, start: alt.start, angelegt: alt.angelegt, ftp: alt.ftp } : neuPlan);
+        planStand++;
+        await setSetting('plan', alt ? planAendern(alt, w, heute) : planAnlegen({ ...w, ftp: settings.ftp, heute }));
         toastOk(alt ? 'Plan geändert' : 'Plan angelegt — los geht’s');
         resolve(true);
-      } else if (dlg.returnValue === 'pausieren') {
-        await setSetting('plan', pausieren(alt, heute));
-        toastRueckgaengig('Plan pausiert — beim Fortsetzen richtet sich der Einstieg nach der Pausenlänge',
-          async () => { await setSetting('plan', alt); document.dispatchEvent(new Event('plan-geaendert')); });
+      } else if (dlg.returnValue === 'pausieren' && alt) {
+        await speichereMitRueckgaengig(pausieren(alt, heute), alt, 'Plan pausiert — beim Fortsetzen richtet sich der Einstieg nach der Pausenlänge',
+          () => document.dispatchEvent(new Event('plan-geaendert')));
         resolve(true);
-      } else if (dlg.returnValue === 'beenden') {
+      } else if (dlg.returnValue === 'beenden' && alt) {
         if (confirm('Trainingsplan beenden? Gefahrene Einheiten bleiben in den Fahrten.')) {
+          planStand++;
           await setSetting('plan', null);
           resolve(true);
         } else resolve(false);
@@ -365,7 +405,7 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
     return;
   }
   if (tag.status === 'verpasst') { knoepfe(null, false); return; }
-  if (tag.status === 'ausgelassen') { knoepfe(null, true); return; }
+  if (tag.status === 'ausgelassen') { knoepfe(null, tag.datum >= heuteIso); return; }
   if (istHeute) {
     knoepfe({ label: 'Starten ›', start: true, fn: () => starte(p, { vorgaben: e.opts, planInfo: planInfo(plan, e) }) }, true);
     return;
@@ -375,14 +415,16 @@ function zeigeTag({ plan, tag, sessions, heute, ftp, starte, oeffneFahrt, naechs
   knoepfe({
     label: 'Heute fahren ›', aus: gesperrt, start: true,
     fn: async () => {
-      const neu = mitAnpassung(plan, montag(heute), { art: 'verschieben', von: tag.datum, nach: heuteIso });
+      const neu = mitAnpassungWirksam(plan, montag(heute), { art: 'verschieben', von: tag.datum, nach: heuteIso }, sessions, heute, ftp);
+      planStand++;
       await setSetting('plan', neu);
       gewaehlt = heuteIso;
       neuZeichnen();
       const heuteE = wocheWirksam(neu, heute, sessions, heute, ftp).find(x => x.datum === heuteIso).einheit;
-      // Startdialog abgebrochen: Verschiebung zurücknehmen, der Tag bleibt gewählt
-      starte(p, { vorgaben: heuteE.opts, planInfo: planInfo(neu, heuteE),
-        abgebrochen: async () => { await setSetting('plan', plan); gewaehlt = tag.datum; neuZeichnen(); } });
+      // Keine Fahrt entstanden (Dialog abgebrochen, Start gescheitert): Verschiebung
+      // zurücknehmen, der Tag bleibt gewählt
+      starte(programmDerEinheit(heuteE), { vorgaben: heuteE.opts, planInfo: planInfo(neu, heuteE),
+        abgebrochen: async () => { planStand++; await setSetting('plan', plan); gewaehlt = tag.datum; neuZeichnen(); } });
     },
   }, true);
 }
@@ -406,12 +448,10 @@ function oeffneEinheit({ plan, tag, sessions, heute, ftp, neuZeichnen }) {
 
   // Änderung speichern, Karte neu, Toast mit Rückgängig (stellt den alten Plan her)
   const aendern = async (neuerPlan, meldung) => {
-    await setSetting('plan', neuerPlan);
+    await speichereMitRueckgaengig(neuerPlan, plan, meldung, neuZeichnen);
     dlg.close();
-    neuZeichnen();
-    toastRueckgaengig(meldung, async () => { await setSetting('plan', plan); neuZeichnen(); });
   };
-  const op = o => mitAnpassung(plan, montag(heute), o);
+  const op = o => mitAnpassungWirksam(plan, montag(heute), o, sessions, heute, ftp);
 
   const aktionen = $('#ein-aktionen');
   aktionen.replaceChildren();
@@ -447,7 +487,7 @@ function oeffneEinheit({ plan, tag, sessions, heute, ftp, neuZeichnen }) {
       () => aendern(op({ art: 'kuerzer', datum: tag.datum }), `Gekürzt auf ${kd} min`));
     if (istHart(e) && e.typ !== 'T') zeile('Leichter (Grundlage)', 'Müde? Locker in Zone 2, gleiche Dauer — zählt nicht als hart',
       () => aendern(op({ art: 'leichter', datum: tag.datum }), 'Als Grundlage geplant'));
-    zeile('Auslassen', e.typ === 'T' ? 'Die bisherige FTP gilt weiter' : 'Fällt diese Woche weg, wird nicht nachgeholt',
+    zeile('Auslassen', e.typ === 'T' ? (ftp ? 'Die bisherige FTP gilt weiter' : 'Der Test kommt nächste Woche wieder') : 'Fällt diese Woche weg, wird nicht nachgeholt',
       () => aendern(op({ art: 'auslassen', datum: tag.datum }), `${wochentagLang(tag.datum)} ausgelassen`));
   }
 

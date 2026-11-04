@@ -132,9 +132,9 @@ let alsListe = false;
 // Lenkeransicht und Liste an ihre Plätze schreiben (gespeicherte Belegung —
 // auch ohne verbundenen Lenker — samt Standard für fehlende Aktionen, so wie
 // sie der Lenker tatsächlich anwendet). ansicht = .belegung-ansicht mit
-// Lenkeransicht und Liste darin; beide liegen in derselben Zelle, sichtbar
-// ist eine, die andere hält nur ihren Platz — der Umschalter (leise
-// Text-Aktion mit aria-controls auf die Ansicht) verschiebt so nichts
+// Lenkeransicht und Liste darin; sichtbar ist eine — mit .platz-halten hält
+// die andere ihren Platz, der Umschalter (leise Text-Aktion mit
+// aria-controls auf die Ansicht) verschiebt dann nichts (Regel in app.css)
 export function zeigeBelegung(ansicht, map) {
   const wirksam = mitStandardBelegung(map ?? {});
   const [karte, liste] = ansicht.children;

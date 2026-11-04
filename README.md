@@ -65,6 +65,47 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, virtuelle Distanz (Leistungsmodell, Fahrergewicht, flach und windstill), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.6
+
+- **Klarerer Graph in der Fahrt:** Der laufende Block sticht heraus, Vergangenes
+  tritt zurück, die Jetzt-Linie ist durchgezogen, die Leistungslinie ruhig. Wattachse
+  und Blockzahlen stören sich und die Linie nicht mehr. Die freie Fahrt zeigt
+  Zonenfarben.
+- **Nächster Block in der LED-Zeile:** rund 12 s vorher „Gleich 210 W · 4 min“.
+- **Zonen-Glut auch hochkant:** ein weicher Schein hinter der Wattzahl.
+- **Programmuhr läuft im Hintergrund weiter:** Bei Bildschirm aus oder Bild-in-Bild
+  holt sie verpasste Sekunden auf, samt Blockwechsel und kJ.
+- **Programme starten direkt im ersten Block**, ohne Rampe vom Startwert.
+- **Fehler bei Import und Löschen bleiben stehen**, bis du sie bestätigst.
+- **`.zwo`-Import prüft die Werte:** unplausible Leistung und Dauer werden abgewiesen,
+  die Kadenz bleibt auch bei Warmup, Cooldown, Rampen und freier Fahrt erhalten.
+- **Stabilere Verbindungen und Tests:** Reconnect endet mit der Fahrt, Geräte ohne
+  passenden Dienst melden sich, schärfere Prüfwerkzeuge.
+
+## Neu in 3.5
+
+- **Cockpit im Querformat:** Riesige Wattzahl links, Graph in der Mitte,
+  Bedienleiste rechts über die volle Höhe, auf dem Handy und auf dem Tablet.
+- **Zonen-Glut:** Die Werte leuchten quer in der Farbe der aktuellen Zone;
+  abschaltbar im ⋯-Menü und in den Einstellungen.
+- **Bild-in-Bild besser treffbar:** größere Tippfläche und Abstand zu „⋯“.
+- **Plan nur geschafft, wenn er gefahren wurde:** „Plan geschafft ✓“ erst ab 70 %
+  der Einheiten, sonst „Plan abgelaufen“ mit Weitermachen oder Neu starten.
+  Weitermachen bringt immer vier neue Wochen, der Einstieg richtet sich nach der
+  letzten Fahrt.
+- **Einsteiger-Option wirkt:** 2 Wochen nur locker und kürzer, dann harte
+  Einheiten mit 90 %, 95 % und schließlich 100 %, auch nachträglich im laufenden
+  Plan; die Vorschau zeigt es.
+- **Der FTP-Test verfällt nicht mehr:** Ohne FTP kommt er am ersten erreichbaren
+  Plantag und danach jede Woche, bis eine FTP da ist.
+- **Sicherer Not-Stopp:** Eine gehaltene Taste hebt ihn nicht mehr auf, die 10-s-Rampe
+  danach lässt sich nicht abkürzen, und ein Tipp in einem Block über der
+  Watt-Obergrenze senkt nicht mehr den Rest des Programms.
+- **Viele Plan-Korrekturen:** Änderungen treffen die Einheit auf der Karte auch
+  nach automatischem Verschieben, die Karte wechselt um Mitternacht den Tag,
+  verlängerte Pläne sperren den Dialog nicht mehr, ein gescheiterter Start nimmt
+  „Heute fahren“ zurück.
+
 ## Neu in 3.4.3
 
 - **Virtuelle Distanz aus Leistung:** Fahrergewicht einstellbar; flache,
@@ -190,8 +231,11 @@ dem Gerät.
 - **LED-Statuszeile:** Meldungen der Fahrt (Block übersprungen, Gerät getrennt,
   Not-Stopp …) laufen als Punktmatrix-Laufschrift durch eine feste Mulde statt
   als Toast — nichts springt, nichts verdeckt.
+- **Cockpit im Querformat:** Handy bis Tablet: riesige Wattzahl links, Graph in
+  der Mitte, Bedienleiste rechts über die volle Höhe; auf Wunsch leuchten die
+  Werte in der Zonenfarbe (Zonen-Glut, im ⋯-Menü und in den Einstellungen).
 - **Ruhiges Layout:** Feste Feldbreiten und ein festes Raster für die
-  Detailwerte (hochkant 2×2, quer 4 nebeneinander); in allen Ausrichtungen und
+  Detailwerte; in allen Ausrichtungen und
   Fokus-Modi geprüft, dass nichts springt und STOPP immer im Bild ist.
 - **Fahrten-Historie:** Eigener Screen mit Monaten und Wochensummen,
   Detail-Graph mit Herzfrequenz, Zielblöcken und Not-Stopp-Streifen.
@@ -278,6 +322,7 @@ Farben, Schriftgrößen, Radien und Abstände kommen nur aus `css/tokens.css`
 ```sh
 node tools/stil-check.mjs   # feste Werte außerhalb der Tokens (läuft auch in release.mjs)
 node tools/datenschutz-check.mjs  # jede Netzstelle freigegeben, CSP unverändert (läuft auch in release.mjs)
+node test/werkzeuge.mjs     # prüft die Prüfungen: release.mjs, eingebaute Verstöße, Pfade, Testbibliothek
 node test/sicherheit.mjs    # präparierte Sicherung: kein Schadcode, bereinigt
 node test/netz.mjs          # Netz-Mitschnitt aller Abläufe inkl. Service Worker, CSP, Speicher
 node test/layout.mjs        # Fahrbildschirm in 5 Größen: Bedienleiste, Überlauf, Zentrierung, Sprünge, Panel

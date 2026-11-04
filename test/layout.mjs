@@ -16,7 +16,7 @@ import { server, browser, sleep } from './lib.mjs';
 
 const GROESSEN = process.argv.slice(2).length
   ? process.argv.slice(2).map(a => a.split('x').map(Number))
-  : [[360, 640], [360, 560], [412, 915], [780, 360], [900, 412]];
+  : [[360, 640], [360, 560], [412, 915], [640, 300], [780, 360], [900, 412], [1180, 820]];
 const WERTE = ['.ride-kopf', '#btn-trainer', '#btn-hr', '#btn-click', '#m-demo', '#btn-mehr', '#m-watt', '#m-target',
   '#m-time', '#m-total', '.row-secondary', '#m-status', '.row-actions', '#live-chart', '#btn-minus', '#btn-plus', '#btn-stop', '#btn-end'];
 
@@ -79,6 +79,69 @@ async function pruefe(srv, [breite, hoehe]) {
       }
     }
 
+    // Bild-in-Bild (headless sonst ausgeblendet): große Tippfläche, 16 px Abstand
+    // zu „⋯", die Kopfzeile bleibt so hoch wie ohne den Knopf
+    await fokus('normal');
+    const kopfOhne = await b.ev(`document.querySelector('.ride-kopf').getBoundingClientRect().height`);
+    const pip = await b.ev(`(() => { document.querySelector('#btn-pip').hidden = false; const q = s => document.querySelector(s).getBoundingClientRect();
+      const p = q('#btn-pip'), m = q('#btn-mehr'); return { b: p.width, h: p.height, luecke: m.left - p.right, kopf: q('.ride-kopf').height, mehrH: m.height }; })()`);
+    await b.ev(`document.querySelector('#btn-pip').hidden = true`);
+    if (pip.b !== 56 || pip.h !== 48) befunde.push(`Bild-in-Bild ${pip.b}×${pip.h} statt 56×48`);
+    if (pip.luecke !== 16) befunde.push(`Bild-in-Bild: ${pip.luecke} px Abstand zu „⋯" statt 16`);
+    if (pip.kopf !== kopfOhne) befunde.push(`Bild-in-Bild verändert die Kopfzeile: ${kopfOhne} → ${pip.kopf}`);
+    if (pip.mehrH < 44) befunde.push(`„⋯" nur ${pip.mehrH} px hoch`);
+
+    // Querformat „Cockpit": in jedem Fokus passen die Werte in ihre Spalte, auch
+    // mit vierstelliger Leistung; die Zahl ist die größte; Glut folgt dem Schalter
+    const cockpit = await b.ev(`matchMedia('(orientation: landscape) and (min-width: 480px)').matches`);
+    if (cockpit) {
+      for (const modus of ['normal', 'werte', 'graph']) {
+        await fokus(modus);
+        const w = await b.ev(`(() => { const m = document.querySelector('.metrics'), v = document.querySelector('#m-watt'); const alt = v.textContent; v.textContent = '1234';
+          const r = document.createRange(); r.selectNodeContents(v); const t = r.getBoundingClientRect(), k = m.getBoundingClientRect();
+          const inhalt = [...m.children].filter(c => c.offsetParent).map(c => c.getBoundingClientRect());
+          const o = { breit: t.right <= k.right + .5 && t.left >= k.left - .5, oben: Math.min(...inhalt.map(c => c.top)) >= k.top - .5, unten: Math.max(...inhalt.map(c => c.bottom)) <= k.bottom + .5, watt: parseFloat(getComputedStyle(v).fontSize),
+            ziel: parseFloat(getComputedStyle(document.querySelector('#m-target')).fontSize), hoch: Math.round(k.height), inhalt: Math.round(Math.max(...inhalt.map(c => c.bottom)) - Math.min(...inhalt.map(c => c.top))) };
+          v.textContent = alt; return o; })()`);
+        if (!w.breit) befunde.push(`${modus}: vierstellige Leistung ragt aus der Werte-Spalte`);
+        if (!w.oben || !w.unten) befunde.push(`${modus}: Werte passen nicht in die Spalte (${w.inhalt} von ${w.hoch} px)`);
+        if (await b.ev(`[...document.querySelectorAll('.metric .label')].some(l => l.getBoundingClientRect().height > parseFloat(getComputedStyle(l).lineHeight) * 1.5)`))
+          befunde.push(`${modus}: Beschriftung bricht um`);
+        if (w.watt <= w.ziel) befunde.push(`${modus}: Wattzahl ${w.watt} px nicht größer als Ziel ${w.ziel} px`);
+      }
+    }
+
+    // Zonen-Glut, hochkant wie quer: folgt dem Schalter, ohne dass etwas springt
+    await fokus('normal');
+    const glut = () => b.ev(`getComputedStyle(document.querySelector('.metrics')).getPropertyValue('--glut')`);
+    const an = await glut();
+    if (!an || an.includes('rgba(0, 0, 0, 0)') || an === 'transparent') befunde.push(`Glut an, aber Farbe „${an}"`);
+    const glutLage = await lage();
+    await b.klick('#btn-mehr', 400);
+    if (!(await b.ev(`!!document.querySelector('#opt-glut').offsetParent`))) befunde.push('Glut-Schalter fehlt im Panel');
+    await b.klick('#opt-glut', 1300);
+    const aus = await b.ev(`getComputedStyle(document.querySelector('.metrics')).backgroundImage`);
+    if (!/rgba\(0, 0, 0, 0\)|transparent/.test(aus) || /color\(srgb [^ ]*[1-9]/.test(aus)) befunde.push(`Glut aus, aber Verlauf ${aus}`);
+    if ((await b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.glut)`)) !== false) befunde.push('Glut-Schalter wird nicht gespeichert');
+    vergleiche('Glut aus', glutLage, await lage());
+    await b.klick('#opt-glut', 300);
+    await b.klick('#btn-mehr', 300);
+
+    // Graph im Detail: Beschriftungen stehen nirgends aufeinander. Mitschnitt
+    // aller Canvas-Texte einer Zeichnung, gleiche Stelle zählt einmal.
+    await fokus('graph');
+    await b.ev(`(() => { const p = CanvasRenderingContext2D.prototype; if (!p.__alt) { p.__alt = p.fillText; p.fillText = function (t, x, y) {
+      if (window.__texte && this.canvas.id === 'live-chart') { const m = this.measureText(t), c = this.getTransform(), f = c.a, gx = c.a * x + c.e, gy = c.d * y + c.f;
+        window.__texte.set(t + '@' + Math.round(gx) + ',' + Math.round(gy), { t, l: (gx - m.actualBoundingBoxLeft * f) / f, r: (gx + m.actualBoundingBoxRight * f) / f, o: (gy - m.actualBoundingBoxAscent * f) / f, u: (gy + m.actualBoundingBoxDescent * f) / f }); }
+      return p.__alt.apply(this, arguments); }; } window.__texte = new Map(); })()`);
+    await sleep(1300);
+    const decken = await b.ev(`(() => { const a = [...window.__texte.values()]; window.__texte = null; const paare = [];
+      for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
+        const p = a[i], q = a[j]; if (p.l < q.r - 1 && q.l < p.r - 1 && p.o < q.u - 1 && q.o < p.u - 1) paare.push(p.t + ' / ' + q.t); }
+      return { n: a.length, paare }; })()`);
+    if (!decken.n) befunde.push('Graph-Detail: keine Beschriftung gezeichnet');
+    if (decken.paare.length) befunde.push(`Graph-Detail: Texte überdecken sich: ${decken.paare.join(', ')}`);
+
     // Panel „⋯": nie über der Bedienleiste, passt ohne Scrollen
     await fokus('normal');
     await b.klick('#btn-mehr', 500);
@@ -140,17 +203,20 @@ async function pruefe(srv, [breite, hoehe]) {
         knopf: [kante, k.top, k.height].map(Math.round).join('/') }; })()`);
     if (blatt.offen) {
       const karte = await blattLage();
-      if (karte.scrollt) befunde.push(`Blatt (Lenker) muss scrollen: ${karte.hoehe}`);
+      if (karte.scrollt && hoehe >= 360) befunde.push(`Blatt (Lenker) muss scrollen: ${karte.hoehe}`);
       await b.klick('#dlg-belegung .belegung-umschalter', 300);
       const liste = await blattLage();
-      if (liste.scrollt) befunde.push(`Blatt (Liste) muss scrollen: ${liste.hoehe}`);
+      if (liste.scrollt && hoehe >= 360) befunde.push(`Blatt (Liste) muss scrollen: ${liste.hoehe}`);
       if (liste.blatt !== karte.blatt || liste.knopf !== karte.knopf) befunde.push(`Umschalten Lenker ↔ Liste verschiebt: ${karte.blatt} ${karte.knopf} → ${liste.blatt} ${liste.knopf}`);
       await b.klick('#dlg-belegung .belegung-umschalter', 300);
       await b.ev('history.back()'); await sleep(500);
     }
 
     // Lern-Modus mit nachgebildetem Lenker (Tasten als 'button'-Ereignis):
-    // jeder Schritt ohne Scrollen, gleiche Höhe, Knöpfe im Bild, Zeilen einzeilig
+    // jeder Schritt ohne Scrollen, gleiche Höhe, Knöpfe im Bild, Zeilen einzeilig.
+    // 640×300 prüft nur die Fahrt (Handy quer mit Browserleiste): dort darf der
+    // Dialog der Einstellungen scrollen
+    if (hoehe < 360) return [...new Set([...befunde, ...b.fehler.map(f => 'JS-Fehler: ' + f)])];
     await b.geh(srv.url, 1500);
     await b.ev(`(async () => { const { geraeteManager: g } = await import('./js/ble/geraete.js');
       const pad = Object.assign(new EventTarget(), { deviceName: 'Zwift Ride' }), orig = g.clients.bind(g);

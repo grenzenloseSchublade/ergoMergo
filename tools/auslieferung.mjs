@@ -7,6 +7,7 @@
 import { cpSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { istHauptmodul } from './quelltext.mjs';
 
 export const WURZEL = fileURLToPath(new URL('..', import.meta.url));
 export const AUSLIEFERUNG = [
@@ -26,7 +27,7 @@ export function ausgelieferteDateien() {
   return liste;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (istHauptmodul(import.meta.url)) {
   const ziel = process.argv[2];
   if (!ziel) { console.error('Aufruf: node tools/auslieferung.mjs <zielordner>'); process.exit(1); }
   for (const p of ausgelieferteDateien()) {

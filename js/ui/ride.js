@@ -26,6 +26,10 @@ import { zeigeBelegung } from './lenker-karte.js';
 import { LedZeile } from './led-zeile.js';
 import { tokenLeser } from './tokens.js';
 
+const ANKUENDIGEN_VOR_S = 12;     // so lange vor dem Wechsel läuft die Ankündigung an
+const ANKUENDIGEN_AB_S = 60;      // nur aus Blöcken ab dieser Länge
+const ANKUENDIGEN_SPRUNG_W = 25;  // nur bei spürbarem Sprung
+
 const STOPP_SPERRE_MS = 3000;     // Panik-Schutz nach Not-Stopp
 const HALTEN_PAUSE_MS = 500;      // ±-Knopf halten: erste Wiederholung
 const HALTEN_TAKT_MS = 300;       //   … danach im Takt
@@ -52,6 +56,7 @@ export class RideScreen {
     this.chart = run ? new WorkoutChart(this.$('#live-chart')) : new LiveChart(this.$('#live-chart'));
     this.tonAn = settings.tonAn !== false;
     this.ansagenAn = !!settings.sprachansagen;
+    this.glutAn = settings.glut !== false;
     initAnsagen(signal.audioCtx());
     this.#led = new LedZeile(this.$('#m-status'));
     this.#zuruecksetzen();
@@ -69,7 +74,7 @@ export class RideScreen {
     this.#abmelden = beobachte(this.$('#live-chart'), () => this.render());
     // session stirbt mit der Fahrt (Abos dort unkritisch); Pool-Clients leben
     // weiter — deren Listener MÜSSEN in destroy() wieder abgebaut werden
-    session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
+    session.addEventListener('tick', () => { this.render(); this.#kuendigeAn(); this.#pip?.update(); });
     session.addEventListener('target', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('error', e => this.#info(e.detail, 'err'));
     // Startmeldung: zeigt, womit gefahren wird — und dass die Tafel lebt.
@@ -98,9 +103,11 @@ export class RideScreen {
   #cursorBlinkBis = 0;
   #zustaende = new Map();     // Statuszeile: art → { text, cls }
   #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
+  #angekuendigt = -1;         // Block, dessen Nachfolger schon angekündigt wurde
+  #ankuendigung = null;       // Text der letzten Ankündigung
   #wartenderHinweis = null;   // leiser Hinweis hinter einer laufenden Fehlermeldung
   #abmelden = null;           // Resize-Beobachtung des Charts
-  #rpmAbweichSeit = 0;
+  #rpmAbweichSeit = null;     // Fahrzeit (s), seit die Kadenz außerhalb des Bereichs liegt
   #rpmLage = '';              // 'drin' | 'daneben' | '' — Fahrbildschirm und Bild-in-Bild
   #rpmPfeil = 0;              // daneben: +1 schneller treten, −1 langsamer (nur Bild-in-Bild)
   #pulsUeber = false;         // Puls über der Pulsgrenze (mit Hysterese) — Fahrbildschirm und Bild-in-Bild
@@ -199,10 +206,34 @@ export class RideScreen {
     }, verzoegerung);
   }
 
+  // Nächsten Block kurz vorher ankündigen: Laufschrift mit Zielwert und Dauer, weil
+  // die Schrift Zeit braucht, schon 12 s vorher. Kurze oder kleine Wechsel (30/30,
+  // Rampentest) bleiben still, sonst liefe die Tafel ununterbrochen.
+  #kuendigeAn() {
+    const run = this.run;
+    if (!run || run.index < 0 || this.session.gestoppt || run.index === this.#angekuendigt) return;
+    const b = run.aktuellerBlock, n = run.naechsterBlock, rest = run.restImBlock;
+    if (!b || !n || b.dauer < ANKUENDIGEN_AB_S || rest > ANKUENDIGEN_VOR_S || rest <= 3) return;
+    this.#angekuendigt = run.index;
+    const ziel = run.zielFuer(n);
+    if (Math.abs(ziel - run.zielFuer(b)) < ANKUENDIGEN_SPRUNG_W || this.$('#dlg-fahrt-optionen').open) return;
+    this.#ankuendigung = `Gleich ${ziel} W · ${n.dauer % 60 ? fmtTime(n.dauer) : `${n.dauer / 60} min`}`;
+    this.hinweis(this.#ankuendigung);
+  }
+
+  // Der Block ist da: eine noch laufende Ankündigung wäre jetzt falsch
+  #beendeAnkuendigung() {
+    if (this.#wartenderHinweis === this.#ankuendigung) this.#wartenderHinweis = null;
+    if (this.#infoMeldung?.text !== this.#ankuendigung) return;
+    this.#infoMeldung = null;
+    this.#zeigeStatus();
+  }
+
   #bindProgramm() {
     const run = this.run;
     let prevWatt = null;
     run.addEventListener('block', e => {
+      this.#beendeAnkuendigung();
       const tonGespielt = prevWatt !== null && this.tonAn;
       if (tonGespielt) signal.blockwechsel(e.detail.watt > prevWatt);
       prevWatt = e.detail.watt;
@@ -496,6 +527,7 @@ export class RideScreen {
       box.onchange = () => { set(box.checked); setSetting(key, box.checked); };
     };
     schalter('#opt-ton', 'tonAn', () => this.tonAn, v => { this.tonAn = v; });
+    schalter('#opt-glut', 'glut', () => this.glutAn, v => { this.glutAn = v; this.render(); });
     schalter('#opt-sprache', 'sprachansagen', () => this.ansagenAn, v => {
       this.ansagenAn = v;
       if (!v) { clearTimeout(this.#ansageTimer); stoppeAnsagen(); }   // aus heißt sofort still
@@ -751,9 +783,11 @@ export class RideScreen {
       // Tasten in einem offenen Panel (Leertaste auf einem Schalter) gehören
       // dem Panel — sonst löste die Leertaste zugleich STOPP aus
       if (e.target.closest?.('dialog')) return;
-      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') this.steuere(step);
-      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') this.steuere(-step);
-      else if (e.key === ' ') { e.preventDefault(); this.#stoppTaste(); }
+      // Gehaltene Taste (e.repeat) wie beim Halten am Knopf: hebt einen Not-Stopp
+      // nie auf; die Leertaste schaltet nur beim ersten Druck
+      if (e.key === 'ArrowUp' || e.key === 'ArrowRight') this.steuere(step, { wiederholung: e.repeat });
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') this.steuere(-step, { wiederholung: e.repeat });
+      else if (e.key === ' ') { e.preventDefault(); if (!e.repeat) this.#stoppTaste(); }
     };
     addEventListener('keydown', this.#keys);
   }
@@ -827,6 +861,8 @@ export class RideScreen {
     el.textContent = watt;
     el.style.color = zoneColor(watt, ftp);
     this.$('#m-target').textContent = s.target;
+    // Glut: Zone des Ziels — ruhig, springt nicht mit der Leistung
+    this.$('.metrics').style.setProperty('--glut', this.glutAn ? zoneColor(s.target, ftp) : 'transparent');
     const zeit = this.#zeitAnzeige();
     this.$('#m-time-label').textContent = zeit.label;
     this.$('#m-time').textContent = zeit.wert;
@@ -850,8 +886,11 @@ export class RideScreen {
     this.#renderPuls(s);
     this.$('#m-kj').textContent = Math.round(s.kj);
     this.$('#m-km').textContent = fmtKm(s.km);
-    // Graph-Fokus = volle Detailstufe, sonst entscheidet die Chart-Höhe
-    const detail = this.$('.ride-grid').classList.contains('fokus-graph') || null;
+    // Graph-Fokus = volle Detailstufe, Werte-Fokus = nur Orientierung (quer ist
+    // der Graph dort hoch, aber schmal: Achsen und Marken stünden aufeinander),
+    // sonst entscheidet die Chart-Höhe
+    const raster = this.$('.ride-grid').classList;
+    const detail = raster.contains('fokus-graph') ? true : raster.contains('fokus-werte') ? false : null;
     if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, ftp,
       t => this.run.programmZeit(t), Date.now() < this.#cursorBlinkBis, t => this.run.istPause(t), detail);
     else this.chart.draw(s.samples, s.count, s.target, ftp, detail);
@@ -875,13 +914,13 @@ export class RideScreen {
     el.textContent = rpm || '–';
     const range = rpm ? this.#rpmBereich(ftp) : null;
     rangeEl.hidden = !range;
-    if (!range) this.#rpmAbweichSeit = 0;
+    if (!range) this.#rpmAbweichSeit = null;
     else {
       rangeEl.textContent = range.high >= 140 ? `${range.low}+` : `${range.low}–${range.high}`;
       const drin = rpm >= range.low && rpm <= range.high;
-      this.#rpmAbweichSeit = drin ? 0 : this.#rpmAbweichSeit + 1;
+      this.#rpmAbweichSeit = drin ? null : this.#rpmAbweichSeit ?? s.elapsed;
     }
-    this.#rpmLage = !range ? '' : this.#rpmAbweichSeit === 0 ? 'drin' : this.#rpmAbweichSeit >= 5 ? 'daneben' : '';
+    this.#rpmLage = !range ? '' : this.#rpmAbweichSeit === null ? 'drin' : s.elapsed - this.#rpmAbweichSeit >= 5 ? 'daneben' : '';
     this.#rpmPfeil = this.#rpmLage === 'daneben' ? (rpm < range.low ? 1 : -1) : 0;
     if (this.#rpmLage) el.dataset.bereich = this.#rpmLage;
     else delete el.dataset.bereich;

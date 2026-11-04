@@ -136,7 +136,7 @@
       </div>
       <span class="kopf-rechts">
         <button type="button" class="kopf-pip" id="btn-pip" data-icon="pip" aria-label="Bild-in-Bild öffnen" aria-pressed="false" title="Bild-in-Bild öffnen" hidden></button>
-        <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte und Töne" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
+        <button type="button" class="kopf-mehr" id="btn-mehr" data-icon="mehr" aria-label="Geräte, Töne und Anzeige" aria-haspopup="dialog" aria-expanded="false" title="Optionen"></button>
       </span>
     </div>
     <div class="metrics">
@@ -157,7 +157,7 @@
         <!-- Gesamtzeit gehört zur Zeit: Rest des Programms bzw. Fahrzeit beim Ausfahren -->
         <span class="gesamt" id="m-total" hidden><b id="m-total-time">0:00</b> <span id="m-total-label">gesamt</span></span>
       </div>
-      <!-- Vier Nebenwerte in festem Raster: hochkant 2×2, breit/quer 4 nebeneinander -->
+      <!-- Vier Nebenwerte in festem Raster: 2×2 oder 4 nebeneinander (Regeln in app.css) -->
       <div class="row-secondary">
         <span><i class="si" data-icon="rotate"></i><b id="m-rpm" class="rpm-wert">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
         <span><i class="si" data-icon="herzpuls"></i><b id="m-hr">–</b> bpm</span>
@@ -185,7 +185,7 @@
   <!-- Optionen der Fahrt als kleines Panel unter „⋯" (ride.js setzt die
        Lage). Nicht modal: STOPP und ± bleiben daneben sofort bedienbar; Tap
        daneben, Esc oder Zurück schließt. Schiebeschalter wie in den Einstellungen. -->
-  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Geräte und Töne">
+  <dialog id="dlg-fahrt-optionen" class="fahrt-optionen" aria-label="Geräte, Töne und Anzeige">
     <div class="fahrt-optionen-inhalt">
       <div class="fo-gruppe fo-geraete">
         <p class="gruppe-titel">Geräte</p>
@@ -201,7 +201,7 @@
            (solange ausgeblendet), quer unter den Tönen. Nichts wächst, nichts springt -->
       <p class="fo-hinweis" id="fo-hinweis" role="status"></p>
       <div class="fo-gruppe fo-toene">
-        <p class="gruppe-titel">Töne</p>
+        <p class="gruppe-titel">Töne und Anzeige</p>
         <label class="schalter-zeile">
           <i class="opt-icon" data-icon="ton"></i>
           <span class="schalter-text">Signaltöne<small>Beim Start, vor und beim Wechsel, bei Lenkertasten</small></span>
@@ -209,8 +209,13 @@
         </label>
         <label class="schalter-zeile">
           <i class="opt-icon" data-icon="sprache"></i>
-          <span class="schalter-text">Sprachansagen<small>Dauer und Watt jedes neuen Blocks</small></span>
+          <span class="schalter-text">Sprachansagen<small>Dauer und Watt je Block</small></span>
           <input type="checkbox" class="schalter" id="opt-sprache">
+        </label>
+        <label class="schalter-zeile">
+          <i class="opt-icon" data-icon="flamme"></i>
+          <span class="schalter-text">Zonen-Glut<small>Werte in der Zonenfarbe</small></span>
+          <input type="checkbox" class="schalter" id="opt-glut">
         </label>
       </div>
     </div>
@@ -225,7 +230,7 @@
         <!-- Umschalter Lenker ↔ Liste (lenker-karte.js): beide in einer Zelle, nichts springt -->
         <button type="button" class="text-aktion belegung-umschalter" aria-controls="belegung-blatt-ansicht">Als Liste ›</button>
       </div>
-      <div id="belegung-blatt-ansicht" class="belegung-ansicht">
+      <div id="belegung-blatt-ansicht" class="belegung-ansicht platz-halten">
         <div id="belegung-blatt-karte"></div>
         <ul id="belegung-blatt-liste" class="belegung"></ul>
       </div>
@@ -305,7 +310,7 @@
       <p class="gruppe-titel">Ziel</p>
       <div class="ziel-wahl" id="plan-ziel"></div>
       <label class="schalter-zeile">
-        <span class="schalter-text">Einsteiger oder Wiedereinstieg<small>Startet sanfter; ohne FTP erst eine Woche locker, dann der Test</small></span>
+        <span class="schalter-text">Einsteiger oder Wiedereinstieg<small>Startet sanft: 2 Wochen nur locker und kürzer, dann steigt die Intensität langsam</small></span>
         <input type="checkbox" class="schalter" id="plan-einsteiger">
       </label>
       <p class="gruppe-titel" id="plan-vorschau-titel">Erste Woche</p>
@@ -399,6 +404,10 @@
         <label class="schalter-zeile">
           <span class="schalter-text">Sprachansagen<small>bei jedem Blockwechsel Dauer und Watt ansagen</small></span>
           <input type="checkbox" class="schalter" id="set-sprache">
+        </label>
+        <label class="schalter-zeile">
+          <span class="schalter-text">Zonen-Glut<small>Die Fahrwerte leuchten in der Farbe der aktuellen Zone</small></span>
+          <input type="checkbox" class="schalter" id="set-glut">
         </label>
         <label class="schalter-zeile">
           <span class="schalter-text">.zwo-Import<small>Workout-Dateien aus Zwift als eigene Programme laden</small></span>

@@ -32,6 +32,7 @@ export class FTMS extends EventTarget {
   #cp = null;
   #pending = null;        // { opcode, resolve, reject, timer } — genau ein ausstehender Write
   #wantConnection = false;
+  #linkFreigeben = true;  // letzter disconnect() mit gatt:true: der Link gehört nur uns
   #reconnectTimer = null;
   #reconnectVersuche = 0;
   #verbindetNeu = false;
@@ -68,8 +69,21 @@ export class FTMS extends EventTarget {
     }
   }
 
+  // Aufbau nach einem await noch gewollt? Ein zu spät gelungener Reconnect
+  // nach Fahrtende übernähme sonst die FTMS-Kontrolle, ohne dass ihn die
+  // Geräte-Leiste noch kennt. Den Link trennen, außer er ist geteilt (Instanz
+  // wurde ersetzt, disconnect mit gatt:false)
+  #nochGewollt() {
+    if (this.#wantConnection) return;
+    if (this.#linkFreigeben) {
+      try { this.#device.gatt.disconnect(); } catch { /* schon getrennt */ }
+    }
+    throw new Error('Verbindungsaufbau abgebrochen');
+  }
+
   async #setup() {
     const server = await this.#device.gatt.connect();
+    this.#nochGewollt();
     const svc = await server.getPrimaryService(FTMS_SERVICE);
 
     // Feature-Read zuerst: löst auf Android das Bonding aus und sagt, was das Gerät kann.
@@ -114,8 +128,10 @@ export class FTMS extends EventTarget {
     this.#cp.addEventListener('characteristicvaluechanged', this.#onCpIndication);
     await this.#cp.startNotifications();
 
+    this.#nochGewollt();
     await this.#write(0x00);          // Request Control — zwingend als Erstes
     await this.#write(0x07);          // Start/Resume
+    this.#nochGewollt();
     this.connected = true;
     this.dispatchEvent(new Event('connected'));
   }
@@ -169,7 +185,9 @@ export class FTMS extends EventTarget {
     logWarn('ftms', 'Verbindung getrennt' + (will ? ', versuche Reconnect' : ''));
     this.dispatchEvent(new Event('disconnected'));
     if (will) {
-      this.#reconnectVersuche = 0;
+      // Bricht die Verbindung im Aufbau wieder ab, zählen die Versuche weiter —
+      // sonst erreichte ein wackliger Trainer die Obergrenze nie
+      if (!this.#verbindetNeu) this.#reconnectVersuche = 0;
       this.#scheduleReconnect(1000);
     }
   }
@@ -186,6 +204,8 @@ export class FTMS extends EventTarget {
         logInfo('ftms', 'Reconnect erfolgreich');
         this.dispatchEvent(new Event('reconnected'));
       } catch (err) {
+        // Inzwischen beendet (Fahrtende, Trennen): kein Fehler, kein neuer Versuch
+        if (!this.#wantConnection || !this.autoReconnect) { this.#verbindetNeu = false; return; }
         this.#reconnectVersuche++;
         if (this.#reconnectVersuche >= MAX_RECONNECT) {
           logError('ftms', `Reconnect nach ${this.#reconnectVersuche} Versuchen aufgegeben`, err.message);
@@ -212,6 +232,7 @@ export class FTMS extends EventTarget {
   // je device.id GETEILT; beim Ersetzen einer Instanz darf sie nicht mit fallen
   disconnect({ gatt = true } = {}) {
     this.#wantConnection = false;
+    this.#linkFreigeben = gatt;
     this.stoppeReconnect();
     if (this.#onGattWeg) this.#device?.removeEventListener('gattserverdisconnected', this.#onGattWeg);
     if (gatt) {

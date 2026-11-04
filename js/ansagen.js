@@ -78,10 +78,18 @@ async function spiele(namen) {
   stoppeAnsagen();
   const gen = generation;
   const bufs = await Promise.all(namen.map(lade));
+  // Abgebrochen/ersetzt: vor dem Wecken zurück — ohne Quelle legte nichts den
+  // Context wieder schlafen, er hielte den Android-Audiofokus
+  if (gen !== generation) return true;
   if (bufs.some(b => !b)) return false;         // Baustein fehlt → Fallback TTS
   await auftaktVorbei();                        // erst der Auftakt, dann die Stimme
+  if (gen !== generation) return true;
   if (!await bereit() || ctx.state !== 'running') return false;
-  if (gen !== generation) return true;          // inzwischen abgebrochen/ersetzt
+  if (gen !== generation) {                     // während des Weckens abgebrochen
+    quelleStart();
+    quelleEnde();                               // Schlaf wieder einplanen
+    return true;
+  }
   let t = ctx.currentTime + 0.05;
   for (const buf of bufs) {
     const src = ctx.createBufferSource();

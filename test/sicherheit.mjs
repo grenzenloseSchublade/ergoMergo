@@ -49,12 +49,24 @@ try {
   soll('Import meldet die ungültigen Teile', fehler, f => typeof f === 'string' && f.includes('ohne-start') && f.includes('Programm ungültig'));
   await b.geh(srv.url, 2500);
   soll('Kein Schadcode ausgeführt (Home)', await b.ev('window.__xss ?? null'), null);
-  await b.geh(srv.url + '?fahrten', 1500);
-  await b.ev(`document.querySelector('#btn-alle-fahrten')?.click()`); await sleep(800);
+  // Erst sicherstellen, dass der Bildschirm wirklich offen ist und den präparierten
+  // Namen als Text zeigt — sonst prüft „kein Schadcode" nichts. b.klick meldet fehlende Knöpfe
+  const offenerBildschirm = () => b.ev(`['home','fahrten','detail','ride'].filter(k => !document.querySelector('#screen-' + k).hidden).join()`);
+  const zeigtNamen = id => b.ev(`document.querySelector('#screen-${id}').textContent.includes(${JSON.stringify(PAYLOAD)})`);
+  const keinImg = () => b.ev(`document.querySelectorAll('img[src="x"]').length`);
+  soll('Home zeigt den Namen als Text', await zeigtNamen('home'), true);
+  soll('Kein <img> aus der Sicherung auf Home', await keinImg(), 0);
+  await b.geh(srv.url, 1500);
+  await b.klick('#btn-alle-fahrten', 800);
+  soll('Fahrtenliste offen', await offenerBildschirm(), 'fahrten');
+  soll('Fahrtenliste zeigt den Namen als Text', await zeigtNamen('fahrten'), true);
   soll('Kein Schadcode ausgeführt (Fahrten)', await b.ev('window.__xss ?? null'), null);
-  await b.ev(`document.querySelector('#fahrten-monate li:not(.woche)')?.click()`); await sleep(900);
+  soll('Kein <img> aus der Sicherung in der Fahrtenliste', await keinImg(), 0);
+  await b.klick('#fahrten-monate li:not(.woche)', 900);
+  soll('Detail offen', await offenerBildschirm(), 'detail');
+  soll('Detail zeigt den Namen als Text', await zeigtNamen('detail'), true);
   soll('Kein Schadcode ausgeführt (Detail)', await b.ev('window.__xss ?? null'), null);
-  soll('Kein <img> aus der Sicherung im DOM', await b.ev(`document.querySelectorAll('img[src="x"]').length`), 0);
+  soll('Kein <img> aus der Sicherung im Detail', await keinImg(), 0);
 
   const fahrt = await b.ev(`import('./js/storage.js').then(m => m.getSession('boese-1'))`);
   // Text in Zahlenfeldern fällt weg; die Liste rechnet Kennwerte danach aus den Rohdaten neu
@@ -126,7 +138,7 @@ try {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {
   abweichungen.push(...b.fehler.map(f => 'JS-Fehler: ' + f));
-  b.schliesse();
+  await b.schliesse();
   srv.schliesse();
 }
 

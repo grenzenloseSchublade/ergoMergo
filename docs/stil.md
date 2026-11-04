@@ -7,7 +7,7 @@ absichern:
 |---|---|---|
 | Tokens | `css/tokens.css` | einzige Quelle für Farben, Schrift, Radien, Abstände, Schatten, Tippflächen |
 | Style Guide | `docs/stil.html` ([online](https://grenzenloseschublade.github.io/ergoMergo/docs/stil.html)) | zeigt alle Tokens und Bausteine mit den echten Stilen — kann nicht veralten |
-| Prüfung | `tools/stil-check.mjs` (läuft in `release.mjs`) | meldet feste Werte außerhalb von `tokens.css` mit Datei und Zeile |
+| Prüfung | `tools/stil-check.mjs` (läuft in `release.mjs`) | meldet feste Werte außerhalb von `tokens.css` mit Datei und Zeile; begründete Ausnahmen stehen dort in `AUSNAHMEN` |
 | Vergleich | `test/` | Screenshots und Layout-Messungen vor jeder Abnahme |
 
 Diese Datei hält fest, **warum** es so ist und wie neue Teile gebaut werden.
@@ -81,11 +81,26 @@ Rollen:
   der Name ist die Zahl der 4-px-Schritte.
 - Alles Tippbare mindestens `--tippflaeche` (44 px), Zeilen in Panels und
   Dialogen `--tippflaeche-zeile` (48 px), die Bedienleiste `--bedien-hoehe`
-  (64 px). Einzige Ausnahme: die Kopfzeilen-Symbole quer (38 px hoch, 44 px
-  breit) — dort zählt jede Zeile für den Graphen — und Wochentag-Reihen mit
-  7 Spalten (Wochenstreifen, Tagewahl): lückenlos, 44 px hoch, bei 360 px
+  (64 px); Bild-in-Bild in der Kopfzeile `--tippflaeche-breit` (56 px). Einzige
+  Ausnahme: Wochentag-Reihen mit 7 Spalten (Wochenstreifen, Tagewahl): lückenlos, 44 px hoch, bei 360 px
   knapp 40 px breit.
-- Symbole: `--icon-xs` 12 · `--icon-s` 14 · `--icon-m` 18 · `--icon-l` 20.
+- Fahrbildschirm quer („Cockpit“, ab 480 px Breite): Werte links, Graph in der
+  Mitte, Bedienleiste rechts über die volle Höhe.
+- Zonen-Glut (`--glut`, Stärke `--glut-staerke`): färbt die Werte-Fläche nach der
+  Zone des Ziels, quer als Verlauf von links, hochkant als Schein hinter der
+  Wattzahl, der zu allen Rändern ausläuft. Kleine Schrift steht darauf in `--ink2`,
+  weil `--ink3` dort unter 4,5:1 fällt.
+- Graph in der Fahrt: Vergangenes tritt zurück (16 %), der laufende Block ist am
+  hellsten (50 %, mit Oberkante), Kommendes liegt dazwischen (34 %). Mehr als 50 %
+  lässt die helle Schrift auf Zone 4 unter 4,5:1 fallen. Die Jetzt-Linie ist
+  durchgezogen, am Ende der Leistungslinie sitzt ein Punkt. Die Linie wird nur in
+  der Anzeige nach Auflösung geglättet (etwa 2,5 Pixel, mindestens 3 s); gespeichert
+  bleiben die Rohwerte. Im Detail steht die Wattachse in einer eigenen Spalte links,
+  Blocklabels stehen in einer Reihe am Fuß der Balken.
+- Ankündigung des nächsten Blocks: Die LED-Zeile zeigt rund 12 s vorher Zielwert
+  und Dauer („Gleich 210 W · 4 min“), nur aus Blöcken ab 60 s und bei mindestens
+  25 W Sprung; sie endet, sobald der Block läuft.
+- Symbole: `--icon-xs` 12 · `--icon-s` 14 · `--icon-m` 18 · `--icon-l` 20 · `--icon-xl` 24.
 
 ## Bausteine
 
@@ -106,7 +121,7 @@ Rollen:
 | Blatt in der Fahrt | `dialog.sheet.blatt-fahrt` + `closedby="any"` | nur Ansehen während der Fahrt (Tastenbelegung); **nicht modal**, sitzt zwischen Kopfzeile und Bedienleiste (quer links daneben, Lage setzt `ride.js`) — STOPP bleibt frei; Tipp daneben schließt wie beim Panel |
 | Tastensymbol | `.ts` (Paddle `.ts-paddle`) | Lenkertaste in Belegung, Lern-Modus und Lenkeransicht, Form und Farbe wie am Lenker; eine Paddle-Richtung je Symbol mit eigener Marke, wenn die Richtungen verschieden belegt sind (Standard: außen +, innen −; in der Lenkeransicht übereinander, `.lk-stapel`) — wirken beide gleich, ist es **eine** Taste: ein Symbol mit beiden Pfeilen („← L →“) und eine Marke. Im Lern-Modus steht jede Richtung für sich |
 | Lenkeransicht | `.lk-karte` (`lenkerKarte()`) | Tasten je Griffzone mit Marke der Aktion; kompakt (Piktogramm `--icon-pikto`, 6 px zwischen den Zonen) — die Tasten darin sind Anzeige, keine Tippflächen. Zum Ansehen nur Zonen mit mindestens einer belegten Taste und eine Legende der Marken (wo der Platz reicht in einer Zeile, schmal in zweien); ohne Belegung ein leiser Hinweis statt einer leeren Karte. Im Lern-Modus alle Zonen und keine Legende: gleiche Höhe in jedem Schritt |
-| Ansicht umschalten | `.belegung-umschalter` + `.belegung-ansicht` | zwei Darstellungen desselben Inhalts (Lenker ↔ Liste): leise Text-Aktion „Als Liste ›“ / „Als Lenker ›“ neben dem Titel, statt eines aufklappbaren `<details>`; beide Darstellungen liegen in derselben Zelle, die verdeckte hält ihren Platz (`visibility`) — Umschalten verschiebt nichts. Die zuletzt gewählte gilt, solange die Seite offen ist |
+| Ansicht umschalten | `.belegung-umschalter` + `.belegung-ansicht` | zwei Darstellungen desselben Inhalts (Lenker ↔ Liste): leise Text-Aktion „Als Liste ›“ / „Als Lenker ›“ neben dem Titel, statt eines aufklappbaren `<details>`; wo nichts springen darf (Blatt in der Fahrt, `.platz-halten`), liegen beide Darstellungen in derselben Zelle und die verdeckte hält ihren Platz (`visibility`) — Umschalten verschiebt nichts; in scrollenden Seiten (Einstellungen) ohne `.platz-halten`, die verdeckte fällt weg (sonst Loch unter der kürzeren). Die zuletzt gewählte gilt, solange die Seite offen ist |
 | Mehrere Tasten je Aktion | `.belegung-tasten` (Liste) | jede Taste mit Symbol + Name, in der Liste untereinander unter bzw. neben der Aktion; im Lern-Modus zeigt die Lenkeransicht die Wahl (Marke an der Taste) — keine eigene Liste, die wächst |
 | Schritt im Ablauf | `.map-aufforderung` (`#map-kicker`, `#map-schritt`), `.map-status` | Ablauf-Dialog mit Schritten (Tasten zuordnen): Kicker „Schritt 1 von 5“ (Versal-Rolle), darunter Marke + Kurzname der Aktion („+ Watt hoch“, `marke`/`kurz` aus `controller-aktionen.js`), darunter eine Rückmeldezeile — jede genau **eine** Zeile mit festem Platz (`nowrap`, notfalls „…“); nur ein Verbindungsfehler am Ende darf umbrechen. Quer steht die Lenkeransicht rechts daneben |
 | Leise Text-Aktion | `.text-aktion` (Warnung: `.warnung`) | Verweis „… ›“ in einer Statuszeile oder einem Hinweis; keine Fläche, Tippfläche 44 px |

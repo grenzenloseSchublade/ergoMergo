@@ -34,6 +34,7 @@ import { besteDauerleistung, effektiveFtp, FTP_ANNAHME } from './metrics.js';
 import { PROGRAMME, ProgramRun, baueBlocks, defaultOpts, holeSeed, neuerSeed, setzeSeed } from './program.js';
 import { WORKOUTS } from './workouts.js';
 import { renderPlan, oeffnePlanDialog, planErsatzHeute } from './ui/plan-ui.js';
+import { zaehltFuerPlan, tagIso } from './plan.js';
 import { initAudio, auftakt } from './signals.js';
 import { starteMessung } from './energie.js';
 
@@ -167,12 +168,16 @@ function verlasseFahrt() {
 // plan: { vorgaben, planInfo, abgebrochen? } — Start aus dem Trainingsplan
 // (Dialog vorbelegt); abgebrochen() läuft, wenn der Startdialog abgebrochen wird
 async function startRide(programm = null, plan = null) {
-  if (startLaeuft || rideScreen) return;
+  if (startLaeuft || rideScreen) { await plan?.abgebrochen?.(); return; }
   startLaeuft = true;
+  let gestartet = false;
   try {
-    await startRideInner(programm, plan);
+    gestartet = await startRideInner(programm, plan);
   } finally {
     startLaeuft = false;
+    // Auch ohne Web Bluetooth, bei Bluetooth aus oder Verbindungsfehler: keine
+    // Fahrt, also auch keine Verschiebung im Plan
+    if (!gestartet) await plan?.abgebrochen?.();
   }
 }
 
@@ -184,21 +189,21 @@ async function startRideInner(programm, plan = null) {
     toastErr(navigator.brave
       ? 'Brave blockiert Web Bluetooth — bitte Chrome verwenden'
       : 'Kein Web Bluetooth — Chrome unter Android/Desktop nötig');
-    return;
+    return false;
   }
   const settings = await getSettings();
   initAudio();                              // braucht die User-Geste des Start-Taps
   let run = null, blocks = null, seed = null;
   if (programm) {
     const opts = await startDialog(programm, settings, plan?.vorgaben);
-    if (!opts) { await plan?.abgebrochen?.(); return; }
+    if (!opts) return false;
     blocks = baueBlocks(programm, opts, settings.ftp);
     seed = opts.seed ?? null;
   }
   // Vorabcheck: ist der Bluetooth-Adapter überhaupt verfügbar/an?
   if (await navigator.bluetooth.getAvailability?.() === false) {
     toastErr('Bluetooth ist ausgeschaltet — bitte einschalten');
-    return;
+    return false;
   }
   // Trainer: verbundenen Pool-Client übernehmen; sonst verbinden (gemerkt)
   // oder Geräteauswahl — die Entscheidung trifft der Manager zentral
@@ -212,25 +217,30 @@ async function startRideInner(programm, plan = null) {
       if (r.ergebnis === 'abgebrochen') {
         // Chooser abgebrochen ODER keine Berechtigung/kein Gerät — nicht still schlucken
         toastErr('Kein Trainer gewählt. Trainer wach? Chrome-Berechtigung „Geräte in der Nähe“ erteilt?');
-        return;
+        return false;
       }
       ftms = geraeteManager.client('trainer');
-      if (!ftms) { toastErr('Trainer schläft — Pedal kurz drehen, dann erneut starten'); return; }
+      if (!ftms) { toastErr('Trainer schläft — Pedal kurz drehen, dann erneut starten'); return false; }
     }
   } catch (err) {
     logError('app', 'Verbindung fehlgeschlagen', `${err.name}: ${err.message}`);
     toastErr('Verbindung fehlgeschlagen: ' + err.message);
-    return;
+    return false;
   }
+  // Trainingsplan: aus dem Plan gestartet → diese Einheit; sonst gilt eine
+  // Fahrt ≥ 15 min an einem Plantag als Ersatz für die offene Einheit. Vor der
+  // Session: ein Fehler hier darf keine Fahrt ohne Bildschirm hinterlassen
+  const planEinheit = plan?.planInfo ?? await planErsatzHeute().catch(err => {
+    logError('app', 'Plan-Einheit nicht lesbar', err.message);
+    return null;
+  });
   $('#bt-support').textContent = '';
   requestPersistence();
   logInfo('app', `Session-Start: ${programm?.name ?? 'Freies Fahren'}`);
   geraeteManager.starteSession();           // Trainer kämpft ab jetzt um die Verbindung
   const session = new Session(ftms, settings, programm);
   session.seed = seed;                      // Zufallsprogramm exakt wiederholbar
-  // Trainingsplan: aus dem Plan gestartet → diese Einheit; sonst gilt eine
-  // Fahrt ≥ 15 min an einem Plantag als Ersatz für die offene Einheit
-  session.planInfo = plan?.planInfo ?? await planErsatzHeute();
+  session.planInfo = planEinheit;
   starteMessung();                          // Akku-Delta pro Fahrt (Punkt „Strom messen")
   if (blocks) run = new ProgramRun(session, blocks);
   else session.setTarget(settings.startWatt, { instant: true });
@@ -245,16 +255,21 @@ async function startRideInner(programm, plan = null) {
     geraeteManager.beendeSession();
     if (gespeichert && session.count > 0) toastOk('Fahrt gespeichert');
     // FTP-Rampentest: 0,75 × beste 60-s-Leistung als neuen FTP anbieten
-    if (programm?.id === 'rampentest' && session.count >= 90) {
+    // (erst wenn die Rampe lief: vorher ist die beste Minute nur das Einrollen)
+    if (programm?.id === 'rampentest' && zaehltFuerPlan({ dauer: session.count, programmId: programm.id })) {
       const best = besteDauerleistung(session.samples, session.count);
       const ftpNeu = Math.round(best * 0.75);
       if (ftpNeu >= 50 && confirm(`Rampentest: beste Minute ${best} W → FTP ${ftpNeu} W übernehmen?`)) {
         await setSetting('ftp', ftpNeu);
+        // Ohne FTP angelegter Plan: der Test bleibt an seinem Tag stehen
+        const { plan: laufend } = await getSettings();
+        if (laufend && !laufend.ftp) await setSetting('plan', { ...laufend, ftpTestAm: tagIso(new Date()) });
         renderProgrammTiles();
       }
     }
     await goHome();
   }, run);
+  return true;
 }
 
 // Startdialog: Optionsfelder aus der Programmdefinition. vorgaben: Werte
@@ -632,7 +647,10 @@ async function openDetail(sessionMeta, { push = true } = {}) {
 $('#start-free').addEventListener('click', () => startRide());
 $('#btn-demo').addEventListener('click', () => demoStarten('vo2max'));
 $('#btn-demo-fahrt').addEventListener('click', beispielHistorieZeigen);
-$('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: renderProgrammTiles }));
+$('#btn-settings').addEventListener('click', () => openSettings({ nachSpeichern: () => {
+  renderProgrammTiles();
+  renderPlan({ starte: startRide, oeffneFahrt: s => openDetail(s) });   // FTP geändert: Einheiten neu
+} }));
 $('#btn-daten').addEventListener('click', zeigeDatenBlatt);
 $('#btn-speicher').addEventListener('click', zeigeDatenBlatt);
 // Trainingsplan anlegen bzw. ändern — danach die Karte neu aufbauen

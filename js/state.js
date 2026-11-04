@@ -13,6 +13,11 @@ const RESUME_RAMP_MS = 10000; // Wiedereinstieg nach Stopp: sanft hochfahren
 const AUTOSAVE_MS = 5000;
 const DATEN_VERALTET_MS = 3000;   // keine Trainerdaten mehr → Livewerte gelten nicht mehr
 const HF_VERALTET_MS = 5000;      // kein HF-Wert mehr → Lücke statt eingefrorener Linie
+// Programmuhr: Chrome drosselt Timer im Hintergrund auf bis zu 60 s. Der Takt
+// misst deshalb die Wanduhr und holt verpasste Sekunden auf. Größere Lücken
+// sind Standby oder ein eingefrorener Tab — die zählen nicht als gefahren
+const MAX_NACHHOLEN_S = 120;
+const UHR_TOLERANZ_MS = 100;      // Timer darf knapp vor der Sekunde feuern, ohne dass sie ausfällt
 
 export class Session extends EventTarget {
   constructor(ftms, settings, programm = null) {
@@ -24,14 +29,15 @@ export class Session extends EventTarget {
     this.planInfo = null;                     // Trainingsplan: Einheit dieser Fahrt (plan.js planInfo)
     this.id = new Date().toISOString();
     this.start = Date.now();
-    this.status = 'riding';                   // riding | paused | done
-    this.target = settings.startWatt;
+    this.status = 'riding';                   // riding | done
+    this.target = Math.min(settings.startWatt, settings.maxWatt);
     this.samples = new Int16Array(4 * 3600 * FIELDS);   // 4 h Vorrat, wächst bei Bedarf
     this.count = 0;
     this.live = { watt: 0, rpm: 0, hr: 0, kmh: 0 };
     this.kj = 0;
     this.km = 0;
     this.programmEndeBei = null;   // Aufzeichnungssekunde des Programmendes (ProgramRun setzt)
+    this.holtAuf = false;          // true: nachgeholte Sekunde, weitere folgen — keine Töne, keine Ansage
     this.#startLoops();
     ftms.addEventListener('data', this.#onData);
   }
@@ -40,11 +46,13 @@ export class Session extends EventTarget {
   #letzteHf = 0;
 
   #ramp = null;               // { from, to, t0 }
-  // Nach Reconnect Ziel neu schreiben; fürs Diagnose-Log festhalten, in
-  // welchem Zustand die Fahrt die Verbindung zurückbekam
+  // Nach Reconnect Ziel sofort neu schreiben (der Timer ist im Hintergrund
+  // gedrosselt); fürs Diagnose-Log festhalten, in welchem Zustand die Fahrt
+  // die Verbindung zurückbekam
   #onReconnect = () => {
     this.#lastWritten = -1;
     logInfo('session', `Reconnect während der Fahrt: ${this.gestoppt ? 'gestoppt' : this.status}, Ziel ${this.target} W`);
+    this.#schreibeZiel();
   };
   #lastWritten = -1;
   #writeTimer = null;
@@ -52,15 +60,18 @@ export class Session extends EventTarget {
   #autosaveTimer = null;
   #hrExternal = false;
   #onData = e => {
+    // Notifications laufen im Hintergrund weiter und treiben die Uhr mit. Vor
+    // dem Übernehmen: die verpassten Sekunden liegen vor diesem Messwert
+    this.holeAuf();
     const d = { ...e.detail };
     if (this.#hrExternal) delete d.hr;      // Gurt schlägt Trainer-Bridge
     Object.assign(this.live, d);
     this.#letzteDaten = performance.now();
     if (d.hr) this.#letzteHf = this.#letzteDaten;
-    // Laufende Rampe (v. a. der sanfte Wiedereinstieg nach Not-Stopp) im
-    // Takt der BLE-Notifications weiterschreiben — Timer sind im
-    // Hintergrund gedrosselt, Notifications kommen weiter
-    if (this.#ramp) this.#schreibeZiel();
+    // Laufende Rampe (v. a. der sanfte Wiedereinstieg nach Not-Stopp) und
+    // noch nicht geschriebene Ziele im Takt der BLE-Notifications schreiben —
+    // Timer sind im Hintergrund gedrosselt, Notifications kommen weiter
+    if (this.#ramp || this.target !== this.#lastWritten) this.#schreibeZiel();
   };
 
   #hrAbos = [];   // [client, typ, fn] — Pool-Clients leben über Sessions hinaus
@@ -91,7 +102,18 @@ export class Session extends EventTarget {
   setTarget(watt, { instant = false, rampMs = RAMP_MS } = {}) {
     const w = Math.min(Math.max(0, Math.round(watt)), this.settings.maxWatt);
     if (instant) { this.#ramp = null; this.target = w; }
-    else { this.#ramp = { from: this.#currentRampValue(), to: w, t0: performance.now(), ms: rampMs }; this.target = w; }
+    else {
+      const von = this.#currentRampValue();     // beendet eine abgelaufene Rampe
+      // Läuft der sanfte Wiedereinstieg, darf ein höheres Ziel (±-Tap, gehaltener
+      // Knopf, Blockwechsel) ihn nicht abkürzen: das neue Ziel kommt in seiner
+      // Restzeit. Nach unten gilt die normale Rampe
+      const alt = this.#ramp;
+      const sanft = rampMs === RESUME_RAMP_MS || (alt?.sanft && w > von);
+      const rest = alt?.sanft ? alt.ms - (performance.now() - alt.t0) : 0;
+      const ms = rampMs === RESUME_RAMP_MS ? rampMs : sanft ? Math.max(RAMP_MS, rest) : rampMs;
+      this.#ramp = { from: von, to: w, t0: performance.now(), ms, sanft };
+      this.target = w;
+    }
     this.dispatchEvent(new Event('target'));
     // Sofort schreiben statt auf den 250-ms-Timer warten: im Hintergrund
     // drosselt Chrome Timer massiv — der BLE-Tastendruck selbst liefert
@@ -100,6 +122,7 @@ export class Session extends EventTarget {
   }
 
   adjust(delta) {
+    this.holeAuf();
     this.gestoppt = false;                  // ±-Tap = bewusstes Weiterfahren
     this.setTarget(this.target + delta);
   }
@@ -107,6 +130,7 @@ export class Session extends EventTarget {
   // Not-Stopp: Ziel sofort 0, vorheriges Ziel für „WEITER" merken.
   // Idempotent — wiederholte Aufrufe überschreiben zielVorStopp nicht.
   emergencyStop() {
+    this.holeAuf();                         // verpasste Sekunden zählen noch als gefahren
     if (!this.gestoppt) this.zielVorStopp = this.target;
     this.gestoppt = true;
     this.setTarget(0, { instant: true });
@@ -116,6 +140,7 @@ export class Session extends EventTarget {
   // sanfte Rampe auf 100 % — verhindert den harten ERG-Einstieg (und damit
   // die "Spiral of Death" direkt nach dem Resume).
   weiterZu(ziel) {
+    this.holeAuf();                         // verpasste Sekunden zählen noch als Stopp
     this.gestoppt = false;
     if (ziel > 0) {
       this.setTarget(Math.round(ziel * 0.5), { instant: true });
@@ -155,7 +180,7 @@ export class Session extends EventTarget {
     // niedrigeren Zwischenwert nachschreiben) — plus Diagnosespur. Der
     // sanfte Wiedereinstieg nach Not-Stopp bleibt: er läuft im Takt der
     // BLE-Notifications weiter (#onData), sonst stünde sofort volle Last an
-    if (document.hidden && this.#ramp?.ms !== RESUME_RAMP_MS) this.#ramp = null;
+    if (document.hidden && !this.#ramp?.sanft) this.#ramp = null;
     const w = this.#currentRampValue();
     if (w === this.#lastWritten) return;
     this.#letzterWriteT = jetzt;
@@ -174,7 +199,7 @@ export class Session extends EventTarget {
     // Nach Reconnect Ziel neu schreiben
     this.ftms.addEventListener('reconnected', this.#onReconnect);
 
-    this.#tickTimer = setInterval(() => this.#tick(), 1000);
+    this.#tickTimer = setInterval(() => this.holeAuf(), 1000);
     // Autosave-Fehler (Speicher voll o. Ä.) nicht als unbehandelte Rejection
     // verlieren: melden, beim nächsten Intervall erneut versuchen
     this.#autosaveTimer = setInterval(() => this.save().catch(err => {
@@ -183,8 +208,34 @@ export class Session extends EventTarget {
     }), AUTOSAVE_MS);
   }
 
-  #tick() {
+  #uhrStand = performance.now();   // Wanduhr, bis zu der die Sekunden verbucht sind
+
+  // Fällige Sekunden verbuchen: im Vordergrund genau eine, sonst alles seit dem
+  // letzten Aufruf — jede für sich, damit ProgramRun keinen Blockwechsel verliert
+  // und jedes Sample das damalige Ziel trägt. Vor jeder Zustandsänderung (Stopp,
+  // Weiter, ±, Skip) aufrufen: Sekunden davor zählen noch zum alten Zustand.
+  // still: auch die letzte Sekunde ohne Töne (Fahrtende).
+  holeAuf({ still = false } = {}) {
     if (this.status !== 'riding') return;
+    const jetzt = performance.now();
+    const faellig = Math.floor((jetzt - this.#uhrStand + UHR_TOLERANZ_MS) / 1000);
+    if (faellig < 1) return;
+    if (faellig > MAX_NACHHOLEN_S) {
+      logWarn('session', `Uhr stand ${faellig} s — Standby, nicht nachgeholt`);
+      this.#uhrStand = jetzt;
+      return;
+    }
+    if (faellig >= 5) logInfo('bg', `Programmuhr holt ${faellig} s auf`);
+    for (let k = 1; k <= faellig; k++) {
+      this.#uhrStand += 1000;
+      this.holtAuf = still || k < faellig;
+      this.#sekunde(this.#uhrStand);
+    }
+    this.holtAuf = false;
+    this.dispatchEvent(new Event('tick'));    // Anzeige: einmal, auch nach vielen Sekunden
+  }
+
+  #sekunde(zeit) {
     const i = this.count * FIELDS;
     if (i + FIELDS > this.samples.length) {
       // Über 4 h: Puffer verdoppeln statt still einzufrieren
@@ -196,9 +247,8 @@ export class Session extends EventTarget {
     // Keine frischen Daten (Trainer getrennt/still, Gurt weg): nicht die
     // letzten Werte minutenlang weiterschreiben — sonst wachsen kJ, NP, TSS
     // und km, und die HF-Linie wird flach statt zur Lücke
-    const jetzt = performance.now();
-    if (jetzt - this.#letzteDaten > DATEN_VERALTET_MS) Object.assign(this.live, { watt: 0, rpm: 0, kmh: 0 });
-    if (jetzt - this.#letzteHf > HF_VERALTET_MS) this.live.hr = 0;
+    if (zeit - this.#letzteDaten > DATEN_VERALTET_MS) Object.assign(this.live, { watt: 0, rpm: 0, kmh: 0 });
+    if (zeit - this.#letzteHf > HF_VERALTET_MS) this.live.hr = 0;
     const s = this.samples;
     s[i] = this.elapsed;
     s[i + 1] = this.live.watt;
@@ -208,8 +258,8 @@ export class Session extends EventTarget {
     s[i + 5] = Math.round(geschwindigkeitKmh(this.live.watt, this.settings.gewichtKg) * 10);
     this.count++;
     this.kj += this.live.watt / 1000;
-    this.km += s[i + 5] / 36000;
-    this.dispatchEvent(new Event('tick'));
+    this.km += s[i + 5] / 36000;   // aus dem Sample, damit Live-km == distanzKm(samples)
+    this.dispatchEvent(new Event('sekunde'));
   }
 
   get elapsed() { return this.count; }        // 1 Sample = 1 s Fahrzeit
@@ -248,6 +298,7 @@ export class Session extends EventTarget {
 
   async finish() {
     if (this.status === 'done') return;
+    this.holeAuf({ still: true });
     this.status = 'done';
     clearInterval(this.#writeTimer);
     clearInterval(this.#tickTimer);

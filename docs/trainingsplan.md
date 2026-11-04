@@ -18,10 +18,11 @@ direkte Daten; einiges ist übertragen oder folgt der Praxis gängiger Apps.
 | Zwischen harten Einheiten ≥ 48 h | 48 h Erholung zwischen HIIT-Einheiten wirkt besser als 24 h [7]. Passt es mit den gewählten Tagen nicht, wird eine Einheit locker. |
 | 4-Wochen-Blöcke: 3 Wochen Aufbau, 1 Woche leicht | Mesozyklen von 3–4 Wochen mit Erholung (TrainerRoad, Friel) [12][13]. |
 | Steigerung über die Dauer (mehr Wiederholungen), Intensität bleibt | So steigen auch Warmup und Cooldown nicht mit; Wochenumfang wächst moderat (Friel: +5–8 CTL/Woche als Obergrenze für Erfahrene [14]). |
-| Rampentest als letzte Einheit der leichten Woche | Ausgeruht testen; alle Ziele sind %FTP und passen sich danach an [16][17]. |
-| FTP unbekannt: nie hart auf Basis der 200-W-Annahme | Für Einsteiger (FTP oft 120–160 W) wären VO2-Intervalle viel zu hart. Regelmäßig Fahrende testen zuerst; Einsteiger rollen eine Woche locker ein. |
+| Rampentest der leichten Woche: spätester Plantag mit ≥ 2 Tagen vor der ersten harten Einheit der Folgewoche | Ausgeruht testen; alle Ziele sind %FTP und passen sich danach an [16][17]. |
+| FTP unbekannt: nie hart auf Basis der 170-W-Annahme | Für Einsteiger (FTP oft 120–160 W) wären VO2-Intervalle viel zu hart. Der Test liegt auf dem ersten erreichbaren Plantag und kommt jede Woche wieder, bis eine FTP da ist; nur ein Rampentest ab 8 min erledigt ihn. Lockere Fahrten laufen bis dahin mit 80 % und ohne Tempo-Blöcke. |
+| Einsteiger oder Wiedereinstieg (Schalter): 2 Wochen nur locker und kürzer, dann harte Einheiten mit 90 %, ab Woche 5 mit 95 %, ab Woche 7 wie geplant | Spürbar sanfter statt nur 5 % weniger; ohne Dauer-Zuschläge des Blocks, bis die volle Intensität erreicht ist. Zählt ab dem Anlegen oder ab dem Tag, an dem der Schalter im laufenden Plan gesetzt wird. |
 | Nur FTP-relative Programme | Pyramide, Fartlek, 4×4 mit festen Watt passen sich nach einem Test nicht an. |
-| Verpasste harte Einheit / FTP-Test wandert auf den nächsten Plantag derselben Woche | Sie verdrängt dort eine lockere Einheit, aber nur wenn die 48-h-Regel hält — sonst der übernächste Tag, sonst entfällt sie [21]. Karte: „Heute: … · Verschoben von Mo“, Streifen ↷. |
+| Verpasste harte Einheit / FTP-Test wandert auf den nächsten Plantag derselben Woche | Sie verdrängt dort eine lockere Einheit (nur der Test auch eine harte), aber nur wenn die 48-h-Regel hält — sonst der übernächste Tag, sonst entfällt sie [21]. Vergangene Tage und eigene Änderungen bleiben unangetastet. Karte: „Heute: … · Verschoben von Mo“, Streifen ↷. |
 | Verpasste lockere Einheiten entfallen, nichts wird nachgeholt | Keine doppelten Tage, kein Übertrag in die nächste Woche [21]. Nach ≥ 14 Tagen ohne Fahrt bietet die Karte an, ab dieser Woche neu aufzubauen. |
 | Intervall-Typ wechselt je Block (4×4 → 40/20 → 30/30) | Abwechslung bei gleicher Wirkung; 2 Einheiten 4×4/Woche reichen für VO2max-Zuwächse [8][9]. |
 | Gesundheitshinweis beim Anlegen | Kurzfassung der ACSM-Empfehlung zur Voruntersuchung und des PAR-Q+ [19][20]; bei Infekt pausieren [22]. |
@@ -30,7 +31,12 @@ direkte Daten; einiges ist übertragen oder folgt der Praxis gängiger Apps.
 
 Der Plan läuft 4, 8 oder 12 Wochen (1–3 Blöcke, Standard 8) oder fortlaufend.
 Am Ende steht eine Bilanz (gefahrene von geplanten Einheiten, FTP vorher →
-jetzt) mit „4 Wochen weiter“ oder „Neuer Plan“.
+jetzt). „Plan geschafft ✓“ gibt es erst ab 70 % gefahrener Einheiten, sonst
+„Plan abgelaufen“: Die Zeit allein ist kein Erfolg. Danach bringt „4 Wochen
+weiter“ bzw. „Weitermachen“ immer vier neue Wochen ab jetzt; der Einstieg richtet
+sich nach der Zeit seit der letzten Fahrt (Stufen unten), ab 14 Tagen läuft die
+leichte Woche mit Test zusätzlich davor. Geplant zählt, was der Plan wirklich
+ausgespielt hat: ab Anlegen bzw. Wiedereinstieg, ohne Ausgelassenes.
 
 Pausieren geht ohne Grund und ohne Enddatum (Plan ändern → Pausieren).
 Während der Pause gibt es keine Einheiten und nichts gilt als verpasst. Beim
@@ -45,8 +51,18 @@ bietet dann „Wiedereinstieg“ an):
 | 14–27 Tage | leichte Woche mit FTP-Test, danach neuer Block | VO2max sinkt nach 2–4 Wochen messbar [24]; alte FTP zu hoch — TrainerRoad testet ab ~14 Tagen neu |
 | ≥ 28 Tage | wie 14–27, der neue Block beginnt mit 95 % | faktisch ein Neubeginn |
 
+Reicht die laufende Woche nicht mehr (kein Plantag übrig, Testtag vorbei),
+beginnt der Einstieg am nächsten Montag, damit die lockere Einheit und der Test
+wirklich stattfinden. Der neue Block ist versprochen: Die Plan-Länge wächst
+entsprechend; nur wer ohnehin höchstens 2 Wochen vor dem Ende war, schließt mit
+der leichten Woche ab.
+
 Die Grenzen sind Praxiswerte aus Trainings-Apps und Coaching-Quellen, keine
 harten Studienzahlen — für Freizeitfahrer eher vorsichtig gewählt.
+
+Bei 30-min-Plänen liegen Schwelle (ab 40 min) und VO2max (ab 35 min) über der
+gewählten Dauer: Die Programme haben diese Untergrenzen, die Vorschau zeigt die
+tatsächliche Dauer.
 
 Ein eigenes Ziel „Abnehmen“ gibt es nicht: HIIT und moderates
 Dauertraining senken Körperfett etwa gleich stark [25]; es fällt unter

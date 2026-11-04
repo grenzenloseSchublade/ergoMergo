@@ -1,11 +1,11 @@
 // TCX-Export (Garmin Training Center XML) als Datei aufs eigene Gerät —
 // lässt sich von Hand bei Strava, Garmin Connect oder intervals.icu
-// hochladen. Distanz aus dem Leistungsmodell; die App sendet nichts.
+// hochladen. Distanz aus denselben Leistungsmodell-Samples wie die Fahrt;
+// die App sendet nichts.
 // Watt über die ns3-Activity-Extension.
 
 import { FIELDS } from './storage.js';
 import { dateiStempel } from './format.js';
-import { geschwindigkeitKmh } from './metrics.js';
 
 // Dateiname einer Fahrt (Ortszeit des Starts)
 export const tcxDateiname = session => `ergomergo-${dateiStempel(new Date(session.start))}.tcx`;
@@ -20,8 +20,9 @@ export function toTCX(session, samples, count) {
     const i = k * FIELDS;
     sumW += samples[i + 1];
     maxW = Math.max(maxW, samples[i + 1]);
-    const t = new Date(session.start + samples[i] * 1000).toISOString();
-    const kmh = Math.round(geschwindigkeitKmh(samples[i + 1], session.gewichtKg ?? 75) * 10) / 10;
+    // 1 Sample = 1 s; das Sekundenfeld ist int16 und liefe nach 9,1 h über
+    const t = new Date(session.start + k * 1000).toISOString();
+    const kmh = samples[i + 5] / 10;
     dist += kmh / 3.6;
     const hr = samples[i + 4];
     // Elementreihenfolge laut TCX-XSD: Time, DistanceMeters, HeartRateBpm, Cadence, Extensions

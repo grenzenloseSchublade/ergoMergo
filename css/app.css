@@ -195,12 +195,18 @@ input.schalter:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .map-status.fehler { white-space: normal; color: var(--danger); }   /* Ende des Ablaufs: Hinweis darf umbrechen */
 #dlg-mapping .dlg-actions { margin-top: var(--abstand-3); }
 #dlg-mapping .dlg-actions button { padding-inline: var(--abstand-2); }   /* „Ohne Belegung weiter" + „Abbrechen" in einer Zeile */
-/* Umschalter Lenker ↔ Liste: beide Ansichten in derselben Zelle, die
-   verdeckte hält ihren Platz (visibility) — Umschalten verschiebt nichts */
-.belegung-ansicht { display: grid; }
-.belegung-ansicht > * { grid-area: 1 / 1; min-width: 0; }
-.belegung-ansicht[data-ansicht="liste"] > :first-child,
-.belegung-ansicht[data-ansicht="karte"] > :last-child { visibility: hidden; }
+/* Umschalter Lenker ↔ Liste: sichtbar ist eine Ansicht. Mit .platz-halten
+   (Blatt in der Fahrt) liegen beide in derselben Zelle und die verdeckte hält
+   ihren Platz (visibility) — Umschalten verschiebt dort nichts. Ohne (in den
+   Einstellungen, die ohnehin scrollen) fällt die verdeckte ganz weg — sonst
+   stünde unter der kürzeren Ansicht ein Loch */
+.belegung-ansicht > * { min-width: 0; }
+.belegung-ansicht:not(.platz-halten)[data-ansicht="liste"] > :first-child,
+.belegung-ansicht:not(.platz-halten)[data-ansicht="karte"] > :last-child { display: none; }
+.belegung-ansicht.platz-halten { display: grid; }
+.belegung-ansicht.platz-halten > * { grid-area: 1 / 1; }
+.belegung-ansicht.platz-halten[data-ansicht="liste"] > :first-child,
+.belegung-ansicht.platz-halten[data-ansicht="karte"] > :last-child { visibility: hidden; }
 .belegung-umschalter { margin-left: auto; font-size: var(--text-sm); white-space: nowrap; }
 .belegung-kopf { display: flex; align-items: center; gap: var(--abstand-2); margin-top: var(--abstand-2); }
 .belegung-kopf .gruppe-titel { margin: 0; }
@@ -525,6 +531,9 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
   grid-template-columns: 1fr 1fr;
   grid-template-areas: "power power" "target time" "sec sec" "status status";
   padding: var(--abstand-2) var(--abstand-4) 0;
+  /* Zonen-Glut: Schein hinter der Wattzahl, der zu allen Rändern ausläuft */
+  background: radial-gradient(closest-side at 50% 45%, color-mix(in srgb, var(--glut) var(--glut-staerke), transparent), transparent);
+  transition: --glut 1s;
 }
 .metrics > .led-tafel { grid-area: status; margin: var(--abstand-2) auto 0; }
 .metric { display: grid; justify-items: center; gap: 0; font-variant-numeric: tabular-nums; }
@@ -569,18 +578,22 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 }
 .kopf-geraete { grid-area: geraete; display: flex; }
 /* Rechts: Bild-in-Bild (falls verfügbar) links neben „⋯" */
-.kopf-rechts { grid-area: mehr; justify-self: end; display: flex; }
+.kopf-rechts { grid-area: mehr; justify-self: end; display: flex; gap: var(--abstand-4); }
 @media (max-width: 420px) {
   .ride-kopf:has(.demo-leiste:not([hidden])) { grid-template-areas: "geraete . mehr" "demo demo demo"; }
 }
 /* Geräte-Symbol ohne Rahmen: Icon + Zustandspunkt, Tippfläche 44 px */
 .kopf-geraet, .kopf-pip, .kopf-mehr {
   width: var(--tippflaeche); height: var(--tippflaeche); padding: 0; background: none; color: var(--ink2);
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--abstand-05);
 }
 .kopf-geraet > span { display: flex; }
 .kopf-geraet svg, .kopf-pip svg { width: var(--icon-m); height: var(--icon-m); }
 .kopf-mehr svg { width: var(--icon-l); height: var(--icon-l); }
+/* Bild-in-Bild größer und mit Abstand zu „⋯“ (Fehltipps öffneten das Panel);
+   die Kopfzeile bleibt 44 px hoch */
+.kopf-pip { width: var(--tippflaeche-breit); height: var(--tippflaeche-zeile); margin-block: calc(-1 * var(--abstand-05)); }
+.kopf-pip svg { width: var(--icon-xl); height: var(--icon-xl); }
 /* Bild-in-Bild offen: Symbol in Akzentfarbe (aktueller Zustand), keine Fläche */
 .kopf-pip[aria-pressed="true"] { color: var(--accent); }
 
@@ -595,7 +608,8 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 }
 
 /* Nebenwerte als festes Raster statt fließendem Umbruch (der brach je nach
-   Breite 3+2 oder 2+2+1): hochkant 2×2, ab 440 px und quer 4 nebeneinander */
+   Breite 3+2 oder 2+2+1): hochkant 2×2, ab 440 px 4 nebeneinander; quer in
+   der Werte-Spalte 2×2, im Werte-Fokus 4 nebeneinander */
 .row-secondary {
   grid-area: sec; display: grid; grid-template-columns: repeat(2, auto);
   justify-content: center; justify-items: start;
@@ -765,29 +779,85 @@ button:disabled { cursor: default; }
 .ride-grid.fokus-graph .row-secondary { font-size: clamp(.95rem, 3vmin, 1.15rem); }
 .ride-grid.fokus-graph .restbalken { display: none; }
 
-/* Querformat: wie Hochformat rotiert — Werte als Zeile oben, Chart in
-   voller Breite darunter (Resthöhe), Chips als schmale Leiste, Bedienung
-   rechts. Schwelle 620px: auch große Handys/Foldables quer sollen dieses
-   Layout bekommen statt des breitgezogenen Portrait-Stapels. */
-@media (orientation: landscape) and (max-height: 620px) {
-  .ride-grid {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "kopf controls" "metrics controls" "chart controls" "chips controls";
+/* Auf der Glut trägt --ink3 kleine Schrift nicht (zu wenig Kontrast) */
+.metrics .label, .metric .unit, .gesamt, .row-secondary { color: var(--ink2); }
+.gesamt b, .row-secondary b { color: var(--ink); }
+
+/* Glut: Zonenfarbe des aktuellen Ziels (setzt ride.js). Als registrierte
+   Eigenschaft, damit der Verlauf beim Blockwechsel weich überblendet */
+@property --glut { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+/* Querformat „Cockpit" (Handy bis Tablet): links die Werte mit riesiger
+   Wattzahl auf der Glut-Fläche, Mitte der Graph, rechts die Bedienleiste über
+   die volle Höhe. Die Wattzahl richtet sich nach Spaltenbreite (cqi, vier
+   Ziffern passen) und Resthöhe (--rest = alles außer ihr selbst). Fokus:
+   Werte = breite Spalte, Graph schmal ohne Chips; Graph = schmale Spalte. */
+@media (orientation: landscape) and (min-width: 480px) {
+  .ride-grid, .ride-grid.fokus-werte, .ride-grid.fokus-graph {
+    grid-template-columns: minmax(16rem, 40%) minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "kopf kopf controls" "metrics chart controls" "metrics chips controls";
   }
+  .ride-grid.fokus-werte { grid-template-columns: minmax(0, 64%) minmax(0, 1fr) auto; }
+  .ride-grid.fokus-graph { grid-template-columns: minmax(11rem, 24%) minmax(0, 1fr) auto; }
+  .ride-kopf { padding-top: 0; padding-left: max(var(--abstand-15), env(safe-area-inset-left)); }
   .metrics {
-    grid-area: metrics;
-    grid-template-columns: auto auto auto;
-    grid-template-areas: "power target time" "sec sec sec" "status status status";
-    column-gap: clamp(var(--abstand-4), 5vw, var(--abstand-12));
-    /* oben ausgerichtet: Beschriftungen auf einer Linie statt treppenförmig
-       (der Restbalken unter der Zeit machte die Spalte höher) */
-    justify-content: center; align-items: start;
-    padding: var(--abstand-1) var(--abstand-25) 0;
+    --rest: 15rem; --watt-max: 24rem;
+    container-type: inline-size;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "power power" "target time" "sec sec" "status status";
+    align-content: center; align-items: start; row-gap: var(--abstand-1);
+    padding: 0 var(--abstand-25) var(--abstand-1) max(var(--abstand-25), env(safe-area-inset-left));
+    background: linear-gradient(to right, color-mix(in srgb, var(--glut) var(--glut-staerke), transparent), transparent 90%);
+    border-radius: 0 var(--radius-l) var(--radius-l) 0;
   }
-  /* Kopfzeile quer flacher: die Höhe gehört dem Graphen */
-  .ride-kopf { padding-top: 0; }
-  .kopf-geraet, .kopf-pip, .kopf-mehr { height: 38px; }   /* Ausnahme von --tippflaeche: quer zählt jede Zeile; Breite bleibt 44 px */
+  .metric-power .value { font-size: clamp(3rem, min(42cqi, 100dvh - var(--rest)), var(--watt-max)); line-height: .95; }
+  .metric-power .unit { display: none; }           /* „Watt" steht beim Ziel; die Höhe gehört der Zahl */
+  .metric:not(.metric-power) .value { font-size: clamp(1.6rem, 11vmin, 4rem); }
+  .row-secondary { grid-template-columns: repeat(2, auto); gap: 0 var(--abstand-6); margin-top: var(--abstand-1); font-size: var(--text-sm); }
+  .metrics > .led-tafel { height: 1.6rem; margin-top: var(--abstand-1); }
+  /* Fokus Werte: Nebenwerte haben Platz für eine Zeile */
+  .ride-grid.fokus-werte .metrics { --rest: 15rem; --watt-max: 34rem; }
+  .ride-grid.fokus-werte .metric-power .value { font-size: clamp(3rem, min(42cqi, 100dvh - var(--rest)), var(--watt-max)); }
+  .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 13vmin, 5rem); }
+  .ride-grid.fokus-werte .row-secondary { grid-template-columns: repeat(4, auto); font-size: clamp(.95rem, 4vmin, 1.4rem); }
+  /* Fokus Graph: Werte kompakt, der Graph bekommt die Breite */
+  .ride-grid.fokus-graph .metrics { grid-template-columns: auto minmax(0, 1fr); }
+  .ride-grid.fokus-graph .metric .label { white-space: nowrap; }
+  .ride-grid.fokus-graph .metric-power .value { font-size: clamp(3rem, min(42cqi, 100dvh - var(--rest)), var(--watt-max)); }
+  .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.2rem, 7vmin, 2.4rem); }
+  .ride-grid.fokus-graph .row-secondary { font-size: var(--text-sm); gap: 0 var(--abstand-3); }
+  .ride-grid.fokus-graph .metric .unit,
+  .ride-grid.fokus-graph .gesamt { display: none; }
+  .row-actions {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    justify-content: safe center;
+    margin: var(--abstand-1) 0 calc(var(--abstand-1) + env(safe-area-inset-bottom));
+    /* Überlaufende Chips als „da ist mehr" lesbar machen statt abgeschnitten */
+    mask-image: linear-gradient(to right, transparent, black 1rem, black calc(100% - 1.5rem), transparent);
+  }
+  .row-actions::-webkit-scrollbar { display: none; }
+  .row-actions .chip { flex: 0 0 auto; padding: var(--abstand-1) var(--abstand-3); font-size: var(--text-sm); }
+  /* Bedienleiste: Höhe nach Platz (nie unter die Tippfläche, nie Riesenflächen
+     auf dem Tablet). +10 oben, −10 direkt über STOPP: verrutscht der Daumen
+     Richtung STOPP, trifft er die harmlose Richtung */
+  .controls {
+    grid-template-columns: clamp(6rem, 11vw, 8rem); align-content: center;
+    grid-auto-rows: minmax(max(var(--tippflaeche), min(var(--bedien-hoehe), 17vh)), 7rem);
+    padding-block: var(--abstand-2) calc(var(--abstand-2) + env(safe-area-inset-bottom));
+    padding-right: max(var(--abstand-25), env(safe-area-inset-right));
+  }
+  /* Portrait-Spurzuweisung aufheben — per ID, sonst verliert der Reset
+     den Spezifitätsvergleich gegen #btn-stop { grid-column: 5 } */
+  #btn-minus, #btn-plus, #btn-stop, #btn-end { grid-column: 1; }
+  .controls #btn-stop, .controls #btn-end { margin-top: var(--abstand-4); }
+  .controls .ctl { min-height: 0; }
+  .controls #btn-plus { order: -1; }
+}
+
+/* Dialoge auf niedrigen Querformat-Schirmen. Schwelle 620 px: auch große
+   Handys und Foldables; auf dem Tablet ist genug Höhe für die Hochkant-Form */
+@media (orientation: landscape) and (max-height: 620px) {
   /* Blatt „Tastenbelegung" quer: Lenkeransicht bzw. Liste links, Titel,
      Umschalter, Hinweis und Schließen rechts — sonst ragt es unten hinaus */
   dialog.sheet.blatt-fahrt { width: min(40rem, 100vw); }
@@ -812,48 +882,10 @@ button:disabled { cursor: default; }
   #map-karte { grid-area: karte; }
   .map-raster > .dlg-actions { grid-area: aktionen; align-self: end; flex-wrap: wrap; }
   /* Panel quer zweispaltig (Geräte | Töne), sonst ragt es unten hinaus */
-  dialog.fahrt-optionen { width: min(36rem, calc(100vw - 16px)); }
+  dialog.fahrt-optionen { width: min(36rem, calc(100vw - clamp(6rem, 11vw, 8rem) - 2.5rem)); }   /* nie über die Bedienleiste */
   .fahrt-optionen-inhalt { grid-template-columns: 1fr 1fr; grid-template-areas: "geraete toene" "geraete hinweis"; grid-template-rows: auto 1fr; }
   .fo-hinweis { grid-area: hinweis; margin: 0; }
   .fahrt-optionen-inhalt:has(> .fo-hinweis:not(:empty)) .fo-toene > .gruppe-titel { visibility: visible; }
-  .metric-power .value { font-size: clamp(2.4rem, 13vmin, 4rem); }
-  .metric:not(.metric-power) .value { font-size: clamp(1.5rem, 8vmin, 2.4rem); }
-  .row-secondary { grid-template-columns: repeat(4, auto); gap: var(--abstand-1) var(--abstand-6); font-size: var(--text-md); margin-top: 0; }
-  #live-chart { grid-area: chart; height: 100%; min-height: 0; }
-  .row-actions {
-    grid-area: chips; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
-    justify-content: safe center;
-    margin: var(--abstand-1) 0 calc(var(--abstand-15) + env(safe-area-inset-bottom));
-    padding: 0 max(var(--abstand-1), env(safe-area-inset-right)) 0 max(var(--abstand-1), env(safe-area-inset-left));
-    /* Überlaufende Chips als „da ist mehr" lesbar machen statt abgeschnitten */
-    mask-image: linear-gradient(to right, transparent, black 1rem, black calc(100% - 1.5rem), transparent);
-  }
-  .row-actions::-webkit-scrollbar { display: none; }
-  /* Nur noch eine kurze Chip-Zeile (Block-Aktionen + ⋯): die volle
-     Tippfläche von 44 px ist quer bezahlbar */
-  .row-actions .chip { flex: 0 0 auto; padding: var(--abstand-1) var(--abstand-3); font-size: var(--text-sm); }
-  .controls { grid-area: controls; grid-template-columns: 1fr; align-content: center; padding-right: max(var(--abstand-25), env(safe-area-inset-right)); }
-  /* Portrait-Spurzuweisung aufheben — per ID, sonst verliert der Reset
-     den Spezifitätsvergleich gegen #btn-stop { grid-column: 5 } */
-  #btn-minus, #btn-plus, #btn-stop, #btn-end { grid-column: 1; }
-  .controls #btn-stop { margin-top: var(--abstand-4); } /* vertikal: kein Overflow möglich */
-  .controls #btn-end { margin-top: var(--abstand-4); }
-  .ctl { min-width: 96px; }
-  /* Fokus quer: nur Schriftgrößen kippen — der Chart behält die volle
-     Restfläche (fokus-werte blendet die Chips aus, 1fr wächst von selbst) */
-  .ride-grid.fokus-werte .metric-power .value { font-size: clamp(3.2rem, 18vmin, 5.5rem); }
-  .ride-grid.fokus-werte .metric:not(.metric-power) .value { font-size: clamp(1.8rem, 9vmin, 3rem); }
-  /* Hochkant-Zeilenvorgaben der Fokus-Modi gelten quer nicht (eigenes Raster) */
-  .ride-grid.fokus-werte, .ride-grid.fokus-graph { grid-template-rows: auto auto minmax(0, 1fr) auto; }
-  .ride-grid.fokus-graph .metric-power .value { font-size: clamp(1.8rem, 8vmin, 2.6rem); }
-  .ride-grid.fokus-graph .metric:not(.metric-power) .value { font-size: clamp(1.1rem, 5vmin, 1.6rem); }
-  /* Graph-Fokus quer: der Graph soll der größte sein — Sekundärzeile kleiner */
-  .ride-grid.fokus-graph .row-secondary { font-size: var(--text-sm); }
-  .ride-grid.fokus-graph .metric .unit,
-  .ride-grid.fokus-graph .gesamt { display: none; }   /* die Kopfzeile kostet quer eine Zeile — hier zurückholen */
-  /* +10 oben, −10 direkt über STOPP: verrutscht der Daumen Richtung STOPP,
-     trifft er die harmlose Richtung */
-  .controls #btn-plus { order: -1; }
 }
 
 /* Niedrige Bildschirme hochkant: Chips enger (Tippfläche bleibt 44 px), damit −10/+10/STOPP im Bild bleiben */

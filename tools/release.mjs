@@ -8,7 +8,8 @@
 //
 // Aufruf:
 //   node tools/release.mjs           nächste Version (v1.0 → v1.1)
-//   node tools/release.mjs v2.0      explizite Version
+//   node tools/release.mjs v2.0      explizite Version, muss höher sein als beide Stempel
+//   node tools/release.mjs v2.0 --rueckstufen   bewusst niedriger oder gleich (selten)
 //   node tools/release.mjs --check   nur prüfen: Stempel gleich, Offline-Shell vollständig,
 //                                    Stil nur aus css/tokens.css (tools/stil-check.mjs)
 //
@@ -39,7 +40,14 @@ const shell = lies('js/version.js');
 
 // Alle auszuliefernden Dateien gegen die SHELL-Liste — fehlende und verwaiste Einträge
 function pruefeShell(swText) {
-  const shell = new Set([...swText.match(/const SHELL = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]));
+  const liste = [...swText.match(/const SHELL = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+  const shell = new Set(liste);
+  // cache.addAll() lehnt doppelte Einträge ab: jede SW-Installation schlüge fehl
+  const doppelt = [...new Set(liste.filter((u, i) => liste.indexOf(u) !== i))];
+  if (doppelt.length) {
+    console.error(`sw.js SHELL enthält doppelte Einträge: ${doppelt.join(', ')}`);
+    process.exit(1);
+  }
   const dateien = [['js', /\.(js|json)$/], ['css', /\.css$/], ['icons', /\.(png|svg)$/], ['audio', /\.ogg$/]]
     .flatMap(([dir, re]) => alleDateien(dir, re));
   const fehlend = dateien.filter(d => !shell.has(d));
@@ -78,14 +86,28 @@ if (process.argv[2] === '--check') {
 if (sw.v !== shell.v)
   console.warn(`Achtung: Stempel waren auseinander (sw.js=${sw.v}, js/version.js=${shell.v}) — werden vereinheitlicht`);
 
+// Numerisch vergleichen (v3.10 > v3.9), fehlende Stellen zählen als 0
+const vergleiche = (a, b) => {
+  const [x, y] = [a, b].map(v => v.slice(1).split('.').map(Number));
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+};
+const hoechster = vergleiche(sw.v, shell.v) >= 0 ? sw.v : shell.v;
+
 // Auto-Bump: letzte Stelle hochzählen (v1.0 → v1.1, v1.0.2 → v1.0.3)
 const hoch = v => {
   const teile = v.slice(1).split('.');
   teile[teile.length - 1] = String(Number(teile[teile.length - 1]) + 1);
   return `v${teile.join('.')}`;
 };
-const neu = process.argv[2] ?? hoch(sw.v);
+const argumente = process.argv.slice(2);
+const neu = argumente.find(a => !a.startsWith('--')) ?? hoch(hoechster);
 if (!/^v\d+(\.\d+){0,2}$/.test(neu)) { console.error(`ungültige Version: ${neu} (erwartet z. B. v1.1)`); process.exit(1); }
+// Gleiche Version: sw.js bliebe byte-gleich, installierte Apps sähen kein Update
+if (vergleiche(neu, hoechster) <= 0 && !argumente.includes('--rueckstufen')) {
+  console.error(`${neu} ist nicht höher als der aktuelle Stand (${hoechster}) — bewusste Rückstufung nur mit --rueckstufen`);
+  process.exit(1);
+}
 
 for (const [pfad, muster] of Object.entries(DATEIEN))
   writeFileSync(pfad, lies(pfad).text.replace(muster, `$1${neu}$2`));
