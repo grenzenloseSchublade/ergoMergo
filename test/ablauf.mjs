@@ -6,7 +6,8 @@
 // (Skip, +30 s, zweistufiges Beenden), die Demo-Wege, Bildschirm wach
 // halten (Hinweis, gebremste Neuanforderung), der Auftakt (Pegel,
 // Bandanteile, Abbruch beim Fahrtende), Audio Session und Diagnose-Log
-// am Fahrtende — mit Sollwerten.
+// am Fahrtende, Programmuhr bei gedrosseltem Timer, Geräte (Reconnect, Gerät
+// ohne Dienst, Lern-Modus), .zwo-Import, TCX — mit Sollwerten.
 // Aufruf: node test/ablauf.mjs     Exit 1, wenn ein Schritt abweicht.
 
 import { server, browser, sleep, historieAnlegen } from './lib.mjs';
@@ -298,7 +299,7 @@ try {
   soll('Halten nach WEITER: Rampe bleibt sanft', await b.ev(`(() => { const z = +document.querySelector('#m-target').textContent, m = Math.max(...__writes); return __writes.length > 1 && m < z * 0.85 ? 'sanft' : 'hart ' + m + ' von ' + z; })()`), 'sanft');
   // Block über der Obergrenze: ± verschiebt nie den Rest des Programms
   soll('Block über maxWatt: + senkt den Rest nicht', await b.ev(`import('./js/program.js').then(({ ProgramRun }) => {
-    const s = Object.assign(new EventTarget(), { settings: { maxWatt: 400 }, elapsed: 0, gestoppt: false, setTarget() {} });
+    const s = Object.assign(new EventTarget(), { settings: { maxWatt: 400 }, elapsed: 0, gestoppt: false, setTarget() {}, holeAuf() {} });
     const r = new ProgramRun(s, [{ dauer: 60, watt: 504 }, { dauer: 60, watt: 190 }]);
     r.adjust(10); const a = r.offset; r.adjust(-10); const c = r.offset; r.adjust(10); return [a, c, r.offset].join(); })`), '0,-10,0');
 
@@ -633,6 +634,390 @@ try {
   soll('Log: Reconnect mit Zustand und Ziel', p6, t => t.includes('Reconnect während der Fahrt: riding, Ziel 185 W'));
   soll('Log: Fahrtende 0 W bestätigt bzw. Grund', p6, t => t.includes('Ziel 0 W bestätigt')
     && t.includes('nicht bestätigt | Trainer nicht verbunden') && t.includes('nicht bestätigt | Fehler: Keine Antwort'));
+  // Programmuhr bei gedrosseltem Timer (Bildschirm aus, Bild-in-Bild): die
+  // Wanduhr wird vorgestellt, der echte 1-s-Timer bzw. eine Notification holt
+  // auf. Sample für Sample, ohne Tonsalve, mit Obergrenze gegen Standby
+  const uhr = await b.ev(`(async () => {
+    const { Session } = await import('./js/state.js'), { ProgramRun } = await import('./js/program.js');
+    const echt = performance.now.bind(performance);
+    let vor = 0;
+    performance.now = () => echt() + vor;
+    const warte = ms => new Promise(r => setTimeout(r, ms));
+    const neu = (blocks, settings = { startWatt: 100, maxWatt: 600 }) => {
+      const writes = [], ereignisse = { tick: 0, block: [], countdown: 0, done: 0 };
+      const f = Object.assign(new EventTarget(), { connected: true, busy: false, setTargetPower: async w => { writes.push(w); } });
+      const s = new Session(f, settings);
+      s.save = async () => {};
+      s.addEventListener('tick', () => ereignisse.tick++);
+      const r = blocks ? new ProgramRun(s, blocks) : null;
+      if (r) {
+        r.addEventListener('block', e => ereignisse.block.push(e.detail.index));
+        r.addEventListener('countdown', () => ereignisse.countdown++);
+        r.addEventListener('done', () => ereignisse.done++);
+      }
+      return { f, s, r, writes, ereignisse, daten: d => f.dispatchEvent(new CustomEvent('data', { detail: d })) };
+    };
+    const feld = (s, k, n) => s.samples[k * 6 + n];
+    const out = {};
+    try {
+      // Timer gedrosselt: 15 s in einem Schub, Blockwechsel und Ziel je Sample
+      {
+        const { s, r, ereignisse, daten } = neu([{ dauer: 10, watt: 100 }, { dauer: 10, watt: 200 }, { dauer: 100, watt: 150 }]);
+        daten({ watt: 150, rpm: 90, kmh: 30 });
+        vor += 15000; await warte(1100);
+        out.schub = { count: s.count, index: r.index, ziel: s.target, tick: ereignisse.tick, block: ereignisse.block.join(), countdown: ereignisse.countdown,
+          lueckenlos: Array.from({ length: s.count }, (_, k) => feld(s, k, 0) === k).every(Boolean), z3: feld(s, 3, 2), z13: feld(s, 13, 2),
+          watt1: feld(s, 1, 1), watt8: feld(s, 8, 1), kj: s.kj };
+        vor += 12000; await warte(1100);
+        out.zweiWechsel = { index: r.index, ziel: s.target, block: ereignisse.block.join() };
+        await s.finish();
+      }
+      // Notification treibt die Uhr ohne Timer
+      {
+        const { s, daten } = neu();
+        daten({ watt: 150 });
+        vor += 5000;
+        const vorher = s.count;
+        daten({ watt: 160 });
+        out.notification = s.count - vorher;
+        await s.finish();
+      }
+      // Standby: über der Obergrenze zählt nichts
+      {
+        const { s, r } = neu([{ dauer: 600, watt: 100 }]);
+        vor += 3600000; await warte(1100);
+        out.standby = { count: s.count, rest: r.restImBlock };
+        await s.finish();
+      }
+      // Not-Stopp: Sekunden vor dem Stopp zählen noch, im Stopp steht die Programmuhr
+      {
+        const { s, r, writes } = neu([{ dauer: 60, watt: 200 }, { dauer: 60, watt: 100 }]);
+        vor += 10000;
+        s.emergencyStop();
+        const beiStopp = s.count, rest = r.restImBlock;
+        vor += 20000; await warte(1100);
+        out.stopp = { beiStopp, rest, restDanach: r.restImBlock, count: s.count, ziel: s.target, index: r.index, letzter: writes.at(-1) };
+        vor += 5000;
+        s.weiterZu(r.aktuellesZiel());
+        const c = s.count;
+        await warte(1100);
+        out.weiter = { imStopp: c, rest: r.restImBlock, pause: r.pauseLog.length, geschlossen: r.pauseLog[0].bis !== null };
+        await s.finish();
+      }
+      // Ausfahren: Programmende auf die Sekunde genau, nur einmal „fertig"
+      {
+        const { s, r, ereignisse } = neu([{ dauer: 5, watt: 100 }]);
+        vor += 8000; await warte(1100);
+        vor += 8000; await warte(1100);
+        out.ausfahren = { ende: s.programmEndeBei, done: ereignisse.done, vorbei: r.vorbei, ueber: r.ueberzeit(s.elapsed) === s.count - 5, ziel: s.target };
+        await s.finish();
+      }
+      // Fahrtende nach einer Lücke: alles aufgezeichnet, keine Töne
+      {
+        const { s, ereignisse } = neu([{ dauer: 3, watt: 100 }, { dauer: 60, watt: 150 }]);
+        vor += 7000;
+        await s.finish();
+        out.finish = { count: s.count, block: ereignisse.block.join(), countdown: ereignisse.countdown };
+      }
+      // Vordergrund: keine Sekunde doppelt
+      {
+        const { s } = neu();
+        await warte(3250);
+        out.vordergrund = s.count;
+        await s.finish();
+      }
+      // Reconnect im Hintergrund: Ziel sofort, nicht erst mit dem gedrosselten Timer
+      {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+        const { f, s, writes, daten } = neu();
+        s.setTarget(185, { instant: true });
+        await warte(300);
+        writes.length = 0;
+        f.dispatchEvent(new Event('reconnected'));
+        out.reconnect = writes.join();
+        // Offenes Ziel (Write fehlgeschlagen o. Ä.): die nächste Notification schreibt
+        await warte(300);
+        s.target = 195;
+        writes.length = 0;
+        daten({ watt: 100 });
+        out.offenesZiel = writes.join();
+        delete document.hidden;
+        await s.finish();
+      }
+      // Erste Rampe: kein Wert über der Obergrenze, sofort der erste Block
+      {
+        const { s, writes } = neu([{ dauer: 60, watt: 70 }], { startWatt: 300, maxWatt: 100 });
+        await warte(50);
+        out.startRampe = { ziel: s.target, erster: writes[0] };
+        await s.finish();
+        const frei = neu(null, { startWatt: 300, maxWatt: 100 });
+        out.startFrei = frei.s.target;
+        await frei.s.finish();
+      }
+      // Blockwechsel im Not-Stopp: Meldung kommt nach WEITER, ohne die sanfte Rampe zu ersetzen
+      {
+        const { s, r, writes, ereignisse } = neu([{ dauer: 60, watt: 200 }, { dauer: 60, watt: 90 }, { dauer: 60, watt: 200 }]);
+        await warte(50);
+        s.emergencyStop();
+        r.skip();
+        out.stoppSkip = { index: r.index, block: ereignisse.block.join() };
+        s.weiterZu(r.aktuellesZiel());
+        await warte(1300);
+        out.nachWeiter = { block: ereignisse.block.join(), ziel: s.target, letzter: writes.at(-1) };
+        await s.finish();
+      }
+    } finally { performance.now = echt; }
+    return out;
+  })()`);
+  const j = v => JSON.stringify(v);
+  soll('Programmuhr: 15 s Lücke aufgeholt', uhr.schub.count, n => n >= 15 && n <= 17);
+  soll('… Blockwechsel und Ziel stimmen', [uhr.schub.index, uhr.schub.ziel].join(), '1,200');
+  soll('… Samples lückenlos', uhr.schub.lueckenlos, true);
+  soll('… jedes Sample mit dem damaligen Ziel', [uhr.schub.z3, uhr.schub.z13].join(), '100,200');
+  soll('… Watt nur solange Daten frisch waren', [uhr.schub.watt1, uhr.schub.watt8].join(), '150,0');
+  soll('… Energie nicht aus eingefrorenen Werten', uhr.schub.kj, k => k > 0.2 && k < 0.8);
+  soll('… Anzeige einmal je Schub, kein Countdown-Geplapper', [uhr.schub.tick, uhr.schub.countdown].join(), '1,0');
+  soll('… nur der laufende Block wird gemeldet', uhr.schub.block, '1');
+  soll('… zwei Wechsel in einem Schub: nur der letzte', j(uhr.zweiWechsel), j({ index: 2, ziel: 150, block: '1,2' }));
+  soll('Notification treibt die Uhr ohne Timer', uhr.notification, n => n >= 5 && n <= 6);
+  soll('Standby über der Obergrenze zählt nicht', uhr.standby.count, n => n <= 2);
+  soll('… und die Programmuhr bleibt stehen', uhr.standby.rest, n => n >= 598);
+  soll('Stopp nach Lücke: Sekunden davor zählen', uhr.stopp.beiStopp, n => n >= 10 && n <= 11);
+  // Die Pause beginnt mit der ersten Sekunde nach dem Stopp, wie im Vordergrund
+  soll('Stopp: Programmuhr steht, Aufzeichnung läuft', [uhr.stopp.rest - uhr.stopp.restDanach <= 1, uhr.stopp.count >= uhr.stopp.beiStopp + 20].join(), 'true,true');
+  soll('Stopp: Last bleibt 0', [uhr.stopp.ziel, uhr.stopp.letzter, uhr.stopp.index].join(), '0,0,0');
+  soll('WEITER nach Lücke: Stoppzeit zählt nicht als Programm', uhr.weiter.rest, n => n >= uhr.stopp.rest - 3 && n <= uhr.stopp.rest);
+  soll('… Lücke vor WEITER liegt in der Pause', [uhr.weiter.imStopp >= uhr.stopp.count + 5, uhr.weiter.pause, uhr.weiter.geschlossen].join(), 'true,1,true');
+  soll('Ausfahren: Programmende auf die Sekunde, einmal gemeldet', j(uhr.ausfahren), j({ ende: 5, done: 1, vorbei: true, ueber: true, ziel: 100 }));
+  soll('Fahrtende holt die Lücke auf, ohne Töne', [uhr.finish.count >= 7, uhr.finish.block, uhr.finish.countdown].join(), 'true,,0');
+  soll('Vordergrund: keine Sekunde doppelt oder verloren', uhr.vordergrund, n => n >= 3 && n <= 4);
+  soll('Reconnect im Hintergrund: Ziel sofort geschrieben', uhr.reconnect, '185');
+  soll('Offenes Ziel: die nächste Notification schreibt', uhr.offenesZiel, '195');
+  soll('Erste Rampe: gleich der erste Block, nie über der Obergrenze', j(uhr.startRampe), j({ ziel: 70, erster: 70 }));
+  soll('Startwert über der Obergrenze: geklemmt', uhr.startFrei, 100);
+  soll('Skip im Stopp: Index folgt still', j(uhr.stoppSkip), j({ index: 1, block: '' }));
+  soll('… Meldung nach WEITER, sanfte Rampe bleibt', [uhr.nachWeiter.block, uhr.nachWeiter.ziel, uhr.nachWeiter.letzter < 75].join(), '1,90,true');
+  // LED-Zeile bei „Bewegung reduzieren": eine Meldung, die eine laufende
+  // ablöst, muss trotzdem enden (kurze Tafel: 2 Durchläufe ≈ 3 s)
+  await b.geh(srv.url, 1500);
+  await b.cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  const led = await b.ev(`(async () => {
+    const { LedZeile } = await import('./js/ui/led-zeile.js');
+    const el = document.body.appendChild(document.createElement('div'));
+    Object.assign(el.style, { position: 'fixed', top: '0', left: '0', width: '40px', height: '20px' });
+    const z = new LedZeile(el);
+    const warte = ms => new Promise(r => setTimeout(r, ms));
+    let fertig = 0;
+    z.setze('A', '', { fertig: () => fertig++ });
+    await warte(200);
+    z.setze('B', '', { fertig: () => fertig++ });
+    await warte(6000);
+    const out = { fertig, text: z.text };
+    z.destroy(); el.remove();
+    return out;
+  })()`);
+  await b.cdp('Emulation.setEmulatedMedia', { features: [] });
+  soll('LED ohne Bewegung: abgelöste Meldung endet trotzdem', JSON.stringify(led), JSON.stringify({ fertig: 1, text: '' }));
+
+  // Abgebrochene Ansage: der Context darf nicht wach bleiben (Android-Audiofokus)
+  await b.ev(`import('./js/signals.js').then(m => document.addEventListener('pointerdown', () => m.initAudio(), { once: true }))`);
+  await tippDaneben(b, 2500);
+  const ansage = await b.ev(`(async () => {
+    const m = await import('./js/signals.js'), a = await import('./js/ansagen.js'), c = m.audioCtx();
+    const warte = ms => new Promise(r => setTimeout(r, ms));
+    a.initAnsagen(c);
+    await warte(300);
+    const vorher = c.state;
+    const p = a.ansageFertig();
+    a.stoppeAnsagen();
+    await p;
+    await warte(300);
+    const nachAbbruch = c.state;
+    // Abbruch genau während des Weckens: danach wieder Schlaf
+    const orig = c.resume;
+    c.resume = function () { a.stoppeAnsagen(); return orig.call(c); };
+    await a.ansageFertig();
+    delete c.resume;
+    await warte(2200);
+    return { vorher, nachAbbruch, nachWecken: c.state };
+  })()`);
+  soll('Ansage abgebrochen: Context schläft', JSON.stringify(ansage), JSON.stringify({ vorher: 'suspended', nachAbbruch: 'suspended', nachWecken: 'suspended' }));
+
+  // .zwo-Import: Prozent statt Bruchteil abgewiesen, Kadenz an jedem Blocktyp
+  const zwo = await b.ev(`(async () => {
+    const { parseZwo } = await import('./js/zwo.js');
+    const datei = inhalt => '<workout_file><name>T</name><workout>' + inhalt + '</workout></workout_file>';
+    const meldung = inhalt => { try { parseZwo(datei(inhalt)); return null; } catch (e) { return e.message; } };
+    const k = parseZwo(datei('<Warmup Duration="120" PowerLow="0.4" PowerHigh="0.6" Cadence="90"/>'
+      + '<Cooldown Duration="120" PowerLow="0.6" PowerHigh="0.4" CadenceLow="70" CadenceHigh="80"/>'
+      + '<Ramp Duration="120" PowerLow="0.5" PowerHigh="0.9" Cadence="85"/>'
+      + '<FreeRide Duration="60" Cadence="95"/><FreeRide Duration="60"/>'
+      + '<SteadyState Duration="60" Power="0.7"/>'));
+    return {
+      prozent: meldung('<SteadyState Duration="60" Power="75"/>'),
+      negativ: meldung('<SteadyState Duration="60" Power="-0.5"/>'),
+      intervall: meldung('<IntervalsT Repeat="2" OnDuration="30" OffDuration="30" OnPower="120" OffPower="0.5"/>'),
+      rampe: meldung('<Warmup Duration="120" PowerLow="50" PowerHigh="75"/>'),
+      lang: meldung('<SteadyState Duration="90000" Power="0.5"/>'),
+      grenze: meldung('<SteadyState Duration="60" Power="5"/>'),
+      kadenz: k.bloecke.map(b => b.rpm ? b.rpm.low + '-' + b.rpm.high : '').join(),
+    };
+  })()`);
+  soll('.zwo: Power="75" abgewiesen', zwo.prozent, t => /7500 % FTP ist unplausibel/.test(t ?? ''));
+  soll('.zwo: negative Leistung abgewiesen', zwo.negativ, t => /unplausibel/.test(t ?? ''));
+  soll('.zwo: auch in Intervallen und Rampen', [zwo.intervall, zwo.rampe].every(t => /unplausibel/.test(t ?? '')), true);
+  soll('.zwo: mehr als 24 h abgewiesen', zwo.lang, t => /24 h/.test(t ?? ''));
+  soll('.zwo: 500 % FTP ist noch erlaubt (Grenze wie in der Sicherung)', zwo.grenze, null);
+  soll('.zwo: Kadenz bei Warmup, Cooldown, Ramp, FreeRide', zwo.kadenz, '85-95,85-95,70-80,70-80,80-90,80-90,90-100,,');
+
+  // TCX: Zeit aus dem Sample-Index, das int16-Sekundenfeld läuft nach 9,1 h über
+  const tcx = await b.ev(`import('./js/export.js').then(({ toTCX }) => {
+    const n = 33000, s = new Int16Array(n * 6);
+    for (let k = 0; k < n; k++) s[k * 6] = k;
+    const start = Date.UTC(2026, 0, 1, 8);
+    const z = [...toTCX({ start }, s, n).matchAll(/<Time>([^<]+)<\\/Time>/g)].map(m => Date.parse(m[1]));
+    return { anzahl: z.length, stetig: z.every((t, i) => !i || t - z[i - 1] === 1000), letzte: (z.at(-1) - start) / 1000 };
+  })`);
+  soll('TCX nach 9,1 h: Zeit läuft weiter', JSON.stringify(tcx), JSON.stringify({ anzahl: 33000, stetig: true, letzte: 32999 }));
+
+  // Geräte: verwaister Reconnect, wackliger Trainer, gewähltes Gerät ohne Dienst
+  const geraet = await b.ev(`(async () => {
+    const { FTMS } = await import('./js/ble/ftms.js'), { geraeteManager: g } = await import('./js/ble/geraete.js');
+    const warte = ms => new Promise(r => setTimeout(r, ms));
+    const trainer = (id, mitDienst = true) => {
+      const log = { writes: [], trennt: 0 };
+      const cp = Object.assign(new EventTarget(), { startNotifications: async () => {},
+        writeValueWithResponse: async bytes => {
+          log.writes.push(bytes[0]);
+          cp.value = new DataView(new Uint8Array([0x80, bytes[0], 1]).buffer);
+          cp.dispatchEvent(new Event('characteristicvaluechanged'));
+        } });
+      const bike = Object.assign(new EventTarget(), { startNotifications: async () => {} });
+      const feature = { readValue: async () => new DataView(new Uint8Array([0, 0, 0, 0, 8, 0, 0, 0]).buffer) };
+      const svc = { getCharacteristic: async c => c === 0x2ad2 ? bike : c === 0x2acc ? feature : cp };
+      const server = { getPrimaryService: async d => {
+        if (d === 0x1826 && mitDienst) return svc;
+        throw new DOMException('kein Dienst', 'NotFoundError');
+      } };
+      const device = Object.assign(new EventTarget(), { id, name: 'KICKR Test', gatt: {
+        connected: false,
+        connect: async () => { device.gatt.connected = true; return server; },
+        disconnect: () => { log.trennt++; device.gatt.connected = false; },
+      } });
+      return { device, log, server };
+    };
+    const out = {};
+    const blue = navigator.bluetooth;
+
+    // Reconnect hängt, Fahrt endet, Trainer wacht danach auf
+    {
+      const { device, log, server } = trainer('t1');
+      blue.requestDevice = async () => device;
+      await g.koppel('trainer');
+      g.starteSession();
+      let aufwachen;
+      device.gatt.connect = () => new Promise(r => { aufwachen = () => { device.gatt.connected = true; r(server); }; });
+      device.gatt.connected = false;
+      device.dispatchEvent(new Event('gattserverdisconnected'));
+      await warte(1200);
+      out.reconnectLief = !!aufwachen;
+      const ftms = g.clients('trainer').length;
+      g.beendeSession();
+      out.abgebrochen = log.trennt;
+      const vorher = log.writes.length;
+      aufwachen();
+      await warte(100);
+      out.waisen = { writes: log.writes.length - vorher, link: device.gatt.connected, ftms, pool: g.clients('trainer').length };
+      await g.vergiss('trainer');
+    }
+
+    // Bricht bei jedem Versuch im Aufbau ab: die Versuche zählen weiter
+    {
+      const { device } = trainer('t2');
+      const c = new FTMS();
+      c.autoReconnect = true;
+      await c.connect(device);
+      const versuche = [];
+      c.addEventListener('reconnectfehler', e => versuche.push(e.detail.versuch));
+      device.gatt.connect = async () => { device.dispatchEvent(new Event('gattserverdisconnected')); throw new Error('abgerissen'); };
+      device.gatt.connected = false;
+      device.dispatchEvent(new Event('gattserverdisconnected'));
+      await warte(3400);
+      c.disconnect();
+      out.versuche = versuche.join();
+    }
+
+    // Gewähltes Gerät ohne Dienst: eigene Meldung, kein „abgebrochen", Link zu
+    {
+      const { device, log } = trainer('t3', false);
+      blue.requestDevice = async () => device;
+      out.ohneDienst = await g.verbindeOderKoppel('trainer').then(r => r.ergebnis, e => e.message);
+      out.ohneDienstLink = [device.gatt.connected, log.trennt > 0].join();
+      blue.requestDevice = async () => { throw new DOMException('abgebrochen', 'NotFoundError'); };
+      out.chooserAbbruch = await g.verbindeOderKoppel('trainer').then(r => r.ergebnis, e => e.message);
+    }
+    return out;
+  })()`);
+  soll('Reconnect am Fahrtende abgebrochen', [geraet.reconnectLief, geraet.abgebrochen >= 1].join(), 'true,true');
+  soll('… zu spät aufgewachter Trainer: keine FTMS-Kontrolle, Link wieder zu', JSON.stringify(geraet.waisen), JSON.stringify({ writes: 0, link: false, ftms: 0, pool: 0 }));
+  soll('Wackliger Trainer: Versuche zählen weiter', geraet.versuche, '1,2');
+  soll('Gerät ohne Dienst: eigene Meldung statt „abgebrochen"', geraet.ohneDienst, t => /passt nicht/.test(t));
+  soll('… und kein offener Link', geraet.ohneDienstLink, 'false,true');
+  soll('Chooser abgebrochen bleibt „abgebrochen"', geraet.chooserAbbruch, 'abgebrochen');
+
+  // Lern-Modus: verbundener Lenker braucht keinen Chooser
+  await b.ev(`(async () => {
+    const { geraeteManager: g } = await import('./js/ble/geraete.js');
+    const lenker = new EventTarget();
+    g.clients = r => r === 'controller' ? [lenker] : [];
+    g.autorisiert = async () => [];
+    window.__chooser = 0;
+    g.verbindeOderKoppel = async () => { __chooser++; return { ergebnis: 'abgebrochen', grund: null }; };
+  })()`);
+  await b.klick('#btn-settings', 700);
+  await b.klick('#btn-map-lernen', 700);
+  soll('Lern-Modus mit verbundenem Lenker: kein Chooser, bleibt offen', [await b.ev('__chooser'), await offen(b, 'dlg-mapping')].join(), '0,true');
+  soll('… und ist bereit', await b.ev(`document.querySelector('#map-status').textContent`), t => t.startsWith('Verbunden'));
+  await b.klick('#btn-map-abbruch', 500);
+  await b.ev(`document.querySelector('#dlg-settings').close()`);
+
+  // Import scheitert: Meldung steht bis zur Bestätigung und im Diagnose-Log,
+  // erst danach lädt die Seite neu
+  await b.geh(srv.url, 1500);
+  await b.klick('#btn-settings', 700);
+  await b.ev(`(() => {
+    window.confirm = () => true;
+    window.alert = m => { localStorage.setItem('test-alert', m); window.__bestaetigt = performance.now(); };
+    const dt = new DataTransfer();
+    dt.items.add(new File(['{kaputt'], 'sicherung.json', { type: 'application/json' }));
+    const i = document.querySelector('#backup-file');
+    i.files = dt.files;
+    i.dispatchEvent(new Event('change'));
+  })()`);
+  await sleep(4000);
+  soll('Import-Fehler: bestätigt und danach neu geladen', [await b.ev(`localStorage.getItem('test-alert')`), await b.ev('window.__bestaetigt ?? null')].join('|'), t => t.startsWith('Import fehlgeschlagen:') && t.endsWith('|'));
+  soll('… steht im Diagnose-Log', await b.ev(`import('./js/storage.js').then(m => m.getLogs()).then(l => l.some(e => e.tag === 'sicherung' && e.msg === 'Import fehlgeschlagen'))`), true);
+  await b.ev(`localStorage.removeItem('test-alert')`);
+
+  // Kadenz-Dämpfung zählt Sekunden: schnelle ±-Taps zählen nicht, 5 s daneben schon
+  // Freie Demo-Fahrt, 160 W bei FTP 200: Bereich 85–95 rpm (unter 60 % FTP gäbe es keinen)
+  await b.ev(`import('./js/storage.js').then(m => m.setSetting('ftp', 200))`);
+  await b.geh(srv.url + '?demo', 2500);
+  await b.ev(`(() => { const f = __ftms, o = f.dispatchEvent.bind(f);
+    f.dispatchEvent = e => { if (e.type === 'data') e.detail.rpm = 30; return o(e); };
+    window.__normal = () => { delete f.dispatchEvent; };
+    f.dispatchEvent(new CustomEvent('data', { detail: { rpm: 30 } })); })()`);
+  const bereich = () => b.ev(`document.querySelector('#m-rpm').dataset.bereich ?? ''`);
+  await b.ev(`(() => { for (const key of ['ArrowUp', 'ArrowDown', 'ArrowUp', 'ArrowDown', 'ArrowUp', 'ArrowDown', 'ArrowUp', 'ArrowDown'])
+    dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); })()`);
+  soll('Kadenz: Bereich wird angezeigt', await b.ev(`document.querySelector('#m-rpm-range').hidden`), false);
+  soll('Kadenz: 8 schnelle Taps sind keine 5 s', await bereich(), '');
+  await sleep(6500);
+  soll('Kadenz: nach 5 s daneben', await bereich(), 'daneben');
+  await b.ev('__normal()');
+  await sleep(2200);
+  soll('Kadenz: wieder im Bereich', await bereich(), 'drin');
+
   // Zweiter Durchlauf ohne Beispieldaten: „Heute fahren ›" ist frei → Startdialog, Abbrechen nimmt zurück
   const b2 = await browser({ breite: 412, hoehe: 900 });
   try {
@@ -659,13 +1044,13 @@ try {
     }
   } finally {
     abweichungen.push(...b2.fehler.map(f => 'JS-Fehler (2): ' + f));
-    b2.schliesse();
+    await b2.schliesse();
   }
 } catch (e) {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {
   abweichungen.push(...b.fehler.map(f => 'JS-Fehler: ' + f));
-  b.schliesse();
+  await b.schliesse();
   srv.schliesse();
 }
 

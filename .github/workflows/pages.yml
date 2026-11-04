@@ -20,6 +20,7 @@ concurrency:
 jobs:
   pruefen-und-bauen:
     runs-on: ubuntu-26.04
+    timeout-minutes: 20      # Tests haben eigene Fristen; das ist die Notbremse
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

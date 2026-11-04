@@ -7,7 +7,7 @@ absichern:
 |---|---|---|
 | Tokens | `css/tokens.css` | einzige Quelle für Farben, Schrift, Radien, Abstände, Schatten, Tippflächen |
 | Style Guide | `docs/stil.html` ([online](https://grenzenloseschublade.github.io/ergoMergo/docs/stil.html)) | zeigt alle Tokens und Bausteine mit den echten Stilen — kann nicht veralten |
-| Prüfung | `tools/stil-check.mjs` (läuft in `release.mjs`) | meldet feste Werte außerhalb von `tokens.css` mit Datei und Zeile |
+| Prüfung | `tools/stil-check.mjs` (läuft in `release.mjs`) | meldet feste Werte außerhalb von `tokens.css` mit Datei und Zeile; begründete Ausnahmen stehen dort in `AUSNAHMEN` |
 | Vergleich | `test/` | Screenshots und Layout-Messungen vor jeder Abnahme |
 
 Diese Datei hält fest, **warum** es so ist und wie neue Teile gebaut werden.

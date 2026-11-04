@@ -8,6 +8,8 @@
 import { effektiveFtp } from './metrics.js';
 
 const RAMPEN_STUFEN = 6;
+export const PCT_MAX = 5;       // 500 % FTP — darüber ist es ein Fehler (Prozent statt Bruchteil), auch in Sicherungen (backup.js)
+const DAUER_MAX_S = 24 * 3600;
 
 export function parseZwo(xmlText) {
   const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
@@ -30,12 +32,13 @@ export function parseZwo(xmlText) {
     const c = num(el, attr, 0);
     return c ? { low: c - 5, high: c + 5 } : undefined;
   };
-  const rampe = (dauer, von, bis) => {
+  const rampe = (dauer, von, bis, rpm) => {
     const stufen = Math.min(RAMPEN_STUFEN, Math.max(2, Math.round(dauer / 60)));
     for (let i = 0; i < stufen; i++) {
       bloecke.push({
         dauer: dauer / stufen,
         pct: von + (bis - von) * (stufen === 1 ? 0 : i / (stufen - 1)),
+        rpm,
       });
     }
   };
@@ -46,7 +49,7 @@ export function parseZwo(xmlText) {
       case 'Warmup':
       case 'Cooldown':
       case 'Ramp':
-        rampe(dauer, num(el, 'PowerLow', 0.5), num(el, 'PowerHigh', 0.75));
+        rampe(dauer, num(el, 'PowerLow', 0.5), num(el, 'PowerHigh', 0.75), rpmVon(el));
         break;
       case 'SteadyState':
         bloecke.push({ dauer, pct: num(el, 'Power', 0.6), rpm: rpmVon(el) });
@@ -62,7 +65,7 @@ export function parseZwo(xmlText) {
         break;
       }
       case 'FreeRide':
-        bloecke.push({ dauer, pct: 0.6 });     // freie Fahrt: neutrale Z2-Vorgabe
+        bloecke.push({ dauer, pct: 0.6, rpm: rpmVon(el) });     // freie Fahrt: neutrale Z2-Vorgabe
         break;
       default:
         // Unbekannte Elemente mit Dauer (z. B. MaxEffort) nicht still
@@ -75,6 +78,11 @@ export function parseZwo(xmlText) {
   const gueltig = bloecke.filter(b => b.dauer >= 1);
   if (!gueltig.length) throw new Error('Workout enthält keine Blöcke');
   if (gueltig.length > 2000) throw new Error('Workout zu lang (mehr als 2000 Blöcke)');
+  if (gueltig.reduce((a, b) => a + b.dauer, 0) > DAUER_MAX_S) throw new Error('Workout zu lang (mehr als 24 h)');
+  // Dieselbe Grenze wie beim Wiederherstellen einer Sicherung. Power="75" statt
+  // "0.75" führe sonst ab dem ersten Block an der Watt-Obergrenze
+  const unsinn = gueltig.find(b => b.pct < 0 || b.pct > PCT_MAX);
+  if (unsinn) throw new Error(`Leistung ${Math.round(unsinn.pct * 100)} % FTP ist unplausibel — .zwo erwartet Bruchteile (0.75 = 75 %)`);
   return { name, bloecke: gueltig, uebersprungen };
 }
 

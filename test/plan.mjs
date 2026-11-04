@@ -62,9 +62,15 @@ for (let maske = 0; maske < 128; maske++) {
           const grenze = ziel === 'leistung' && tage.length >= 5 ? 3 : 2;
           if (hartInWoche > grenze) fehler.push(`${name} W${w + 1}: ${hartInWoche} harte Einheiten`);
           const woche = wocheAb(plan, tag(w * 7), ftp || 200);
-          // Test so spät wie möglich, aber ≥ 48 h vor der nächsten harten Einheit (prüft der Abstand oben)
           if (w % 4 === 3 && (ftp || w > 3) && !woche.some(t => t.einheit?.typ === 'T'))
             fehler.push(`${name} W${w + 1}: Erholungswoche ohne Rampentest`);
+          // Test auf dem spätesten Plantag, der ≥ 2 Tage vor der ersten harten Einheit der Folgewoche liegt
+          if (w % 4 === 3 && ftp && !einsteiger) {
+            const ersterHart = wocheAb(plan, tag((w + 1) * 7), ftp).findIndex(t => t.einheit && TYPEN[t.einheit.typ].art === 'hart');
+            const erwartet = tage.filter(t => ersterHart < 0 || 7 + ersterHart - t >= 2).at(-1) ?? tage.at(-1);
+            const ist = woche.findIndex(t => t.einheit?.typ === 'T');
+            if (ist !== erwartet) fehler.push(`${name} W${w + 1}: Rampentest am ${WOCHENTAGE[ist]} statt ${WOCHENTAGE[erwartet]}`);
+          }
           // Steigerung im Block (nicht nach einer Testwoche — die ist kurz)
           // (Einsteiger steigen nach dem Einrollen bewusst von der kurzen Stufe ein)
           if (vorigeMinuten && !vorwocheTest && !(einsteiger && w <= 3) && w % 4 !== 0 && w % 4 !== 3 && minuten > vorigeMinuten * 1.25 + 10)
@@ -221,6 +227,17 @@ for (const laenge of [4, 8, 12]) {
     if (tageP >= 14 && !naechste.slice(0, 7).some(e => e.typ === 'T')) fehler.push(`${name}: kein FTP-Test in der Einstiegswoche`);
     if (tageP >= 28 && !naechste.some(e => istHart(e) && e.typ !== 'T' && e.opts.intensitaet === 95)) fehler.push(`${name}: neuer Block nicht sanfter`);
   }
+  // Stufe 7–13 Tage an einem frühen Wochentag (Mo, Di): nach der lockeren ersten
+  // Einheit liegt noch eine harte in der Woche — sie muss bei 95 % bleiben
+  for (const tageP of [12, 13]) {
+    const heute = tag(9 + tageP);
+    const { plan: neu, text } = wiedereinstieg(pausiert, tagIso(tag(9)), heute);
+    const woche = planWoche(neu, heute);
+    const harte = [...Array(7 - wochentag(heute)).keys()].map(i => einheitAm(neu, tag(9 + tageP + i), 220))
+      .filter(e => e && e.woche === woche && istHart(e) && e.typ !== 'T');
+    if (!harte.length) fehler.push(`Wiedereinstieg nach ${tageP} Tagen (${text}): keine harte Einheit in der Woche`);
+    if (harte.some(e => e.opts.intensitaet !== 95)) fehler.push(`Wiedereinstieg nach ${tageP} Tagen (${text}): harte Einheit nicht bei 95 %`);
+  }
 }
 
 // Bilanz zählt über Pausen hinweg (Fahrten vor dem Wiedereinstieg bleiben drin)
@@ -241,6 +258,11 @@ for (const laenge of [4, 8, 12]) {
   const s = dauer => ({ planRef: e.ref, start: tag(8).getTime() + 18 * 36e5, dauer, programmId: e.programmId });
   if (erledigtDurch(e, [s(120)])) fehler.push('Abbruch nach 2 min gilt als erledigt');
   if (!erledigtDurch(e, [s(2700)])) fehler.push('Planfahrt 45 min nicht erledigt');
+  // Freie Fahrt am Plantag: ab genau 15 min erledigt sie die Einheit
+  const frei = dauer => ({ start: tag(8).getTime() + 18 * 36e5, dauer });
+  const statusBei = dauer => wocheWirksam(plan, tag(7), [frei(dauer)], tag(9), 220)[1].status;
+  if (!erledigtDurch(e, [frei(900)]) || statusBei(900) !== 'erledigt') fehler.push(`Freie Fahrt 15 min nicht erledigt: ${statusBei(900)}`);
+  if (erledigtDurch(e, [frei(899)]) || statusBei(899) !== 'verpasst') fehler.push(`Freie Fahrt unter 15 min gilt als erledigt: ${statusBei(899)}`);
   if (!zaehltFuerPlan({ dauer: 500, programmId: 'rampentest' }) || zaehltFuerPlan({ dauer: 400, programmId: 'rampentest' }) || zaehltFuerPlan({ dauer: 500, programmId: 'vo2max' }))
     fehler.push('Schwelle für den FTP-Test falsch');
   const text = planBeschreibung(planInfo(plan, e));

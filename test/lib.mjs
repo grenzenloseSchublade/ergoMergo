@@ -81,26 +81,78 @@ async function starteChrome(bewegung) {
   throw new Error(`Chrome startet nicht (CHROME setzen?) — ${letzterFehler.message}`);
 }
 
+// Noch laufende Chromes: beim Prozessende nie Prozess oder Profil zurücklassen,
+// auch wenn ein Test direkt process.exit() ruft oder abgebrochen wird
+const laufend = new Set();                     // { proc, profil }
+const profilLoeschen = profil => { try { rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* tmp räumt das System */ } };
+process.on('exit', () => {
+  for (const { proc, profil } of laufend) { proc.kill('SIGKILL'); profilLoeschen(profil); }
+});
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => process.exit(130));
+
+// Chrome beenden und auf das Ende warten; erst dann das Profil löschen (sonst
+// schreibt es noch hinein). Reagiert es nicht, hilft SIGKILL
+function beendeChrome(eintrag) {
+  const { proc, profil } = eintrag;
+  return new Promise(ok => {
+    const fertig = () => { clearTimeout(t); profilLoeschen(profil); laufend.delete(eintrag); ok(); };
+    const t = setTimeout(() => proc.kill('SIGKILL'), 3000);
+    if (proc.exitCode !== null || proc.signalCode !== null) return fertig();
+    proc.once('exit', fertig);
+    proc.kill();
+  });
+}
+
+const CDP_FRIST_MS = 60000;                    // länger läuft kein einzelner Testschritt
+
 // Frisches Chrome-Profil, eine Seite, CDP-Helfer. breite/hoehe = Viewport.
 // swUmgehen: false lässt den Service Worker arbeiten (Netz-Mitschnitt inkl. SW)
-export async function browser({ breite = 412, hoehe = 915, dpr = 1, bewegung = true, swUmgehen = true } = {}) {
-  const { proc, profil, wsUrl } = await starteChrome(bewegung);
+export async function browser(optionen = {}) {
+  const chrome = await starteChrome(optionen.bewegung ?? true);
+  const eintrag = { proc: chrome.proc, profil: chrome.profil };
+  laufend.add(eintrag);
+  try {
+    return await seiteAufbauen(chrome, eintrag, optionen);
+  } catch (e) {
+    await beendeChrome(eintrag);
+    throw new Error(`Chrome-Aufbau gescheitert: ${e.message}`);
+  }
+}
+
+async function seiteAufbauen({ wsUrl }, eintrag, { breite = 412, hoehe = 915, dpr = 1, swUmgehen = true, cdpFrist = CDP_FRIST_MS }) {
   const port = new URL(wsUrl).port;
-  const seite = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page');
+  const seiten = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(10000) })).json();
+  const seite = seiten.find(t => t.type === 'page');
+  if (!seite) throw new Error('Chrome meldet keine Seite');
   const ws = new WebSocket(seite.webSocketDebuggerUrl);
-  await new Promise(r => ws.onopen = r);
+  await new Promise((ok, fehl) => {
+    const t = setTimeout(() => fehl(new Error('DevTools-Verbindung: keine Antwort nach 30 s')), 30000);
+    ws.onopen = () => { clearTimeout(t); ok(); };
+    ws.onerror = () => { clearTimeout(t); fehl(new Error('DevTools-Verbindung gescheitert')); };
+  });
   let id = 0;
-  const offen = new Map();
+  const offen = new Map();                    // id → { ok, fehl }
   const fehler = [];
   const zuhoerer = new Set();                 // rohe CDP-Ereignisse (auch aus angehängten Sitzungen, z. B. SW)
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
-    offen.get(m.id)?.(m);
+    offen.get(m.id)?.ok(m);
     for (const f of zuhoerer) f(m);
     if (m.method === 'Runtime.exceptionThrown')
       fehler.push((m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 300));
   };
-  const cdp = (method, params = {}, sessionId) => new Promise(r => { const i = ++id; offen.set(i, r); ws.send(JSON.stringify({ id: i, method, params, ...(sessionId ? { sessionId } : {}) })); });
+  // Chrome tot: offene Aufrufe ablehnen, statt den Test ewig hängen zu lassen
+  ws.onclose = () => {
+    for (const { fehl } of [...offen.values()]) fehl(new Error('Verbindung zu Chrome geschlossen'));
+  };
+  const cdp = (method, params = {}, sessionId) => new Promise((ok, fehl) => {
+    if (ws.readyState !== WebSocket.OPEN) { fehl(new Error(`CDP ${method}: Verbindung zu Chrome geschlossen`)); return; }
+    const i = ++id;
+    const fertig = f => x => { clearTimeout(t); offen.delete(i); f(x); };
+    const t = setTimeout(() => { offen.delete(i); fehl(new Error(`CDP ${method}: keine Antwort nach ${cdpFrist / 1000} s`)); }, cdpFrist);
+    offen.set(i, { ok: fertig(ok), fehl: fertig(fehl) });
+    ws.send(JSON.stringify({ id: i, method, params, ...(sessionId ? { sessionId } : {}) }));
+  });
   const ev = async expr => {
     const m = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
     if (m.result?.exceptionDetails) fehler.push('Auswertung: ' + JSON.stringify(m.result.exceptionDetails).slice(0, 300));
@@ -127,17 +179,13 @@ export async function browser({ breite = 412, hoehe = 915, dpr = 1, bewegung = t
     const orig = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (typ, ...r) { if (typ === 'reconnectfehler') window.__ftms = this; return orig.call(this, typ, ...r); };` });
   return {
-    cdp, ev, fehler, groesse,
+    cdp, ev, fehler, groesse, proc: eintrag.proc, profil: eintrag.profil,
     hoere: f => { zuhoerer.add(f); return () => zuhoerer.delete(f); },
     geh: async (url, ms = 2500) => { await cdp('Page.navigate', { url }); await sleep(ms); },
     klick: async (sel, ms = 450) => { await ev(`document.querySelector(${JSON.stringify(sel)}).click()`); await sleep(ms); },
     bild: async () => Buffer.from((await cdp('Page.captureScreenshot', { format: 'png' })).result.data, 'base64'),
-    // Profil erst löschen, wenn Chrome beendet ist (sonst schreibt es noch hinein)
-    schliesse: () => {
-      ws.close();
-      proc.once('exit', () => { try { rmSync(profil, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* tmp räumt das System */ } });
-      proc.kill();
-    },
+    // Promise: fertig, wenn Chrome beendet und das Profil gelöscht ist
+    schliesse: () => { ws.close(); return beendeChrome(eintrag); },
   };
 }
 

@@ -101,7 +101,7 @@ export class RideScreen {
   #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
   #wartenderHinweis = null;   // leiser Hinweis hinter einer laufenden Fehlermeldung
   #abmelden = null;           // Resize-Beobachtung des Charts
-  #rpmAbweichSeit = 0;
+  #rpmAbweichSeit = null;     // Fahrzeit (s), seit die Kadenz außerhalb des Bereichs liegt
   #rpmLage = '';              // 'drin' | 'daneben' | '' — Fahrbildschirm und Bild-in-Bild
   #rpmPfeil = 0;              // daneben: +1 schneller treten, −1 langsamer (nur Bild-in-Bild)
   #pulsUeber = false;         // Puls über der Pulsgrenze (mit Hysterese) — Fahrbildschirm und Bild-in-Bild
@@ -884,13 +884,13 @@ export class RideScreen {
     el.textContent = rpm || '–';
     const range = rpm ? this.#rpmBereich(ftp) : null;
     rangeEl.hidden = !range;
-    if (!range) this.#rpmAbweichSeit = 0;
+    if (!range) this.#rpmAbweichSeit = null;
     else {
       rangeEl.textContent = range.high >= 140 ? `${range.low}+` : `${range.low}–${range.high}`;
       const drin = rpm >= range.low && rpm <= range.high;
-      this.#rpmAbweichSeit = drin ? 0 : this.#rpmAbweichSeit + 1;
+      this.#rpmAbweichSeit = drin ? null : this.#rpmAbweichSeit ?? s.elapsed;
     }
-    this.#rpmLage = !range ? '' : this.#rpmAbweichSeit === 0 ? 'drin' : this.#rpmAbweichSeit >= 5 ? 'daneben' : '';
+    this.#rpmLage = !range ? '' : this.#rpmAbweichSeit === null ? 'drin' : s.elapsed - this.#rpmAbweichSeit >= 5 ? 'daneben' : '';
     this.#rpmPfeil = this.#rpmLage === 'daneben' ? (rpm < range.low ? 1 : -1) : 0;
     if (this.#rpmLage) el.dataset.bereich = this.#rpmLage;
     else delete el.dataset.bereich;

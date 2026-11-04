@@ -20,7 +20,7 @@ import { GL_ROLLEN, GL_ICONS, koppelMitRueckmeldung, geraeteHinweis } from './ge
 import { oeffneModal } from '../navigation.js';
 import { toast, toastOk, toastErr } from './toast.js';
 import { download } from '../export.js';
-import { formatLog } from '../logger.js';
+import { formatLog, logError, flushJetzt } from '../logger.js';
 import { exportiereAlles, importiereAlles } from '../backup.js';
 import { initAudio, tick } from '../signals.js';
 
@@ -30,6 +30,16 @@ async function sicherungSpeichern() {
   download(`ergomergo-backup-${dateiStempel()}.json`,
     await exportiereAlles(), 'application/json');
   toastOk('Sicherung heruntergeladen');
+}
+
+// Fehler vor einem Neuladen: als Toast wäre die Meldung (auch welche Fahrten
+// ungültig sind) nach gut einer Sekunde weg. Der Text steht im Diagnose-Log
+// und bleibt stehen, bis er bestätigt ist
+async function fehlerBestaetigen(titel, err) {
+  logError('sicherung', titel, err.message);
+  // Mit Frist: hängt die Datenbank (Löschen blockiert), wartet das Schreiben sonst ewig
+  await Promise.race([flushJetzt(), new Promise(r => setTimeout(r, 500))]);
+  alert(`${titel}: ${err.message}`);
 }
 
 // „Deine Daten": was die App mit den Daten macht und ob der Browser sie
@@ -154,7 +164,7 @@ export async function openSettings({ nachSpeichern } = {}) {
       await alleDatenLoeschen();
       toastOk('Alle Daten gelöscht — lade neu …');
     } catch (err) {
-      toastErr('Löschen fehlgeschlagen: ' + err.message);
+      await fehlerBestaetigen('Löschen fehlgeschlagen', err);
     }
     setTimeout(() => location.replace(location.pathname), 1200);
   };
@@ -171,7 +181,7 @@ export async function openSettings({ nachSpeichern } = {}) {
       const n = await importiereAlles(await file.text());
       toastOk(`Wiederhergestellt: ${n} Fahrten — lade neu …`);
     } catch (err) {
-      toastErr('Import fehlgeschlagen: ' + err.message);
+      await fehlerBestaetigen('Import fehlgeschlagen', err);
     }
     // Auch nach Teilimport neu laden: die App zeigt sonst einen Mischzustand
     setTimeout(() => location.reload(), 1500);
@@ -309,8 +319,10 @@ async function lerneTasten(zeigeMap) {
   zeigeKarte();
   try {
     // Dieselbe Entscheidung wie überall: verbinden oder — ohne Berechtigung —
-    // Geräteauswahl (Tap auf „Tasten zuordnen" ist die frische Geste)
-    const r = await geraeteManager.verbindeOderKoppel('controller');
+    // Geräteauswahl (Tap auf „Tasten zuordnen" ist die frische Geste). Steht
+    // der Lenker schon und gibt es nichts ohne Chooser nachzuverbinden, reicht das
+    const genuegt = geraeteManager.clients('controller').length && !(await geraeteManager.autorisiert('controller')).length;
+    const r = genuegt ? { ergebnis: 'verbunden', grund: null } : await geraeteManager.verbindeOderKoppel('controller');
     if (fertig) return;                          // Abbruch — Pool behält die Verbindung
     if (r.ergebnis === 'abgebrochen') { ende(); return; }
     if (!geraeteManager.clients('controller').length) {

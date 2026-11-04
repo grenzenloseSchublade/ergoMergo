@@ -119,7 +119,7 @@ export class ProgramRun extends EventTarget {
     // die Programmuhr steht währenddessen bei `frozen`
     this.pauseLog = [];
     this.index = -1;
-    session.addEventListener('tick', () => this.#tick());
+    session.addEventListener('sekunde', () => this.#tick());
     this.#tick();
   }
 
@@ -162,6 +162,8 @@ export class ProgramRun extends EventTarget {
     this.#tick();
   }
 
+  #gemeldet = -1;     // zuletzt per 'block' gemeldeter Block (der Stopp-Zweig setzt index still)
+
   // Programm durchlaufen, ab jetzt wird ausgefahren
   get vorbei() { return this.index === -2; }
 
@@ -197,6 +199,7 @@ export class ProgramRun extends EventTarget {
   // Block selbst über maxWatt (hohe FTP, Rampentest), ist die Grenze negativ —
   // sie darf den Offset nie senken, sonst führe der Rest des Programms zu tief.
   adjust(delta, { anwenden = true } = {}) {
+    this.session.holeAuf();
     let neu = this.offset + delta;
     const b = this.aktuellerBlock;
     if (b) neu = Math.min(Math.max(neu, -b.watt),
@@ -208,6 +211,7 @@ export class ProgramRun extends EventTarget {
   // Aktuellen Block überspringen (Programmuhr ans Blockende springen).
   // Liefert, ob etwas passiert ist (für die Rückmeldung in der UI).
   skip() {
+    this.session.holeAuf();
     if (this.index < 0 || !this.restImBlock) return false;
     this.#schliessePause();
     this.#setzeZeitOffset(this.zeitOffset + this.restImBlock);
@@ -217,6 +221,7 @@ export class ProgramRun extends EventTarget {
   // Player-Logik: erst an den Blockanfang, kurz nach Blockanfang (<3 s
   // gefahren) zum vorherigen Block. Liefert 'anfang' | 'vorheriger' | null.
   zurueck() {
+    this.session.holeAuf();
     this.#schliessePause();
     const t = Math.max(0, this.session.elapsed + this.zeitOffset);
     const cur = this.blockAt(t);
@@ -236,6 +241,7 @@ export class ProgramRun extends EventTarget {
   // (Blockdauer wächst), statt die Programmuhr zurückzuspulen — der Graph
   // läuft vorwärts weiter, nichts wird doppelt durchlaufen oder gezeichnet.
   verlaengern(sek) {
+    this.session.holeAuf();
     const b = this.aktuellerBlock;             // nach Programmende nichts anhängen
     if (!b) return false;
     b.dauer += sek;
@@ -302,23 +308,31 @@ export class ProgramRun extends EventTarget {
       }
       return;
     }
+    const erster = this.index === -1;
     if (cur.i !== this.index) {
       this.index = cur.i;
-      this.#apply();
-      this.dispatchEvent(new CustomEvent('block', { detail: { index: cur.i, watt: cur.block.watt } }));
+      this.#apply({ instant: erster });       // Start: gleich der erste Block, keine Rampe vom Startwert
     }
     this.restImBlock = cur.ende - t;
     this.restGesamt = this.total - t;
+    // Ton und Ansage: erst nach dem Aufholen und nur zum laufenden Block. Ein
+    // Wechsel im Not-Stopp (Skip, Zurück, Stopp in der letzten Sekunde) meldet
+    // sich nach WEITER — ohne #apply, die sanfte Rampe läuft da schon
+    if (this.session.holtAuf) return;
+    if (cur.i !== this.#gemeldet) {
+      this.#gemeldet = cur.i;
+      this.dispatchEvent(new CustomEvent('block', { detail: { index: cur.i, watt: cur.block.watt } }));
+    }
     if ((this.restImBlock === 2 || this.restImBlock === 1) && cur.i < this.blocks.length - 1)
       this.dispatchEvent(new Event('countdown'));
   }
 
-  #apply() {
+  #apply({ instant = false } = {}) {
     // Not-Stopp respektieren: ein Blockwechsel darf den Widerstand nicht
     // wieder einschalten — WEITER/± sind die einzige Rückkehr
     if (this.session.gestoppt) return;
     const b = this.aktuellerBlock;            // nach Programmende kein Blockziel mehr
-    if (b) this.session.setTarget(b.watt + this.offset);
+    if (b) this.session.setTarget(b.watt + this.offset, { instant });
   }
 }
 
