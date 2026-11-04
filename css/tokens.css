@@ -29,6 +29,7 @@
   /* Powerzonen (Zwift-Konvention, 6 Zonen) */
   --z1: #8a9aa0; --z2: #4a9bd8; --z3: #5fc98d;
   --z4: #e3c63f; --z5: #e8913f; --z6: #ef6b5e;
+  --glut-staerke: 22%;        /* Glut hinter den Fahrwerten (quer): Anteil der Zonenfarbe am Rand */
   /* Tastenfarben des Zwift-Lenkers (Symbole + Lenkeransicht) */
   --taste-gruen: #4cc76e; --taste-magenta: #e0489a; --taste-blau: #4a9bd8; --taste-orange: #f0892f;
   /* Graphen */
@@ -84,11 +85,13 @@
   /* --- Tippflächen und Symbole --- */
   --tippflaeche: 44px;        /* Minimum für alles Tippbare */
   --tippflaeche-zeile: 48px;  /* Zeilen in Panels und Dialogen */
+  --tippflaeche-breit: 56px;  /* Bild-in-Bild: häufig gebraucht, neben „⋯“ */
   --bedien-hoehe: 64px;       /* −10/+10/STOPP/Beenden */
   --icon-xs: 12px;
   --icon-s: 14px;
   --icon-m: 18px;
   --icon-l: 20px;
+  --icon-xl: 24px;
   --icon-pikto: 32px;         /* Griff-Piktogramm je Zone in der Lenkeransicht */
 
   /* --- Bewegung (bei „Bewegung reduzieren" global aus) --- */

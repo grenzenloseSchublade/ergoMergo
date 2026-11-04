@@ -185,8 +185,11 @@ dem Gerät.
 - **LED-Statuszeile:** Meldungen der Fahrt (Block übersprungen, Gerät getrennt,
   Not-Stopp …) laufen als Punktmatrix-Laufschrift durch eine feste Mulde statt
   als Toast — nichts springt, nichts verdeckt.
+- **Cockpit im Querformat:** Handy bis Tablet: riesige Wattzahl links, Graph in
+  der Mitte, Bedienleiste rechts über die volle Höhe; auf Wunsch leuchten die
+  Werte in der Zonenfarbe (Zonen-Glut, im ⋯-Menü und in den Einstellungen).
 - **Ruhiges Layout:** Feste Feldbreiten und ein festes Raster für die
-  Detailwerte (hochkant 2×2, quer 4 nebeneinander); in allen Ausrichtungen und
+  Detailwerte; in allen Ausrichtungen und
   Fokus-Modi geprüft, dass nichts springt und STOPP immer im Bild ist.
 - **Fahrten-Historie:** Eigener Screen mit Monaten und Wochensummen,
   Detail-Graph mit Herzfrequenz, Zielblöcken und Not-Stopp-Streifen.

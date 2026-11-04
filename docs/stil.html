@@ -257,14 +257,15 @@
     nicht modal und sitzt zwischen Kopfzeile und Bedienleiste (quer links daneben): STOPP bleibt frei.
     Zum Ansehen nur Griffzonen mit belegten Tasten. Eine Aktion kann mehrere Tasten haben: jede trägt ihre
     Marke, die Liste zeigt sie untereinander. Verschieden belegte Paddle-Richtungen stehen übereinander
-    (<code>.lk-stapel</code>, ← oben), die Marke außen. „Als Liste ›“ schaltet um — beide Ansichten liegen in
-    derselben Zelle (<code>.belegung-ansicht</code>), nichts verschiebt sich.</p>
+    (<code>.lk-stapel</code>, ← oben), die Marke außen. „Als Liste ›“ schaltet um — im Blatt liegen beide Ansichten in
+    derselben Zelle (<code>.belegung-ansicht.platz-halten</code>), nichts verschiebt sich; in den
+    Einstellungen (scrollt ohnehin) fällt die verdeckte weg.</p>
   <div class="spalte">
     <div class="belegung-kopf">
       <p class="gruppe-titel">Tastenbelegung</p>
       <button type="button" class="text-aktion belegung-umschalter" aria-controls="sg-ansicht">Als Liste ›</button>
     </div>
-    <div id="sg-ansicht" class="belegung-ansicht"><div></div><ul class="belegung"></ul></div>
+    <div id="sg-ansicht" class="belegung-ansicht platz-halten"><div></div><ul class="belegung"></ul></div>
     <p class="hint">Ändern: Einstellungen → Geräte → „Tasten zuordnen“</p>
   </div>
   <h3 class="gruppe-titel">Lern-Modus · Schritt im Ablauf</h3>

@@ -52,6 +52,7 @@ export class RideScreen {
     this.chart = run ? new WorkoutChart(this.$('#live-chart')) : new LiveChart(this.$('#live-chart'));
     this.tonAn = settings.tonAn !== false;
     this.ansagenAn = !!settings.sprachansagen;
+    this.glutAn = settings.glut !== false;
     initAnsagen(signal.audioCtx());
     this.#led = new LedZeile(this.$('#m-status'));
     this.#zuruecksetzen();
@@ -496,6 +497,7 @@ export class RideScreen {
       box.onchange = () => { set(box.checked); setSetting(key, box.checked); };
     };
     schalter('#opt-ton', 'tonAn', () => this.tonAn, v => { this.tonAn = v; });
+    schalter('#opt-glut', 'glut', () => this.glutAn, v => { this.glutAn = v; this.render(); });
     schalter('#opt-sprache', 'sprachansagen', () => this.ansagenAn, v => {
       this.ansagenAn = v;
       if (!v) { clearTimeout(this.#ansageTimer); stoppeAnsagen(); }   // aus heißt sofort still
@@ -827,6 +829,8 @@ export class RideScreen {
     el.textContent = watt;
     el.style.color = zoneColor(watt, ftp);
     this.$('#m-target').textContent = s.target;
+    // Glut (nur quer sichtbar): Zone des Ziels — ruhig, springt nicht mit der Leistung
+    this.$('.metrics').style.setProperty('--glut', this.glutAn ? zoneColor(s.target, ftp) : 'transparent');
     const zeit = this.#zeitAnzeige();
     this.$('#m-time-label').textContent = zeit.label;
     this.$('#m-time').textContent = zeit.wert;
@@ -850,8 +854,11 @@ export class RideScreen {
     this.#renderPuls(s);
     this.$('#m-kj').textContent = Math.round(s.kj);
     this.$('#m-km').textContent = fmtKm(s.km);
-    // Graph-Fokus = volle Detailstufe, sonst entscheidet die Chart-Höhe
-    const detail = this.$('.ride-grid').classList.contains('fokus-graph') || null;
+    // Graph-Fokus = volle Detailstufe, Werte-Fokus = nur Orientierung (quer ist
+    // der Graph dort hoch, aber schmal: Achsen und Marken stünden aufeinander),
+    // sonst entscheidet die Chart-Höhe
+    const raster = this.$('.ride-grid').classList;
+    const detail = raster.contains('fokus-graph') ? true : raster.contains('fokus-werte') ? false : null;
     if (this.run) this.chart.draw(this.run.blocks, this.run.total, s.samples, s.count, this.run.offset, ftp,
       t => this.run.programmZeit(t), Date.now() < this.#cursorBlinkBis, t => this.run.istPause(t), detail);
     else this.chart.draw(s.samples, s.count, s.target, ftp, detail);

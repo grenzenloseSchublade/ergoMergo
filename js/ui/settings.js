@@ -9,7 +9,7 @@ import { getSettings, setSetting, setSettings, getLogs, clearLogs, alleDatenLoes
 // Schema (EINSTELLUNGEN in storage.js)
 const ZAHLFELDER = { '#set-ftp': 'ftp', '#set-schritt': 'wattSchritt', '#set-max': 'maxWatt', '#set-start': 'startWatt',
   '#set-puls': 'pulsGrenze' };
-const SCHALTER = { '#set-sprache': 'sprachansagen', '#set-ton': 'tonAn', '#set-zwo': 'zwoImport',
+const SCHALTER = { '#set-sprache': 'sprachansagen', '#set-ton': 'tonAn', '#set-glut': 'glut', '#set-zwo': 'zwoImport',
   '#set-halten-tasten': 'haltenTasten', '#set-halten-paddles': 'haltenPaddles' };
 import { esc, dateiStempel } from '../format.js';
 import { geraeteManager, kannMerken, eintraegeVon } from '../ble/geraete.js';

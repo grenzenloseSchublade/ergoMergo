@@ -448,6 +448,10 @@ try {
     '{"plus":[26,25],"minus":[27,24],"skip":2,"prev":null,"stopp":5}');
   soll('Belegungsliste zeigt alle Tasten', await b.ev(`[...document.querySelectorAll('#ctrl-map-anzeige li')].map(li => [...li.querySelectorAll('small')].map(e => e.textContent).join('+')).join('|')`),
     'Paddle rechts außen+Paddle links außen|Paddle rechts innen+Paddle links innen|Pfeil rechts|B (magenta)');
+  // Einstellungen scrollen ohnehin: die verdeckte Liste hält dort keinen Platz
+  // (sonst stünde unter der Lenkeransicht ein Loch) — nur im Blatt der Fahrt
+  soll('Einstellungen: kein Platzhalter unter der Lenkeransicht', await b.ev(`(() => { const a = document.querySelector('#ctrl-map-ansicht');
+    return a.dataset.ansicht === 'karte' && Math.round(a.getBoundingClientRect().height) === Math.round(a.firstElementChild.getBoundingClientRect().height); })()`), true);
   // Die gelernte Belegung am Lenker: beide Paddles außen +, innen −; Block zurück unbelegt
   soll('Gelernte Belegung wirkt am Lenker', await ride(JSON.parse(await b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => JSON.stringify(s.controllerMap))`)),
     [[0, -80, 80], [0, 0, 80], [0, 80, 80], [0, 0, 80], [1, 80, 80], [1, -80, 80], [1, 0, 80], [0, 0, 80, [0]], [0, 0, 80]]), 'plus minus plus minus');
