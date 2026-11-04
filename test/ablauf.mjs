@@ -87,6 +87,15 @@ try {
   await b.ev(`document.querySelector('#set-ftp').value = 248; document.querySelector('#dlg-settings button.primary').click()`);
   await sleep(800);
   soll('Speichern übernimmt FTP 248', await ftp(), 248);
+  const gewicht = () => b.ev(`import('./js/storage.js').then(m => m.getSettings()).then(s => s.gewichtKg)`);
+  await b.klick('#btn-settings', 600);
+  soll('Gewichtsfeld zeigt Standard 75 kg', await b.ev(`document.querySelector('#set-gewicht').value`), '75');
+  await b.ev(`document.querySelector('#set-gewicht').value = 82.4; document.querySelector('#dlg-settings button.primary').click()`);
+  await sleep(800);
+  soll('Speichern übernimmt Fahrergewicht 82,4 kg', await gewicht(), 82.4);
+  await b.klick('#btn-settings', 600);
+  await b.ev(`document.querySelector('#set-gewicht').value = 75; document.querySelector('#dlg-settings button.primary').click()`);
+  await sleep(800);
   await b.klick('#btn-settings', 600);
   soll('returnValue beim Öffnen leer', await b.ev(`document.querySelector('#dlg-settings').returnValue`), '');
   await zurueck(600);

@@ -3,7 +3,7 @@
 // Screen-Wechsel und rideScreen-Registrierung kommen als Callbacks.
 
 import { getSettings, FIELDS } from './storage.js';
-import { distanzKm, fahrtStats, kadenzBereich } from './metrics.js';
+import { distanzKm, fahrtStats, kadenzBereich, geschwindigkeitKmh } from './metrics.js';
 import { initAudio, auftakt } from './signals.js';
 import { Session } from './state.js';
 import { WORKOUTS } from './workouts.js';
@@ -69,12 +69,12 @@ export async function startDemo(variante, { betreteFahrt }) {
     for (let k = 0; k < secs; k++) {
       const ziel = zielAt(k);
       const d = fahrer(ziel, k);
-      session.samples.set([k, d.watt, ziel, d.rpm, d.hr, Math.round(d.kmh * 10)], k * FIELDS);
+      session.samples.set([k, d.watt, ziel, d.rpm, d.hr, Math.round(geschwindigkeitKmh(d.watt, settings.gewichtKg) * 10)], k * FIELDS);
       session.kj += d.watt / 1000;
       Object.assign(session.live, d);
     }
     session.count = secs;
-    session.km = distanzKm(session.samples, secs);   // zentral aus den Samples, kein zweiter Rechenweg
+    session.km = distanzKm(session.samples, secs);   // zentral aus den Modell-Samples
   };
   // ?demo=<id> für jedes eingebaute Programm; ?demo=programm = 4×4 mit festen Watt
   const programm = variante === 'programm' ? PROGRAMME.find(x => x.id === 'intervalle44')
@@ -122,20 +122,20 @@ export async function startDemo(variante, { betreteFahrt }) {
 const zufallAus = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647 - 0.5;
 
 // gurtAb/gurtLuecke: Sekunden ohne HF (Gurt spät verbunden, Kontaktverlust)
-function demoFahrt({ id, start, programm, ziele, programmEndeBei = null, ftp, seed, gurtAb = 0, gurtLuecke = null }) {
+function demoFahrt({ id, start, programm, ziele, programmEndeBei = null, ftp, gewichtKg = 75, seed, gurtAb = 0, gurtLuecke = null }) {
   const fahrer = fahrermodell(ftp, zufallAus(seed));
   const count = ziele.length;
   const samples = new Int16Array(count * FIELDS);
   for (let k = 0; k < count; k++) {
     const d = fahrer(ziele[k], k);
     const mitGurt = k >= gurtAb && !(gurtLuecke && k > gurtLuecke[0] && k < gurtLuecke[1]);
-    samples.set([k, d.watt, ziele[k], d.rpm, mitGurt ? d.hr : 0, Math.round(d.kmh * 10)], k * FIELDS);
+    samples.set([k, d.watt, ziele[k], d.rpm, mitGurt ? d.hr : 0, Math.round(geschwindigkeitKmh(d.watt, gewichtKg) * 10)], k * FIELDS);
   }
   // Metadaten in derselben Form wie Session.save()
   const session = {
     id, start, programm: programm.name, programmId: programm.id ?? null, seed: null,
-    ftp: ftp || null, akkuProStunde: null,
-    programmEndeBei, final: true, ...fahrtStats(samples, count, programmEndeBei, ftp),
+    ftp: ftp || null, gewichtKg, distanzModell: 1, akkuProStunde: null,
+    programmEndeBei, final: true, ...fahrtStats(samples, count, programmEndeBei, ftp, gewichtKg),
   };
   return { session, data: { samples, count } };
 }
@@ -152,7 +152,7 @@ const optsFuer = (p, seed) => ({
 // ?demo=fahrt — Beispiel einer gespeicherten Fahrt: 4×4 Intervalle mit
 // Not-Stopp, Ausfahren nach Programmende, Gurt erst nach 90 s verbunden und
 // kurzer Kontaktverlust. Gestern 18:30.
-function beispielFahrtMit(ftp) {
+function beispielFahrtMit(ftp, gewichtKg = 75) {
   const p = PROGRAMME.find(x => x.id === 'intervalle44');
   const ziele = zieleAus(expand(p.bauen({ wdh: 4, hart: 210, locker: 90 })));
   const stoppBei = 8 * 60 + 2 * 7 * 60 + 4 * 60 + 60;   // in der 3. Erholung
@@ -163,22 +163,23 @@ function beispielFahrtMit(ftp) {
   start.setDate(start.getDate() - 1);
   start.setHours(18, 30, 0, 0);
   return demoFahrt({ id: 'demo-fahrt', start: start.getTime(), programm: p, ziele, programmEndeBei,
-    ftp, seed: 7, gurtAb: 90, gurtLuecke: [1700, 1725] });
+    ftp, gewichtKg, seed: 7, gurtAb: 90, gurtLuecke: [1700, 1725] });
 }
 
 export async function beispielFahrt() {
-  return beispielFahrtMit((await getSettings()).ftp);
+  const s = await getSettings();
+  return beispielFahrtMit(s.ftp, s.gewichtKg);
 }
 
 // ?demo=fahrten — Fahrten-Historie der letzten ~10 Wochen: die Beispielfahrt
 // als jüngste, davor ~3 Fahrten pro Woche aus den eingebauten Programmen,
 // eine Urlaubswoche, vereinzelt Probefahrten unter 2 min.
 export async function beispielHistorie() {
-  const { ftp } = await getSettings();
+  const { ftp, gewichtKg } = await getSettings();
   const rnd = zufallAus(42);
   const mix = [...WORKOUTS.filter(w => w.id !== 'sprint3030'),
     ...PROGRAMME.filter(p => ['intervalle44', 'pyramide', 'fartlek'].includes(p.id))];
-  const fahrten = [beispielFahrtMit(ftp)];
+  const fahrten = [beispielFahrtMit(ftp, gewichtKg)];
   for (let tage = 2; tage <= 70; tage++) {
     if (tage >= 22 && tage <= 29) continue;              // Urlaub
     const r = rnd() + 0.5;
@@ -190,14 +191,14 @@ export async function beispielHistorie() {
     const seed = 1000 + tage;
     if (r < 0.04) {                                      // Probefahrt/Fehlstart
       fahrten.push(demoFahrt({ id, start: start.getTime(), programm: { name: 'Freies Fahren' },
-        ziele: Array(80).fill(100), ftp, seed }));
+        ziele: Array(80).fill(100), ftp, gewichtKg, seed }));
       continue;
     }
     const p = mix[Math.floor((rnd() + 0.5) * mix.length)];
     const ziele = zieleAus(baueBlocks(p, optsFuer(p, seed), ftp));
     const programmEndeBei = ziele.length;
     ziele.push(...Array(60 + Math.round((rnd() + 0.5) * 120)).fill(ziele.at(-1)));
-    fahrten.push(demoFahrt({ id, start: start.getTime(), programm: p, ziele, programmEndeBei, ftp, seed,
+    fahrten.push(demoFahrt({ id, start: start.getTime(), programm: p, ziele, programmEndeBei, ftp, gewichtKg, seed,
       gurtAb: Math.round((rnd() + 0.5) * 60) }));
   }
   // Die letzten vier Wochen als Trainingsplan (8 Wochen) gefahren — damit die

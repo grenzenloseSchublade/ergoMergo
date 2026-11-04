@@ -47,6 +47,8 @@ export function bereinigeFahrt(s) {
   const f = { id: s.id.slice(0, 64), programm: text(s.programm) ?? 'Freies Fahren',
     programmId: text(s.programmId, 64) ?? null, final: s.final === true };
   for (const k of ZAHLEN) if (zahlOk(s[k])) f[k] = s[k]; else if (s[k] === null) f[k] = null;
+  if (zahlOk(s.gewichtKg)) f.gewichtKg = pruefeEinstellung('gewichtKg', s.gewichtKg);
+  if (s.distanzModell === 1) f.distanzModell = 1;
   if (Array.isArray(s.zonenSek) && s.zonenSek.length === 6 && s.zonenSek.every(zahlOk)) f.zonenSek = s.zonenSek;
   if (typeof s.planRef === 'string') f.planRef = s.planRef.slice(0, 32);
   if (s.plan && typeof s.plan === 'object') {

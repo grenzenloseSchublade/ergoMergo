@@ -162,7 +162,7 @@
         <span><i class="si" data-icon="rotate"></i><b id="m-rpm" class="rpm-wert">–</b> rpm <i id="m-rpm-range" class="rpm-range" hidden></i></span>
         <span><i class="si" data-icon="herzpuls"></i><b id="m-hr">–</b> bpm</span>
         <span><i class="si" data-icon="blitz"></i><b id="m-kj">0</b> kJ</span>
-        <span><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km</span>
+        <span title="Virtuelle Distanz aus Leistung geschätzt"><i class="si" data-icon="route"></i><b id="m-km">0,0</b> km*</span>
       </div>
       <!-- Statuszeile: eigene Zeile, mittig; Mulde bleibt immer stehen, Inhalt setzt der RideScreen -->
       <span id="m-status" class="led-tafel" aria-live="polite" role="status"></span>
@@ -374,6 +374,10 @@
     <h2>Einstellungen</h2>
     <div class="dlg-fields">
       <label>FTP (Watt, 0 = unbekannt)<input type="number" id="set-ftp" min="0" max="500" step="1"></label>
+      <div class="feld-hinweis">
+        <label>Fahrergewicht (kg)<input type="number" id="set-gewicht" min="30" max="200" step="0.1" aria-describedby="gewicht-hinweis"></label>
+        <p class="hint" id="gewicht-hinweis">Virtuelle Distanz: flach, windstill; geschätzt mit 10 kg Rad/Ausrüstung, Crr 0,004 und CdA 0,32 m².</p>
+      </div>
       <label>Wattschritt für ±<input type="number" id="set-schritt" min="1" max="50" step="1"></label>
       <label>Obergrenze (Watt)<input type="number" id="set-max" min="100" max="1000" step="1"></label>
       <label>Startleistung (Watt)<input type="number" id="set-start" min="20" max="300" step="1"></label>

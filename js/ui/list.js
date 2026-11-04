@@ -1,7 +1,7 @@
 // Fahrten-Listen: Startbildschirm (Wochendiagramm + letzte Fahrten) und
 // Screen „Fahrten" (Monate/Wochen). Die Detailansicht lebt in detail.js.
 
-import { listSessions, getSamples, saveSession } from '../storage.js';
+import { listSessions, getSamples, saveSession, getSettings } from '../storage.js';
 import { fmtTime, fmtKm, fmtDauer, esc } from '../format.js';
 import { fahrtStats } from '../metrics.js';
 import { planBeschreibung, montag, plusTage } from '../plan.js';
@@ -91,11 +91,14 @@ export const programmEndeVon = s => s.programmEndeBei ?? (s.ausgefahrenSek ? s.d
 // Zonen), aus den Rohsamples nachrechnen und persistieren — mit derselben
 // Rechnung wie beim Speichern (Programmfenster!). Liefert true, wenn etwas
 // ergänzt wurde.
-export async function ergaenzeKennwerte(session, data) {
-  if (session.np !== undefined && session.km !== undefined) return false;
+export async function ergaenzeKennwerte(session, data, gewichtKg = 75) {
+  if (session.np !== undefined && session.km !== undefined && session.distanzModell === 1) return false;
   data ??= await getSamples(session.id);
   if (!data) return false;
-  Object.assign(session, fahrtStats(data.samples, data.count, programmEndeVon(session), session.ftp ?? 0));
+  const gewicht = session.gewichtKg ?? gewichtKg;
+  Object.assign(session, fahrtStats(data.samples, data.count, programmEndeVon(session), session.ftp ?? 0, gewicht));
+  session.gewichtKg = gewicht;
+  session.distanzModell = 1;
   await saveSession(session);
   return true;
 }
@@ -119,7 +122,8 @@ function fahrtZeile(s, onOpen) {
 // haben, einmalig nachrechnen (sonst fehlen km und Zonenbalken)
 async function ladeFahrten() {
   const sessions = await listSessions();
-  for (const s of sessions) await ergaenzeKennwerte(s);
+  const { gewichtKg } = await getSettings();
+  for (const s of sessions) await ergaenzeKennwerte(s, undefined, gewichtKg);
   return sessions;
 }
 

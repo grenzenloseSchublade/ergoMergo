@@ -62,7 +62,7 @@ dem Gerät.
 | Fahrbildschirm | Live-Graph mit Programmprofil und Positionscursor, Blocksteuerung (überspringen/zurück/+30 s), Kadenz-Zielbereiche, Fokus-Modus (Tap auf Werte oder Graph kippt die Gewichtung), LED-Statuszeile, Gerätezustand oben links, Bild-in-Bild (Experiment) |
 | Ansagen & Töne | Countdown vor jedem Wechsel, unterscheidbare Signale für härter/leichter (Dur-Dreiklang rauf bzw. Töne abwärts), Sprachansagen aus vorgerenderten Audio-Bausteinen — funktionieren auch mit Bildschirm aus |
 | Geräte | Trainer, Herzfrequenz-Gurt, Zwift Click/Ride; Tasten frei belegbar per Lern-Modus; Schnellverbindung ohne Geräteauswahl (mit Chrome-Flag) |
-| Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
+| Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, virtuelle Distanz (Leistungsmodell, Fahrergewicht, flach und windstill), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
 ## Neu in 3.6
@@ -105,6 +105,11 @@ dem Gerät.
   nach automatischem Verschieben, die Karte wechselt um Mitternacht den Tag,
   verlängerte Pläne sperren den Dialog nicht mehr, ein gescheiterter Start nimmt
   „Heute fahren“ zurück.
+
+## Neu in 3.4.3
+
+- **Virtuelle Distanz aus Leistung:** Fahrergewicht einstellbar; flache,
+  windstille Modellstrecke mit Rennrad-Rollwiderstand und Luftwiderstand.
 
 ## Neu in 3.4.2
 

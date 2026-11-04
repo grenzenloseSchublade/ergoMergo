@@ -1,6 +1,6 @@
 // Trainingskennwerte aus den Rohsamples (Int16 n×6: s, watt, ziel, rpm, hf, kmh×10).
 // Alles nachträglich aus sessionData ableitbar — alte Sessions lassen sich
-// damit in der Detailansicht nachberechnen (inkl. Distanz aus der Trainer-Speed).
+// damit in der Detailansicht nachberechnen (inkl. virtueller Leistungsdistanz).
 
 import { FIELDS } from './storage.js';
 
@@ -10,6 +10,24 @@ import { FIELDS } from './storage.js';
 // rechnen bewusst NUR mit dem echten FTP.
 export const FTP_ANNAHME = 170;
 export const effektiveFtp = ftp => ftp || FTP_ANNAHME;
+
+// Modell: CdA 0,32 m², Crr 0,004, Luftdichte 1,225 kg/m³,
+// 10 kg Fahrrad/Ausrüstung; Windstille und ebene Straße.
+const LUFTDICHTE = 1.225, CDA = 0.32, CRR = 0.004, G = 9.80665, FAHRRAD_KG = 10;
+
+// Löst P = ½ρCdA·v³ + Crr·m·g·v (Radleistung) per Binärsuche.
+export function geschwindigkeitKmh(watt, gewichtKg = 75) {
+  if (!(watt > 0)) return 0;
+  const luft = 0.5 * LUFTDICHTE * CDA;
+  const roll = CRR * (gewichtKg + FAHRRAD_KG) * G;
+  let low = 0, high = 30;
+  for (let i = 0; i < 32; i++) {
+    const v = (low + high) / 2;
+    if (luft * v ** 3 + roll * v < watt) low = v;
+    else high = v;
+  }
+  return (low + high) * 1.8; // m/s → km/h
+}
 
 // Kadenz-Vorgabe aus der Zielintensität (Konsens TrainerRoad/Rouvy:
 // Z2–Schwelle 85–95, VO2max 100–110, Sprint 110+; Recovery frei → null)
@@ -54,21 +72,25 @@ export function besteDauerleistung(samples, count, fenster = 60) {
   return Math.round(best / fenster);
 }
 
-// Distanz als Integral der Trainer-Speed (Feld 5, kmh×10, 1 Sample = 1 s) —
-// dieselbe Rechnung wie im TCX-Export; im ERG-Modus gangabhängig, also
-// „Trainer-Distanz", keine Leistungsgröße
+// Distanz aus gespeicherter Modellgeschwindigkeit (Feld 5, kmh×10, 1 Sample = 1 s).
 export function distanzKm(samples, count) {
   let sum = 0;
   for (let k = 0; k < count; k++) sum += samples[k * FIELDS + 5];
   return sum / 36000;
 }
 
+export function distanzLeistungKm(samples, count, gewichtKg = 75) {
+  let sum = 0;
+  for (let k = 0; k < count; k++)
+    sum += Math.round(geschwindigkeitKmh(samples[k * FIELDS + 1], gewichtKg) * 10);
+  return sum / 36000;
+}
+
 // Kennwerte einer Fahrt wie gespeichert (Session.stats() und Demo-Fahrten).
 // Intensitätswerte (Ø/max W, Kadenz, NP/IF/TSS, HF, Zonen) bewusst aufs
 // Programmfenster begrenzt: das Ausfahren danach verzerrt sie nicht.
-// Mengen (Dauer, Arbeit, Distanz) zählen die ganze Fahrt — wie Livewerte
-// und TCX-Export, sonst passen kJ und km nicht zur angezeigten Fahrt.
-export function fahrtStats(samples, count, programmEndeBei, ftp) {
+// Dauer, Arbeit und Distanz zählen die ganze Fahrt inkl. Ausrollen.
+export function fahrtStats(samples, count, programmEndeBei, ftp, gewichtKg = 75) {
   const n = Math.min(count, programmEndeBei ?? count);
   let sumW = 0, maxW = 0, sumRpm = 0, rpmN = 0, sumAlle = 0;
   for (let k = 0; k < count; k++) {
@@ -88,7 +110,7 @@ export function fahrtStats(samples, count, programmEndeBei, ftp) {
     avgRpm: rpmN ? Math.round(sumRpm / rpmN) : 0,
     ...kennwerte(samples, n, ftp),
     // Distanz über die ganze Fahrt inkl. Ausfahren — konsistent zum TCX-Export
-    km: Math.round(distanzKm(samples, count) * 100) / 100,
+    km: Math.round(distanzLeistungKm(samples, count, gewichtKg) * 100) / 100,
   };
 }
 

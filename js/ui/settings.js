@@ -7,7 +7,7 @@ import { getSettings, setSetting, setSettings, getLogs, clearLogs, alleDatenLoes
 
 // Formularfelder ↔ Einstellungen; Grenzen und Standardwerte stehen nur im
 // Schema (EINSTELLUNGEN in storage.js)
-const ZAHLFELDER = { '#set-ftp': 'ftp', '#set-schritt': 'wattSchritt', '#set-max': 'maxWatt', '#set-start': 'startWatt',
+const ZAHLFELDER = { '#set-ftp': 'ftp', '#set-gewicht': 'gewichtKg', '#set-schritt': 'wattSchritt', '#set-max': 'maxWatt', '#set-start': 'startWatt',
   '#set-puls': 'pulsGrenze' };
 const SCHALTER = { '#set-sprache': 'sprachansagen', '#set-ton': 'tonAn', '#set-glut': 'glut', '#set-zwo': 'zwoImport',
   '#set-halten-tasten': 'haltenTasten', '#set-halten-paddles': 'haltenPaddles' };
@@ -193,7 +193,7 @@ export async function openSettings({ nachSpeichern } = {}) {
     // leer oder 0 → Standardwert
     const neu = {};
     for (const [id, k] of Object.entries(ZAHLFELDER))
-      neu[k] = pruefeEinstellung(k, Math.round(Number($(id).value)) || EINSTELLUNGEN[k].std);
+      neu[k] = pruefeEinstellung(k, Number($(id).value) || EINSTELLUNGEN[k].std);
     for (const [id, k] of Object.entries(SCHALTER)) neu[k] = $(id).checked;
     neu.haltenTempo = pruefeEinstellung('haltenTempo', dlg.querySelector('[name="halten-tempo"]:checked')?.value)
       ?? EINSTELLUNGEN.haltenTempo.std;

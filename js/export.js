@@ -1,6 +1,8 @@
 // TCX-Export (Garmin Training Center XML) als Datei aufs eigene Gerät —
 // lässt sich von Hand bei Strava, Garmin Connect oder intervals.icu
-// hochladen. Die App selbst sendet nichts. Watt über die ns3-Activity-Extension.
+// hochladen. Distanz aus denselben Leistungsmodell-Samples wie die Fahrt;
+// die App sendet nichts.
+// Watt über die ns3-Activity-Extension.
 
 import { FIELDS } from './storage.js';
 import { dateiStempel } from './format.js';

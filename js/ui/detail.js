@@ -64,7 +64,7 @@ export async function renderDetail(root, session, onClose, { demo = null } = {})
   const data = demo ?? await getSamples(session.id);
   const settings = await getSettings();
 
-  if (data && !demo) await ergaenzeKennwerte(session, data);
+  if (data && !demo) await ergaenzeKennwerte(session, data, settings.gewichtKg);
 
   // Ø/max beziehen sich aufs Programm, sobald danach ausgefahren wurde
   const imProgramm = session.ausgefahrenSek > 0 ? ' (Programm)' : '';
@@ -72,7 +72,7 @@ export async function renderDetail(root, session, onClose, { demo = null } = {})
     ['Dauer', fmtTime(session.dauer)], [`Ø${imProgramm}`, `${session.avgW} W`], ['max', `${session.maxW} W`],
     ['Arbeit', `${session.kJ} kJ`], ['Ø Kadenz', `${session.avgRpm} rpm`],
   ];
-  if (session.km) stats.push(['Distanz', `${fmtKm(session.km)} km`]);
+  if (session.km) stats.push(['Virt. Distanz', `${fmtKm(session.km)} km`]);
   if (session.np) stats.push(['NP', `${session.np} W`]);
   if (session.if) stats.push(['IF', session.if], ['TSS', session.tss]);
   if (session.hrAvg) stats.push(['Ø HF', `${session.hrAvg} bpm`, 'hf'], ['max HF', `${session.hrMax} bpm`, 'hf']);

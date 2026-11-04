@@ -1,5 +1,5 @@
 // IndexedDB: sessions (Metadaten), sessionData (Rohsamples), settings, programme.
-// Samples liegen als Int16Array n×6 [s, watt, ziel, rpm, hf, kmh×10].
+// Samples liegen als Int16Array n×6 [s, watt, ziel, rpm, hf, Modell-kmh×10].
 
 import RIDE_TASTEN from './ble/zwift-ride-tasten.json' with { type: 'json' };
 
@@ -88,6 +88,8 @@ export const HALTEN_TEMPO = {
 // Unbekannte Schlüssel (z. B. icuApiKey bis v3.2) werden beim Lesen
 // verworfen und aus der Datenbank gelöscht.
 const ganz = (min, max) => v => typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : undefined;
+const dezimal = (min, max) => v => typeof v === 'number' && Number.isFinite(v)
+  ? Math.min(max, Math.max(min, Math.round(v * 10) / 10)) : undefined;
 // Grenze, die auch ganz aus sein darf: 0 = aus, sonst in [min, max]
 const ausOder = (min, max) => v => { const g = ganz(0, max)(v); return g ? Math.max(min, g) : g; };
 const jaNein = v => typeof v === 'boolean' ? v : undefined;
@@ -127,6 +129,7 @@ const tastenMap = v => objekt(v) ? Object.fromEntries(Object.entries(v)
   .filter(([k]) => /^[a-z]+$/i.test(k)).map(([k, b]) => [k, tastenWert(b)]).filter(([, b]) => b !== undefined)) : undefined;
 export const EINSTELLUNGEN = {
   ftp: { std: 0, pruefe: ganz(0, 500) },
+  gewichtKg: { std: 75, pruefe: dezimal(30, 200) },
   wattSchritt: { std: 10, pruefe: ganz(1, 50) },
   maxWatt: { std: 400, pruefe: ganz(100, 1000) },
   startWatt: { std: 100, pruefe: ganz(20, 300) },

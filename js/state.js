@@ -4,7 +4,7 @@
 
 import { FIELDS, saveSamples, saveSession } from './storage.js';
 import { logInfo, logWarn } from './logger.js';
-import { fahrtStats } from './metrics.js';
+import { fahrtStats, geschwindigkeitKmh } from './metrics.js';
 import { zaehltFuerPlan } from './plan.js';
 
 const WRITE_INTERVAL = 250;   // ms — Schutz des Control Points
@@ -255,7 +255,7 @@ export class Session extends EventTarget {
     s[i + 2] = this.target;
     s[i + 3] = this.live.rpm;
     s[i + 4] = this.live.hr;
-    s[i + 5] = Math.round(this.live.kmh * 10);
+    s[i + 5] = Math.round(geschwindigkeitKmh(this.live.watt, this.settings.gewichtKg) * 10);
     this.count++;
     this.kj += this.live.watt / 1000;
     this.km += s[i + 5] / 36000;   // aus dem Sample, damit Live-km == distanzKm(samples)
@@ -274,7 +274,7 @@ export class Session extends EventTarget {
   }
 
   stats() {
-    return fahrtStats(this.samples, this.count, this.programmEndeBei, this.settings.ftp);
+    return fahrtStats(this.samples, this.count, this.programmEndeBei, this.settings.ftp, this.settings.gewichtKg);
   }
 
   async save(final = false) {
@@ -289,9 +289,10 @@ export class Session extends EventTarget {
       seed: this.seed,
       planRef: plan?.ref ?? null, plan,
       ftp: this.settings.ftp || null,
+      gewichtKg: this.settings.gewichtKg ?? 75,
       akkuProStunde: this.akkuProStunde ?? null,
       programmEndeBei: this.programmEndeBei,   // Detail-Graph: Ausfahr-Bereich absetzen
-      final, ...this.stats(),
+      final, distanzModell: 1, ...this.stats(),
     });
   }
 
