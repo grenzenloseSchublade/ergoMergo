@@ -26,6 +26,10 @@ import { zeigeBelegung } from './lenker-karte.js';
 import { LedZeile } from './led-zeile.js';
 import { tokenLeser } from './tokens.js';
 
+const ANKUENDIGEN_VOR_S = 12;     // so lange vor dem Wechsel läuft die Ankündigung an
+const ANKUENDIGEN_AB_S = 60;      // nur aus Blöcken ab dieser Länge
+const ANKUENDIGEN_SPRUNG_W = 25;  // nur bei spürbarem Sprung
+
 const STOPP_SPERRE_MS = 3000;     // Panik-Schutz nach Not-Stopp
 const HALTEN_PAUSE_MS = 500;      // ±-Knopf halten: erste Wiederholung
 const HALTEN_TAKT_MS = 300;       //   … danach im Takt
@@ -70,7 +74,7 @@ export class RideScreen {
     this.#abmelden = beobachte(this.$('#live-chart'), () => this.render());
     // session stirbt mit der Fahrt (Abos dort unkritisch); Pool-Clients leben
     // weiter — deren Listener MÜSSEN in destroy() wieder abgebaut werden
-    session.addEventListener('tick', () => { this.render(); this.#pip?.update(); });
+    session.addEventListener('tick', () => { this.render(); this.#kuendigeAn(); this.#pip?.update(); });
     session.addEventListener('target', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('error', e => this.#info(e.detail, 'err'));
     // Startmeldung: zeigt, womit gefahren wird — und dass die Tafel lebt.
@@ -99,6 +103,8 @@ export class RideScreen {
   #cursorBlinkBis = 0;
   #zustaende = new Map();     // Statuszeile: art → { text, cls }
   #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
+  #angekuendigt = -1;         // Block, dessen Nachfolger schon angekündigt wurde
+  #ankuendigung = null;       // Text der letzten Ankündigung
   #wartenderHinweis = null;   // leiser Hinweis hinter einer laufenden Fehlermeldung
   #abmelden = null;           // Resize-Beobachtung des Charts
   #rpmAbweichSeit = null;     // Fahrzeit (s), seit die Kadenz außerhalb des Bereichs liegt
@@ -200,10 +206,34 @@ export class RideScreen {
     }, verzoegerung);
   }
 
+  // Nächsten Block kurz vorher ankündigen: Laufschrift mit Zielwert und Dauer, weil
+  // die Schrift Zeit braucht, schon 12 s vorher. Kurze oder kleine Wechsel (30/30,
+  // Rampentest) bleiben still, sonst liefe die Tafel ununterbrochen.
+  #kuendigeAn() {
+    const run = this.run;
+    if (!run || run.index < 0 || this.session.gestoppt || run.index === this.#angekuendigt) return;
+    const b = run.aktuellerBlock, n = run.naechsterBlock, rest = run.restImBlock;
+    if (!b || !n || b.dauer < ANKUENDIGEN_AB_S || rest > ANKUENDIGEN_VOR_S || rest <= 3) return;
+    this.#angekuendigt = run.index;
+    const ziel = run.zielFuer(n);
+    if (Math.abs(ziel - run.zielFuer(b)) < ANKUENDIGEN_SPRUNG_W || this.$('#dlg-fahrt-optionen').open) return;
+    this.#ankuendigung = `Gleich ${ziel} W · ${n.dauer % 60 ? fmtTime(n.dauer) : `${n.dauer / 60} min`}`;
+    this.hinweis(this.#ankuendigung);
+  }
+
+  // Der Block ist da: eine noch laufende Ankündigung wäre jetzt falsch
+  #beendeAnkuendigung() {
+    if (this.#wartenderHinweis === this.#ankuendigung) this.#wartenderHinweis = null;
+    if (this.#infoMeldung?.text !== this.#ankuendigung) return;
+    this.#infoMeldung = null;
+    this.#zeigeStatus();
+  }
+
   #bindProgramm() {
     const run = this.run;
     let prevWatt = null;
     run.addEventListener('block', e => {
+      this.#beendeAnkuendigung();
       const tonGespielt = prevWatt !== null && this.tonAn;
       if (tonGespielt) signal.blockwechsel(e.detail.watt > prevWatt);
       prevWatt = e.detail.watt;

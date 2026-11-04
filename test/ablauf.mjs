@@ -1046,6 +1046,29 @@ try {
     abweichungen.push(...b2.fehler.map(f => 'JS-Fehler (2): ' + f));
     await b2.schliesse();
   }
+  // Ankündigung des nächsten Blocks: rund 12 s vorher mit Zielwert und Dauer, weg,
+  // sobald der Block da ist. Aus kurzen Blöcken (30/30) heraus bleibt es still.
+  const b3 = await browser({ breite: 412, hoehe: 900 });
+  try {
+    await b3.geh(srv.url, 800);
+    await b3.ev(`import('./js/storage.js').then(m => m.setSetting('ftp', 200))`);
+    await b3.geh(srv.url + '?demo=programm', 1500);
+    const led = () => b3.ev(`document.querySelector('#m-status .sr-text')?.textContent ?? ''`);
+    const bisLed = async (test, ms) => { for (const ende = Date.now() + ms; Date.now() < ende; await sleep(250)) { const t = await led(); if (test(t)) return t; } return await led(); };
+    soll('Ankündigung kommt vor dem Wechsel', await bisLed(t => t.startsWith('Gleich'), 14000), 'Gleich 210 W · 4 min');
+    soll('… noch im alten Block', await b3.ev(`document.querySelector('#m-target').textContent`), v => Number(v) < 150);
+    await bisLed(t => !t.startsWith('Gleich'), 16000);
+    soll('… weg, sobald der Block läuft', await led(), t => !t.startsWith('Gleich'));
+    soll('… Ziel ist da', await b3.ev(`document.querySelector('#m-target').textContent`), v => Number(v) > 150);
+    await b3.geh(srv.url + '?demo=sprint3030', 1500);
+    // Aus dem langen Einrollen heraus ist die Ankündigung richtig, erst danach gilt die Stille
+    await bisLed(t => t.startsWith('Gleich'), 14000);
+    await bisLed(t => !t.startsWith('Gleich'), 16000);
+    soll('Kurze Blöcke: keine Ankündigung', await bisLed(t => t.startsWith('Gleich'), 22000), t => !t.startsWith('Gleich'));
+  } finally {
+    abweichungen.push(...b3.fehler.map(f => 'JS-Fehler (3): ' + f));
+    await b3.schliesse();
+  }
 } catch (e) {
   abweichungen.push('Testfehler: ' + e.message);
 } finally {

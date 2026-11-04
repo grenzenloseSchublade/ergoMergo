@@ -585,7 +585,7 @@ body:has(#screen-ride:not([hidden])) { overflow: hidden; }
 /* Geräte-Symbol ohne Rahmen: Icon + Zustandspunkt, Tippfläche 44 px */
 .kopf-geraet, .kopf-pip, .kopf-mehr {
   width: var(--tippflaeche); height: var(--tippflaeche); padding: 0; background: none; color: var(--ink2);
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--abstand-05);
 }
 .kopf-geraet > span { display: flex; }
 .kopf-geraet svg, .kopf-pip svg { width: var(--icon-m); height: var(--icon-m); }

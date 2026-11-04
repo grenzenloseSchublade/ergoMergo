@@ -65,6 +65,23 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.6
+
+- **Klarerer Graph in der Fahrt:** Der laufende Block sticht heraus, Vergangenes
+  tritt zurück, die Jetzt-Linie ist durchgezogen, die Leistungslinie ruhig. Wattachse
+  und Blockzahlen stören sich und die Linie nicht mehr. Die freie Fahrt zeigt
+  Zonenfarben.
+- **Nächster Block in der LED-Zeile:** rund 12 s vorher „Gleich 210 W · 4 min“.
+- **Zonen-Glut auch hochkant:** ein weicher Schein hinter der Wattzahl.
+- **Programmuhr läuft im Hintergrund weiter:** Bei Bildschirm aus oder Bild-in-Bild
+  holt sie verpasste Sekunden auf, samt Blockwechsel und kJ.
+- **Programme starten direkt im ersten Block**, ohne Rampe vom Startwert.
+- **Fehler bei Import und Löschen bleiben stehen**, bis du sie bestätigst.
+- **`.zwo`-Import prüft die Werte:** unplausible Leistung und Dauer werden abgewiesen,
+  die Kadenz bleibt auch bei Warmup, Cooldown, Rampen und freier Fahrt erhalten.
+- **Stabilere Verbindungen und Tests:** Reconnect endet mit der Fahrt, Geräte ohne
+  passenden Dienst melden sich, schärfere Prüfwerkzeuge.
+
 ## Neu in 3.5
 
 - **Cockpit im Querformat:** Riesige Wattzahl links, Graph in der Mitte,

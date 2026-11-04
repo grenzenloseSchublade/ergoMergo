@@ -97,6 +97,9 @@ Rollen:
   der Anzeige nach Auflösung geglättet (etwa 2,5 Pixel, mindestens 3 s); gespeichert
   bleiben die Rohwerte. Im Detail steht die Wattachse in einer eigenen Spalte links,
   Blocklabels stehen in einer Reihe am Fuß der Balken.
+- Ankündigung des nächsten Blocks: Die LED-Zeile zeigt rund 12 s vorher Zielwert
+  und Dauer („Gleich 210 W · 4 min“), nur aus Blöcken ab 60 s und bei mindestens
+  25 W Sprung; sie endet, sobald der Block läuft.
 - Symbole: `--icon-xs` 12 · `--icon-s` 14 · `--icon-m` 18 · `--icon-l` 20 · `--icon-xl` 24.
 
 ## Bausteine
