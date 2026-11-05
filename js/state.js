@@ -13,10 +13,13 @@ const RESUME_RAMP_MS = 10000; // Wiedereinstieg nach Stopp: sanft hochfahren
 const AUTOSAVE_MS = 5000;
 const DATEN_VERALTET_MS = 3000;   // keine Trainerdaten mehr → Livewerte gelten nicht mehr
 const HF_VERALTET_MS = 5000;      // kein HF-Wert mehr → Lücke statt eingefrorener Linie
-// Programmuhr: Chrome drosselt Timer im Hintergrund auf bis zu 60 s. Der Takt
-// misst deshalb die Wanduhr und holt verpasste Sekunden auf. Größere Lücken
-// sind Standby oder ein eingefrorener Tab — die zählen nicht als gefahren
-const MAX_NACHHOLEN_S = 120;
+// Programmuhr: Chrome drosselt Timer im Hintergrund, und ohne Bild-in-Bild friert
+// die Seite nach Sekunden bis Minuten ganz ein (Gerätelog 04.11.: 8 min Lücken bei
+// stehender Verbindung, gefahren wurde weiter). Der Takt misst deshalb die Wanduhr
+// und holt verpasste Sekunden auf. Längere Lücken gelten als Standby — mit
+// getrenntem Trainer schon früh, denn dann ist die Fahrt vermutlich unterbrochen
+const MAX_NACHHOLEN_S = 30 * 60;
+const MAX_NACHHOLEN_GETRENNT_S = 120;
 const UHR_TOLERANZ_MS = 100;      // Timer darf knapp vor der Sekunde feuern, ohne dass sie ausfällt
 
 export class Session extends EventTarget {
@@ -220,22 +223,32 @@ export class Session extends EventTarget {
     const jetzt = performance.now();
     const faellig = Math.floor((jetzt - this.#uhrStand + UHR_TOLERANZ_MS) / 1000);
     if (faellig < 1) return;
-    if (faellig > MAX_NACHHOLEN_S) {
+    const verbunden = this.ftms.connected;
+    if (faellig > (verbunden ? MAX_NACHHOLEN_S : MAX_NACHHOLEN_GETRENNT_S)) {
       logWarn('session', `Uhr stand ${faellig} s — Standby, nicht nachgeholt`);
       this.#uhrStand = jetzt;
       return;
     }
-    if (faellig >= 5) logInfo('bg', `Programmuhr holt ${faellig} s auf`);
+    // Die Seite schlief, der Trainer hielt sein Ziel: fehlende Daten sagen dann
+    // nichts über die Fahrt. Die letzten Werte sind die beste Schätzung — sonst
+    // liefe die Zeit weiter, Distanz und Energie aber nicht. Gilt nur für Lücken,
+    // die selbst die Daten veralten lassen; bei wachem Takt bleibt Stille echte Stille
+    const halten = verbunden && !this.gestoppt && faellig * 1000 > DATEN_VERALTET_MS;
+    if (faellig >= 5) logInfo('bg', `Programmuhr holt ${faellig} s auf${halten ? ', letzte Werte gehalten' : ''}`);
     for (let k = 1; k <= faellig; k++) {
       this.#uhrStand += 1000;
       this.holtAuf = still || k < faellig;
-      this.#sekunde(this.#uhrStand);
+      this.#sekunde(this.#uhrStand, halten);
     }
     this.holtAuf = false;
+    if (halten) {
+      this.#letzteDaten = jetzt;              // Frist für neue Daten läuft ab dem Aufwachen
+      this.dispatchEvent(new CustomEvent('geschaetzt', { detail: faellig }));
+    }
     this.dispatchEvent(new Event('tick'));    // Anzeige: einmal, auch nach vielen Sekunden
   }
 
-  #sekunde(zeit) {
+  #sekunde(zeit, halten = false) {
     const i = this.count * FIELDS;
     if (i + FIELDS > this.samples.length) {
       // Über 4 h: Puffer verdoppeln statt still einzufrieren
@@ -247,7 +260,7 @@ export class Session extends EventTarget {
     // Keine frischen Daten (Trainer getrennt/still, Gurt weg): nicht die
     // letzten Werte minutenlang weiterschreiben — sonst wachsen kJ, NP, TSS
     // und km, und die HF-Linie wird flach statt zur Lücke
-    if (zeit - this.#letzteDaten > DATEN_VERALTET_MS) Object.assign(this.live, { watt: 0, rpm: 0, kmh: 0 });
+    if (!halten && zeit - this.#letzteDaten > DATEN_VERALTET_MS) Object.assign(this.live, { watt: 0, rpm: 0, kmh: 0 });
     if (zeit - this.#letzteHf > HF_VERALTET_MS) this.live.hr = 0;
     const s = this.samples;
     s[i] = this.elapsed;

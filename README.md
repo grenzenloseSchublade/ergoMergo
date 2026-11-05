@@ -65,6 +65,21 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.6.1
+
+- **Fahrt zählt auch bei eingefrorener Seite weiter:** Android hält die Seite ohne
+  Bild-in-Bild im Hintergrund an. Bei stehender Trainer-Verbindung zählen die
+  verpassten Sekunden jetzt mit den letzten Werten für Zeit, Distanz und kJ, bis
+  30 min je Lücke. Ohne Verbindung holt die App nur bis 2 min nach. Der Puls bleibt
+  eine Lücke.
+- **Hinweis bei der Rückkehr:** Ab 10 s Lücke meldet die LED-Zeile
+  „8:11 min geschätzt · Bild-in-Bild hält die Fahrt aktiv“. Hörst du während der
+  Lücke auf zu treten, zählt die Zeit trotzdem als gefahren. Wattziele sendet eine
+  eingefrorene Seite weiterhin nicht, Programme im Hintergrund brauchen also
+  Bild-in-Bild.
+- **Sauberes Diagnose-Log:** Die harmlose `ResizeObserver`-Meldung erscheint nicht
+  mehr als Fehler.
+
 ## Neu in 3.6
 
 - **Klarerer Graph in der Fahrt:** Der laufende Block sticht heraus, Vergangenes

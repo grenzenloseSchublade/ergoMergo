@@ -47,5 +47,8 @@ export function formatLog(entries) {
 export const hex = b => [...b].map(x => x.toString(16).padStart(2, '0')).join(' ');
 
 // Unbehandelte Fehler mitschneiden
-addEventListener('error', e => logError('js', e.message, e.error?.stack ?? `${e.filename}:${e.lineno}`));
+// ResizeObserver-Schleife: harmlose Browser-Meldung, der nächste Frame holt es nach
+addEventListener('error', e => {
+  if (!e.message?.startsWith('ResizeObserver loop')) logError('js', e.message, e.error?.stack ?? `${e.filename}:${e.lineno}`);
+});
 addEventListener('unhandledrejection', e => logError('js', 'unhandled rejection', e.reason?.stack ?? String(e.reason)));

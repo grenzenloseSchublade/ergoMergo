@@ -365,6 +365,19 @@ try {
   await zurueck(2500);
   soll('2× Zurück beendet', await bildschirm(), 'home');
 
+  // --- Seite war eingefroren: Distanz läuft weiter, LED-Zeile sagt es. Die
+  // vorgestellte Uhr räumt das Laden der nächsten Demo wieder ab ---
+  await b.geh(srv.url + '?demo=frei', 2000);
+  const frost = await b.ev(`(async () => {
+    const km = () => parseFloat(document.querySelector('#m-km').textContent.replace(',', '.'));
+    const vorher = km(), echt = performance.now.bind(performance);
+    performance.now = () => echt() + 180000;
+    await new Promise(r => setTimeout(r, 1300));
+    return { zuwachs: km() - vorher, status: document.querySelector('#m-status').textContent };
+  })()`);
+  soll('Nach dem Einfrieren: Distanz gewachsen', frost.zuwachs, z => z > 0.5);
+  soll('… LED-Zeile nennt Schätzung und Abhilfe', frost.status, t => /3:0\d min geschätzt/.test(t) && t.includes('Bild-in-Bild'));
+
   // --- Programm: Skip, +30 s, zweistufiges Beenden ---
   await b.geh(srv.url + '?demo=programm', 2500);
   const zeit = () => b.ev(`document.querySelector('#m-time').textContent`);
@@ -682,12 +695,56 @@ try {
         out.notification = s.count - vorher;
         await s.finish();
       }
-      // Standby: über der Obergrenze zählt nichts
+      // Eingefrorene Seite (Gerätelog 04.11.), Verbindung steht: 8 min zählen mit den letzten Werten
+      {
+        const { s, daten } = neu();
+        let gemeldet = 0;
+        s.addEventListener('geschaetzt', e => gemeldet += e.detail);
+        daten({ watt: 200, rpm: 90, kmh: 30, hr: 140 });
+        vor += 480000; await warte(1100);
+        out.eingefroren = { count: s.count, km: s.km, kj: s.kj, watt: feld(s, 400, 1), rpm: feld(s, 400, 3), hf: feld(s, 400, 4), gemeldet };
+        // Danach bleibt der Trainer wirklich still: gilt wieder als keine Daten
+        await warte(4300);
+        out.nachFrost = s.live.watt;
+        await s.finish();
+      }
+      // Trainer nach der Lücke getrennt: 15 s zählen, aber nicht aus alten Werten
+      {
+        const { f, s, daten } = neu();
+        daten({ watt: 150, kmh: 30 });
+        f.connected = false;
+        vor += 15000; await warte(1100);
+        out.getrennt = { count: s.count, watt1: feld(s, 1, 1), watt8: feld(s, 8, 1), kj: s.kj };
+        await s.finish();
+      }
+      // Wacher Takt, stiller Trainer: bleibt 0, auch mit stehender Verbindung
+      {
+        const { s, daten } = neu();
+        daten({ watt: 150, kmh: 30 });
+        await warte(4300);
+        out.still = s.live.watt;
+        await s.finish();
+      }
+      // Lücke im Not-Stopp: kein Tritt aus alten Werten
+      {
+        const { s, daten } = neu();
+        daten({ watt: 150, kmh: 30 });
+        s.emergencyStop();
+        vor += 60000; await warte(1100);
+        out.stoppGeschaetzt = { watt: feld(s, 30, 1), km: s.km };
+        await s.finish();
+      }
+      // Standby: über der Obergrenze zählt nichts, getrennt schon ab 2 min
       {
         const { s, r } = neu([{ dauer: 600, watt: 100 }]);
         vor += 3600000; await warte(1100);
         out.standby = { count: s.count, rest: r.restImBlock };
         await s.finish();
+        const g = neu();
+        g.f.connected = false;
+        vor += 180000; await warte(1100);
+        out.standbyGetrennt = g.s.count;
+        await g.s.finish();
       }
       // Not-Stopp: Sekunden vor dem Stopp zählen noch, im Stopp steht die Programmuhr
       {
@@ -774,8 +831,19 @@ try {
   soll('… Blockwechsel und Ziel stimmen', [uhr.schub.index, uhr.schub.ziel].join(), '1,200');
   soll('… Samples lückenlos', uhr.schub.lueckenlos, true);
   soll('… jedes Sample mit dem damaligen Ziel', [uhr.schub.z3, uhr.schub.z13].join(), '100,200');
-  soll('… Watt nur solange Daten frisch waren', [uhr.schub.watt1, uhr.schub.watt8].join(), '150,0');
-  soll('… Energie nicht aus eingefrorenen Werten', uhr.schub.kj, k => k > 0.2 && k < 0.8);
+  soll('… Verbindung steht: letzte Werte gehalten', [uhr.schub.watt1, uhr.schub.watt8].join(), '150,150');
+  soll('… Energie zählt mit', uhr.schub.kj, k => k > 2 && k < 2.8);
+  soll('Eingefroren 8 min: Zeit läuft', uhr.eingefroren.count, n => n >= 480 && n <= 482);
+  soll('… Distanz und Energie laufen', [uhr.eingefroren.km > 3.9 && uhr.eingefroren.km < 4.1, uhr.eingefroren.kj > 95 && uhr.eingefroren.kj < 97].join(), 'true,true');
+  soll('… Watt und Kadenz gehalten, Puls als Lücke', [uhr.eingefroren.watt, uhr.eingefroren.rpm, uhr.eingefroren.hf].join(), '200,90,0');
+  soll('… Lücke wird der Anzeige gemeldet', uhr.eingefroren.gemeldet, n => n >= 480 && n <= 482);
+  soll('… danach gilt Stille wieder als keine Daten', uhr.nachFrost, 0);
+  soll('Getrennt: Zeit holt auf', uhr.getrennt.count, n => n >= 15 && n <= 17);
+  soll('… Watt nur solange Daten frisch waren', [uhr.getrennt.watt1, uhr.getrennt.watt8].join(), '150,0');
+  soll('… Energie nicht aus alten Werten', uhr.getrennt.kj, k => k > 0.2 && k < 0.8);
+  soll('Wacher Takt, stiller Trainer: keine Werte', uhr.still, 0);
+  soll('Lücke im Not-Stopp: nichts geschätzt', j(uhr.stoppGeschaetzt), v => JSON.parse(v).watt === 0 && JSON.parse(v).km < 0.05);
+  soll('Getrennt über 2 min: Standby', uhr.standbyGetrennt, n => n <= 2);
   soll('… Anzeige einmal je Schub, kein Countdown-Geplapper', [uhr.schub.tick, uhr.schub.countdown].join(), '1,0');
   soll('… nur der laufende Block wird gemeldet', uhr.schub.block, '1');
   soll('… zwei Wechsel in einem Schub: nur der letzte', j(uhr.zweiWechsel), j({ index: 2, ziel: 150, block: '1,2' }));

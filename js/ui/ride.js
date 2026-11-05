@@ -29,6 +29,7 @@ import { tokenLeser } from './tokens.js';
 const ANKUENDIGEN_VOR_S = 12;     // so lange vor dem Wechsel läuft die Ankündigung an
 const ANKUENDIGEN_AB_S = 60;      // nur aus Blöcken ab dieser Länge
 const ANKUENDIGEN_SPRUNG_W = 25;  // nur bei spürbarem Sprung
+const GESCHAETZT_MELDEN_AB_S = 10;  // kürzere Lücken sind kaum der Rede wert
 
 const STOPP_SPERRE_MS = 3000;     // Panik-Schutz nach Not-Stopp
 const HALTEN_PAUSE_MS = 500;      // ±-Knopf halten: erste Wiederholung
@@ -74,6 +75,8 @@ export class RideScreen {
     this.#abmelden = beobachte(this.$('#live-chart'), () => this.render());
     // session stirbt mit der Fahrt (Abos dort unkritisch); Pool-Clients leben
     // weiter — deren Listener MÜSSEN in destroy() wieder abgebaut werden
+    session.addEventListener('geschaetzt', e => { this.#geschaetztS += e.detail; this.#meldeGeschaetzt(); });
+    this.#abo(document, 'visibilitychange', () => this.#meldeGeschaetzt());
     session.addEventListener('tick', () => { this.render(); this.#kuendigeAn(); this.#pip?.update(); });
     session.addEventListener('target', () => { this.render(); this.#pip?.update(); });
     session.addEventListener('error', e => this.#info(e.detail, 'err'));
@@ -106,6 +109,7 @@ export class RideScreen {
   #angekuendigt = -1;         // Block, dessen Nachfolger schon angekündigt wurde
   #ankuendigung = null;       // Text der letzten Ankündigung
   #wartenderHinweis = null;   // leiser Hinweis hinter einer laufenden Fehlermeldung
+  #geschaetztS = 0;           // geschätzte Sekunden, noch nicht gemeldet
   #abmelden = null;           // Resize-Beobachtung des Charts
   #rpmAbweichSeit = null;     // Fahrzeit (s), seit die Kadenz außerhalb des Bereichs liegt
   #rpmLage = '';              // 'drin' | 'daneben' | '' — Fahrbildschirm und Bild-in-Bild
@@ -219,6 +223,17 @@ export class RideScreen {
     if (Math.abs(ziel - run.zielFuer(b)) < ANKUENDIGEN_SPRUNG_W || this.$('#dlg-fahrt-optionen').open) return;
     this.#ankuendigung = `Gleich ${ziel} W · ${n.dauer % 60 ? fmtTime(n.dauer) : `${n.dauer / 60} min`}`;
     this.hinweis(this.#ankuendigung);
+  }
+
+  // Zurück aus dem Hintergrund: sagen, dass ein Teil der Fahrt geschätzt ist und
+  // wie es sich vermeiden lässt. Erst sichtbar melden, sonst läuft die Schrift ins
+  // Leere; die Reihenfolge von Sichtbarwerden und Aufholen ist nicht festgelegt.
+  // Mit offenem Bild-in-Bild wäre der Rat sinnlos
+  #meldeGeschaetzt() {
+    if (document.hidden || this.#geschaetztS < GESCHAETZT_MELDEN_AB_S) return;
+    const s = this.#geschaetztS;
+    this.#geschaetztS = 0;
+    if (!this.#pip?.aktiv) this.hinweis(`${fmtTime(s)} min geschätzt · Bild-in-Bild hält die Fahrt aktiv`);
   }
 
   // Der Block ist da: eine noch laufende Ankündigung wäre jetzt falsch
