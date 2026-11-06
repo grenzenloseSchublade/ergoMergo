@@ -1114,7 +1114,7 @@ try {
     abweichungen.push(...b2.fehler.map(f => 'JS-Fehler (2): ' + f));
     await b2.schliesse();
   }
-  // Ankündigung des nächsten Blocks: rund 12 s vorher mit Zielwert und Dauer, weg,
+  // Ankündigung des nächsten Blocks: 30 s vorher mit Zielwert und Dauer, weg,
   // sobald der Block da ist. Aus kurzen Blöcken (30/30) heraus bleibt es still.
   const b3 = await browser({ breite: 412, hoehe: 900 });
   try {
@@ -1123,16 +1123,34 @@ try {
     await b3.geh(srv.url + '?demo=programm', 1500);
     const led = () => b3.ev(`document.querySelector('#m-status .sr-text')?.textContent ?? ''`);
     const bisLed = async (test, ms) => { for (const ende = Date.now() + ms; Date.now() < ende; await sleep(250)) { const t = await led(); if (test(t)) return t; } return await led(); };
-    soll('Ankündigung kommt vor dem Wechsel', await bisLed(t => t.startsWith('Gleich'), 14000), 'Gleich 210 W · 4 min');
+    soll('Ankündigung kommt vor dem Wechsel', await bisLed(t => t.startsWith('Danach'), 14000), 'Danach 210 W · 4 min');
     soll('… noch im alten Block', await b3.ev(`document.querySelector('#m-target').textContent`), v => Number(v) < 150);
-    await bisLed(t => !t.startsWith('Gleich'), 16000);
-    soll('… weg, sobald der Block läuft', await led(), t => !t.startsWith('Gleich'));
+    await bisLed(t => !t.startsWith('Danach'), 24000);
+    soll('… weg, sobald der Block läuft', await led(), t => !t.startsWith('Danach'));
     soll('… Ziel ist da', await b3.ev(`document.querySelector('#m-target').textContent`), v => Number(v) > 150);
+
+    // 30 s vorher, auch wenn gerade ein anderer Hinweis läuft; unter dem ⋯-Panel
+    // wartet sie. Die Uhr springt bis kurz vor die Grenze (die Lücke wird geschätzt
+    // und gemeldet); rAF-Zeitstempel mit verschieben, sonst steht die Laufschrift
+    const rest = async () => { const [m, s] = (await b3.ev(`document.querySelector('#m-time').textContent`)).split(':').map(Number); return m * 60 + s; };
+    const sprung = (await rest()) - 36;
+    await b3.ev(`(() => { const echt = performance.now.bind(performance), raf = requestAnimationFrame.bind(window);
+      performance.now = () => echt() + ${sprung * 1000}; window.requestAnimationFrame = cb => raf(() => cb(performance.now())); })()`);
+    soll('Sprung: Schätzung läuft in der LED-Zeile', await bisLed(t => t.includes('geschätzt'), 3000), t => t.includes('geschätzt'));
+    await b3.klick('#btn-mehr', 300);
+    for (const ende = Date.now() + 15000; Date.now() < ende && await rest() > 27; ) await sleep(250);
+    soll('Panel offen: keine Ankündigung darunter', [await rest(), await led()], ([r, t]) => r <= 27 && !t.startsWith('Danach'));
+    await b3.ev(`document.querySelector('#dlg-fahrt-optionen').close()`);
+    const nachPanel = await bisLed(t => t.startsWith('Danach'), 3000);
+    soll('… nach dem Schließen kommt sie, vor der Schätzung', [nachPanel, await rest()], ([t, r]) => /^Danach 90 W/.test(t) && r >= 20);
+    soll('… danach läuft die Schätzung weiter', await bisLed(t => !t.startsWith('Danach'), 24000), t => t.includes('geschätzt'));
+    soll('… noch vor dem Wechsel', await rest(), r => r > 0 && r <= 10);
+
     await b3.geh(srv.url + '?demo=sprint3030', 1500);
     // Aus dem langen Einrollen heraus ist die Ankündigung richtig, erst danach gilt die Stille
-    await bisLed(t => t.startsWith('Gleich'), 14000);
-    await bisLed(t => !t.startsWith('Gleich'), 16000);
-    soll('Kurze Blöcke: keine Ankündigung', await bisLed(t => t.startsWith('Gleich'), 22000), t => !t.startsWith('Gleich'));
+    await bisLed(t => t.startsWith('Danach'), 14000);
+    await bisLed(t => !t.startsWith('Danach'), 24000);
+    soll('Kurze Blöcke: keine Ankündigung', await bisLed(t => t.startsWith('Danach'), 22000), t => !t.startsWith('Danach'));
   } finally {
     abweichungen.push(...b3.fehler.map(f => 'JS-Fehler (3): ' + f));
     await b3.schliesse();

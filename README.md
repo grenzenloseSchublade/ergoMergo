@@ -65,6 +65,17 @@ dem Gerät.
 | Auswertung | Dauer, Ø/max/NP, IF/TSS, HF, Distanz (aus Trainer-Speed integriert, im ERG-Modus gangabhängig), Zeit in Zonen, Soll/Ist-Vergleich pro Block, Wochenbilanz, TCX-Export, Akkuverbrauch pro Fahrt |
 | Plattform | Installierbare PWA, offlinefähig, alles lokal in IndexedDB — kein Server, keine Cloud; Demo-Modus ohne Trainer (Button auf dem Startbildschirm) |
 
+## Neu in 3.6.2
+
+- **Nächster Block 30 s vorher:** Die LED-Zeile zeigt „Danach 210 W · 4 min“
+  jetzt 30 s statt 12 s vor dem Wechsel. Beide Durchläufe sind vor dem Countdown
+  fertig.
+- **Keine verschluckte Ankündigung:** Ist das ⋯-Panel offen oder die Seite
+  verdeckt, kommt sie danach, solange noch mindestens 6 s Zeit sind.
+- **Hinweise warten aufeinander:** Ankündigung, Schätzung und Energiespar-Hinweis
+  verdrängen einander nicht mehr. Die Ankündigung zieht vor, der andere Hinweis
+  läuft danach.
+
 ## Neu in 3.6.1
 
 - **Fahrt zählt auch bei eingefrorener Seite weiter:** Android hält die Seite ohne

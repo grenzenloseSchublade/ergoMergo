@@ -26,7 +26,8 @@ import { zeigeBelegung } from './lenker-karte.js';
 import { LedZeile } from './led-zeile.js';
 import { tokenLeser } from './tokens.js';
 
-const ANKUENDIGEN_VOR_S = 12;     // so lange vor dem Wechsel läuft die Ankündigung an
+const ANKUENDIGEN_VOR_S = 30;     // so lange vor dem Wechsel läuft die Ankündigung an
+const ANKUENDIGEN_BIS_S = 6;      // danach lohnt sie nicht mehr: der Wert braucht ~3,5 s herein
 const ANKUENDIGEN_AB_S = 60;      // nur aus Blöcken ab dieser Länge
 const ANKUENDIGEN_SPRUNG_W = 25;  // nur bei spürbarem Sprung
 const GESCHAETZT_MELDEN_AB_S = 10;  // kürzere Lücken sind kaum der Rede wert
@@ -108,7 +109,7 @@ export class RideScreen {
   #infoMeldung = null;        // einmalige Meldung { text, cls, neu }
   #angekuendigt = -1;         // Block, dessen Nachfolger schon angekündigt wurde
   #ankuendigung = null;       // Text der letzten Ankündigung
-  #wartenderHinweis = null;   // leiser Hinweis hinter einer laufenden Fehlermeldung
+  #wartende = [];             // leise Hinweise, die hinter der laufenden Meldung warten
   #geschaetztS = 0;           // geschätzte Sekunden, noch nicht gemeldet
   #abmelden = null;           // Resize-Beobachtung des Charts
   #rpmAbweichSeit = null;     // Fahrzeit (s), seit die Kadenz außerhalb des Bereichs liegt
@@ -143,6 +144,9 @@ export class RideScreen {
   // Einmalige Meldung (läuft zweimal durch).
   // Ist das Panel offen, steht sie zusätzlich dort (die LED kann darunter liegen).
   #info(text, cls = 'ok') {
+    // Ein verdrängter leiser Hinweis (Ankündigung, Schätzung) kommt danach noch einmal
+    const alt = this.#infoMeldung;
+    if (alt?.cls === '' && alt.text !== text) this.#stelleAn(alt.text, true);
     if (this.$('#dlg-fahrt-optionen').open) {
       const h = this.$('#fo-hinweis');
       h.textContent = text;
@@ -154,11 +158,20 @@ export class RideScreen {
 
   // Leiser Hinweis von außen (z. B. Bildschirm bleibt nicht an): neutrale
   // Schrift, läuft zweimal durch und verschwindet — kein Popup. Eine gerade
-  // laufende Fehlermeldung überschreibt er nicht, er folgt ihr
-  hinweis(text) {
+  // laufende Fehlermeldung oder einen anderen leisen Hinweis überschreibt er
+  // nicht, er folgt ihnen. Nur vorrang (die Ankündigung, an die Zeit gebunden)
+  // schiebt einen leisen Hinweis nach hinten
+  hinweis(text, { vorrang = false } = {}) {
     if (this.#tot) return;
-    if (this.#infoMeldung?.cls === 'err') this.#wartenderHinweis = text;
+    const m = this.#infoMeldung;
+    if (m?.cls === 'err' || (m?.cls === '' && !vorrang)) this.#stelleAn(text, vorrang);
     else this.#info(text, '');
+  }
+
+  #stelleAn(text, vorne) {
+    if (this.#wartende.includes(text)) return;
+    if (vorne) this.#wartende.unshift(text);
+    else this.#wartende.push(text);
   }
 
 
@@ -166,7 +179,16 @@ export class RideScreen {
     // Die Mulde bleibt immer stehen (feste Höhe) — nur die LED-Schrift wechselt
     const zustand = STATUS_PRIO.map(a => this.#zustaende.get(a)).find(Boolean);
     let m = this.#infoMeldung;
-    if (m && m.cls !== 'err' && zustand?.cls === 'err') { m = null; this.#infoMeldung = null; }
+    if (m && m.cls !== 'err' && zustand?.cls === 'err') {
+      // Ein Fehlerzustand verdrängt Infos; leise Hinweise warten, bis er vorbei ist
+      if (m.cls === '') this.#stelleAn(m.text, true);
+      m = null;
+      this.#infoMeldung = null;
+    }
+    if (!m && zustand?.cls !== 'err' && this.#wartende.length) {
+      this.#info(this.#wartende.shift(), '');
+      return;
+    }
     if (m) {
       const neu = m.neu;
       m.neu = false;
@@ -175,10 +197,7 @@ export class RideScreen {
         fertig: () => {
           if (this.#infoMeldung !== m) return;
           this.#infoMeldung = null;
-          const h = this.#wartenderHinweis;
-          this.#wartenderHinweis = null;
-          if (h) this.#info(h, '');
-          else this.#zeigeStatus();
+          this.#zeigeStatus();
         },
       });
       return;
@@ -210,19 +229,23 @@ export class RideScreen {
     }, verzoegerung);
   }
 
-  // Nächsten Block kurz vorher ankündigen: Laufschrift mit Zielwert und Dauer, weil
-  // die Schrift Zeit braucht, schon 12 s vorher. Kurze oder kleine Wechsel (30/30,
-  // Rampentest) bleiben still, sonst liefe die Tafel ununterbrochen.
+  // Nächsten Block vorher ankündigen: Laufschrift mit Zielwert und Dauer. Ein
+  // Durchlauf dauert rund 10 s, deshalb 30 s vorher: beide Durchläufe sind vor
+  // dem Countdown fertig. „Danach" statt „Gleich", das stimmt auch im zweiten
+  // Durchlauf. Kurze oder kleine Wechsel (30/30, Rampentest) bleiben still,
+  // sonst liefe die Tafel ununterbrochen.
   #kuendigeAn() {
     const run = this.run;
     if (!run || run.index < 0 || this.session.gestoppt || run.index === this.#angekuendigt) return;
     const b = run.aktuellerBlock, n = run.naechsterBlock, rest = run.restImBlock;
-    if (!b || !n || b.dauer < ANKUENDIGEN_AB_S || rest > ANKUENDIGEN_VOR_S || rest <= 3) return;
+    if (!b || !n || b.dauer < ANKUENDIGEN_AB_S || rest > ANKUENDIGEN_VOR_S || rest < ANKUENDIGEN_BIS_S) return;
+    // Verdeckt oder unter dem Panel liefe sie ungesehen durch: nachholen, solange Zeit ist
+    if (document.hidden || this.$('#dlg-fahrt-optionen').open) return;
     this.#angekuendigt = run.index;
     const ziel = run.zielFuer(n);
-    if (Math.abs(ziel - run.zielFuer(b)) < ANKUENDIGEN_SPRUNG_W || this.$('#dlg-fahrt-optionen').open) return;
-    this.#ankuendigung = `Gleich ${ziel} W · ${n.dauer % 60 ? fmtTime(n.dauer) : `${n.dauer / 60} min`}`;
-    this.hinweis(this.#ankuendigung);
+    if (Math.abs(ziel - run.zielFuer(b)) < ANKUENDIGEN_SPRUNG_W) return;
+    this.#ankuendigung = `Danach ${ziel} W · ${n.dauer % 60 ? fmtTime(n.dauer) : `${n.dauer / 60} min`}`;
+    this.hinweis(this.#ankuendigung, { vorrang: true });
   }
 
   // Zurück aus dem Hintergrund: sagen, dass ein Teil der Fahrt geschätzt ist und
@@ -238,7 +261,7 @@ export class RideScreen {
 
   // Der Block ist da: eine noch laufende Ankündigung wäre jetzt falsch
   #beendeAnkuendigung() {
-    if (this.#wartenderHinweis === this.#ankuendigung) this.#wartenderHinweis = null;
+    this.#wartende = this.#wartende.filter(t => t !== this.#ankuendigung);
     if (this.#infoMeldung?.text !== this.#ankuendigung) return;
     this.#infoMeldung = null;
     this.#zeigeStatus();
